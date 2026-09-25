@@ -1,0 +1,21 @@
+{
+  "C": 0.003,
+  "analysis": "horizon",
+  "availability_lag_days": 60,
+  "censored_test": 8090,
+  "class_weight": null,
+  "drop_censored": false,
+  "features_version": "v2",
+  "first_test_prediction_date": "2010-05-30",
+  "horizon": 8,
+  "label": "y_8q",
+  "model": "logit",
+  "n_features": 83,
+  "n_test": 118696,
+  "n_train": 218358,
+  "positives_test": 1295,
+  "positives_train": 660,
+  "train_repdte_max": "2007-12-31",
+  "train_repdte_min": "2002-03-31",
+  "variant": "8q"
+}

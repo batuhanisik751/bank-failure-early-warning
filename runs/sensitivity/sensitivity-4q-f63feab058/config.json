@@ -1,0 +1,21 @@
+{
+  "C": 0.003,
+  "analysis": "lag",
+  "availability_lag_days": 90,
+  "censored_test": 3862,
+  "class_weight": null,
+  "drop_censored": false,
+  "features_version": "v2",
+  "first_test_prediction_date": "2010-06-29",
+  "horizon": 4,
+  "label": "y_4q",
+  "model": "logit",
+  "n_features": 83,
+  "n_test": 118634,
+  "n_train": 252311,
+  "positives_test": 809,
+  "positives_train": 606,
+  "train_repdte_max": "2008-12-31",
+  "train_repdte_min": "2002-03-31",
+  "variant": "90d"
+}

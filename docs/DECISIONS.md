@@ -455,3 +455,25 @@ open for the owner to revisit.
   CLI call (`--model logit,hazard` then `--model texas,gbdt`), about 30-45 s per model-year
   on an idle machine. Regeneration of the 4q artefacts reached 2019 before this note;
   the remaining years and the 8q horizon are re-fitted in the follow-up step.
+- 2026-09-25 — **Sensitivity analyses refit on the P1 fixed split, not the walk-forward.**
+  `evaluation.sensitivity` refits `logit` (v2 features, `LOGIT_C`) and `gbdt`
+  (`settings.models.gbdt`) once per variant through `fixed_split_masks` +
+  `assert_no_leakage`, with the fixed-split constants (chosen inside this split's
+  training period) rather than the per-year tuning, so a cell differs from its baseline
+  by the one assumption under test only. The baseline cells (4q, censored kept, 60-day
+  lag) reproduce the D6 `train` runs exactly (logit 0.4437 / 0.7815, gbdt 0.4324 /
+  0.7791). The censored variant drops `censored_in_window_Hq` rows from *both* training
+  and test (spec 5 rule 3), unlike the `sensitivity_censored_dropped` block of the
+  train runs, which drops them from the test side only. The lag variants relabel in
+  memory through `build_labels(..., lag_days=L)` (new optional parameter; the panel's
+  `avail_date` is overridden by `repdte + L`, the `labels` table is never rewritten) and
+  recompute the split with a settings copy carrying that lag; because the rule 6.2 cut
+  and the windows shift together, the training rows are the same reports at every lag
+  while the positives (537 / 554 / 606 at 45 / 60 / 90 days) and the test failures
+  (851 / 833 / 809) move with the windows. No artefacts go to `models/`; the
+  `runs/sensitivity/` record (id from analysis, variant, model, horizon, lag) is the
+  artefact and `reports/sensitivity.md` is rebuilt from those records. Findings: 8q
+  costs the booster far more than the logit (PR-AUC 0.13 against 0.38), dropping
+  censored rows lifts every metric slightly (rescued banks are hard negatives), and a
+  90-day lag costs the booster 0.07 PR-AUC while the logit loses 0.02; the logit stays
+  the less sensitive model and the PR-AUC ranking never flips.

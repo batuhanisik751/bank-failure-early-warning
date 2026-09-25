@@ -1,0 +1,28 @@
+{
+  "analysis": "lag",
+  "availability_lag_days": 60,
+  "backend": "lightgbm",
+  "censored_test": 3877,
+  "drop_censored": false,
+  "features_version": "v2",
+  "first_test_prediction_date": "2010-05-30",
+  "horizon": 4,
+  "iterations_capped": false,
+  "label": "y_4q",
+  "model": "gbdt",
+  "monotone": false,
+  "n_features": 83,
+  "n_test": 118696,
+  "n_train": 252330,
+  "params": {
+    "learning_rate": 0.03,
+    "min_samples_leaf": 200,
+    "n_estimators": 200,
+    "num_leaves": 63
+  },
+  "positives_test": 833,
+  "positives_train": 554,
+  "train_repdte_max": "2008-12-31",
+  "train_repdte_min": "2002-03-31",
+  "variant": "60d"
+}

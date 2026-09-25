@@ -63,7 +63,10 @@ def _dates(series: pd.Series) -> pd.Series:
 
 
 def build_labels(
-    panel: pd.DataFrame, horizons: list[int], as_of_date: dt.date | pd.Timestamp
+    panel: pd.DataFrame,
+    horizons: list[int],
+    as_of_date: dt.date | pd.Timestamp,
+    lag_days: int | None = None,
 ) -> pd.DataFrame:
     """Label every panel row for each horizon; keyed by ``(cert, repdte)``.
 
@@ -72,13 +75,23 @@ def build_labels(
     dropped and never censored. Returns one row per panel row with ``window_start``
     (= ``avail_date``), ``dropped_failed_before_avail`` and, per horizon H, ``y_Hq``
     (int 0/1), ``window_end_Hq``, ``censored_in_window_Hq`` and ``label_complete_Hq``.
+
+    ``lag_days`` overrides the panel's ``avail_date`` with ``repdte + lag_days`` so the
+    availability-lag sensitivity can relabel in memory (a report that is assumed to
+    arrive later has a later window, and a bank that failed in the meantime is dropped);
+    the stored ``labels`` table is never touched by this.
     """
     missing = [c for c in PANEL_INPUTS if c not in panel.columns]
     if missing:
         raise KeyError(f"panel is missing column(s) {missing}")
     if not horizons:
         raise ValueError("horizons must not be empty")
-    avail = _dates(panel["avail_date"])
+    if lag_days is None:
+        avail = _dates(panel["avail_date"])
+    else:
+        if int(lag_days) < 0:
+            raise ValueError(f"lag_days must be non-negative, got {lag_days}")
+        avail = _dates(panel["repdte"]) + pd.Timedelta(days=int(lag_days))
     fail = _dates(panel["fail_date"])
     exit_ = _dates(panel["exit_date"])
     as_of = pd.Timestamp(as_of_date)
