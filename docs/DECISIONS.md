@@ -130,3 +130,12 @@ open for the owner to revisit.
   completeness flag now counts as incomplete and a missing `dropped_failed_before_avail`
   as dropped (both excluded), matching how a missing `window_end` is already handled.
   Nullable `boolean` columns with `pd.NA` are accepted instead of raising.
+- 2026-09-25 (C5 evaluation): recall@k uses `k = ceil(frac * n)` (at least 1, capped at
+  n) so a small test slice still has a non-empty head; head counts larger than the sample
+  are capped at n. Ranking is score descending with NaN scores last and a deterministic
+  tie-break (ascending `tie_breaker`, typically `cert`, else stable input order); for the
+  AUC metrics NaN scores are replaced by a value below the smallest real score so they
+  count as "least risky" rather than raising. `evaluate_by_year` returns `year` as a
+  string column so the `pooled` row fits. Lead time counts calendar quarters between the
+  first flagged report date and the failure date. Figures strip the `Software` and
+  creation-time metadata so re-runs are byte-identical.
