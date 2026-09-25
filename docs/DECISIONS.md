@@ -106,3 +106,12 @@ open for the owner to revisit.
   missingness for the missing-indicator columns downstream. Q1 rows are never flagged. On
   the full `financials_raw` table 0.14% of rows carry the flag and the three helpers run in
   well under a second.
+- 2026-09-25 — **Split utility (Rule 6.2):** `splits.time_split.training_mask` keeps a row
+  only if `window_end_Hq < prediction_date(test_start)`, `label_complete_Hq` and not
+  `dropped_failed_before_avail`; `fixed_split_masks` intersects that with the nominal
+  `train_start..train_end` from settings. With a 60-day lag and `test_start = 2010-03-31`
+  the effective training end is 2008Q4 for H=4 (252,330 rows) but 2007Q4 for H=8
+  (218,358 rows): the nominal `train_end` is a ceiling, not the cut. `walk_forward_folds`
+  skips years with no usable test row and warns on partial years (e.g. 4q in 2025), so
+  callers pick `last_test_year` as the latest complete year. `test_mask` carries
+  `__test__ = False` so pytest does not collect it from test modules.
