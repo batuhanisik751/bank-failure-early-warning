@@ -381,3 +381,34 @@ open for the owner to revisit.
   Top gain features of `gbdt`: `d4q_texas_ratio`, `d4q_equity_to_assets`,
   `construction_to_capital`, `texas_ratio`, `equity_to_assets` (the four-quarter trend
   features from D3 carry the most split gain, ahead of every level).
+- 2026-09-25 — **D7 discrete-time hazard model.** `horizons_quarters` is now `[1, 4, 8]`:
+  the labels table gains `y_1q, window_end_1q, censored_in_window_1q, label_complete_1q`
+  (window `(avail_date, avail_date + 3 months]`, 572 positives among 705,968 usable
+  rows, 0.081 %); the twelve pre-existing columns are byte-identical to the previous
+  Parquet (checked column by column), only the file hash changes because of the four
+  new columns. The hazard (`bankcanary.models.hazard`) is the P1 pipeline with an
+  *unweighted* logit on all 83 `features_v2` features and target `y_1q`; non-failure
+  exits are censoring because a bank has no rows after it leaves, so nothing is deleted
+  or re-weighted. `C` is tuned like `tune_logit_c.py` but at 1q (`train-hazard --tune`,
+  one `runs/tune_hazard/` record per candidate, resumable): the inner slice holds only
+  13 one-quarter positives, so the winner `C = 0.0003` (4q validation PR-AUC 0.2844) is
+  statistically tied with 0.003 (0.2837); the pre-stated rule (highest 4q PR-AUC, the
+  horizon the model is compared on) was applied mechanically. Conversion
+  `p_Hq = 1 - (1 - h)^H` assumes the hazard persists at its current level (covariates
+  are not projected); ranking metrics are invariant to it, Brier is reported on the
+  converted probabilities. Fixed split: 1q test PR-AUC 0.2598; converted 4q PR-AUC
+  0.3633 / Brier 0.00643 against `logit_v2` 0.4437 / 0.00506 and `gbdt` 0.4324 / 0.00518
+  (75 one-quarter training positives against 554 four-quarter ones explain the gap);
+  converted 8q PR-AUC 0.3948 / Brier 0.00959 *beats* `logit_v2` at 8q (0.3764 / 0.00838)
+  while `gbdt` collapses at 8q (0.1328, ROC 0.9029; its 8q training set closes at
+  2007Q4 under rule 6.2, which is worth a look in the D8 walk-forward). The 8q
+  comparators are saved as `models/logit_v2_8q` and `models/gbdt_8q`. Odds ratios come
+  from an unpenalised `statsmodels` Logit of `y_1q` on the standardised design of the 15
+  interpreted features alone (six small-logit features plus the nine P2 rate/run
+  features), standard errors clustered by `cert`, no missing indicators because P2
+  ratio pairs sharing a denominator go missing together and their indicators would be
+  collinear; the L2-shrunk coefficient of the full hazard is shown next to each one
+  (at `C = 0.0003` they sit near 1, which is the shrinkage, not the evidence). The
+  hazard artefacts live in `models/hazard/` without a horizon suffix, and successive
+  `train-hazard --horizon H` calls merge their converted block into its `metrics.json`
+  (a re-fit keeps earlier blocks) so `reports/p2_hazard.md` is re-rendered from disk.

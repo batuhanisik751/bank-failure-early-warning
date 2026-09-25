@@ -1,0 +1,17 @@
+{
+  "C": 0.0003,
+  "comparators": [
+    "logit_v2",
+    "gbdt"
+  ],
+  "conversion": "1 - (1 - h)^H",
+  "converted_from": 1,
+  "features_version": "v2",
+  "horizon": 8,
+  "model": "hazard",
+  "n_features": 83,
+  "n_test": 118696,
+  "positives_test": 1295,
+  "test_end": "2013-12-31",
+  "test_start": "2010-03-31"
+}

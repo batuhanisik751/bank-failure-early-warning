@@ -1,0 +1,12 @@
+{
+  "C": 0.001,
+  "features_version": "v2",
+  "horizon": 1,
+  "model": "hazard",
+  "n_features": 83,
+  "n_inner_train": 174822,
+  "n_validation": 68725,
+  "positives_inner_train": 13,
+  "validation_end": "2008-12-31",
+  "validation_start": "2007-03-31"
+}

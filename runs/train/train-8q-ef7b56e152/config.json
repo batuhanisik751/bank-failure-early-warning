@@ -1,0 +1,21 @@
+{
+  "availability_lag_days": 60,
+  "features_version": "v2",
+  "first_test_prediction_date": "2010-05-30",
+  "horizon": 8,
+  "label": "y_8q",
+  "model": "logit_v2",
+  "n_features": 83,
+  "n_test": 118696,
+  "n_train": 218358,
+  "positives_test": 1295,
+  "positives_train": 660,
+  "test_end": "2013-12-31",
+  "test_repdte_max": "2013-12-31",
+  "test_repdte_min": "2010-03-31",
+  "test_start": "2010-03-31",
+  "train_end_nominal": "2008-12-31",
+  "train_repdte_max": "2007-12-31",
+  "train_repdte_min": "2002-03-31",
+  "train_start_nominal": "2002-03-31"
+}

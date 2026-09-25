@@ -10,8 +10,9 @@ end_quarter: null          # null = latest quarter the FDIC API has published
 # Point-in-time availability: a report dated q is usable from q + availability_lag_days.
 availability_lag_days: 60
 
-# Prediction horizons in quarters. Primary = 4 (12 months), secondary = 8 (24 months).
-horizons_quarters: [4, 8]
+# Prediction horizons in quarters. Primary = 4 (12 months), secondary = 8 (24 months);
+# 1 is the discrete-time hazard event ("fails inside the next quarter", step D7).
+horizons_quarters: [1, 4, 8]
 
 # Fixed out-of-time split for quick iteration (spec 8.2). The Rule 6.2 split utility still
 # trims training rows whose outcome window closes after the first test prediction date.

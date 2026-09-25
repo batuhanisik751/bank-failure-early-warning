@@ -36,7 +36,7 @@ def _labels(fin: pd.DataFrame) -> pd.DataFrame:
     df = fin[["cert", "repdte"]].copy()
     df["window_start"] = df["repdte"] + pd.Timedelta(days=60)
     df["dropped_failed_before_avail"] = False
-    for h in (4, 8):
+    for h in (1, 4, 8):
         df[f"y_{h}q"] = ((df["cert"] == 1) & (df["repdte"] >= Q[2])).astype("int64")
         df[f"window_end_{h}q"] = df["window_start"] + pd.DateOffset(months=3 * h)
         df[f"censored_in_window_{h}q"] = (df["cert"] == 2) & (df["repdte"] == Q[4])
