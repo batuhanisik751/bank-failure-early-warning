@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from bankcanary.features.spec import BKCLASS_CODES, FeatureSpec, log_ratio, spec
+from bankcanary.features.spec import BKCLASS_CODES, BKCLASS_NAMES, FeatureSpec, log_ratio, spec
 from bankcanary.features.ytd import lag
 
 DAYS_PER_YEAR = 365.25
@@ -51,7 +51,7 @@ SPECS.extend(
         "structure",
         f"bkclass == '{code}'",
         "flag",
-        f"One-hot charter class indicator for bkclass code {code}.",
+        f"True when the charter class is {code}, that is {BKCLASS_NAMES[code]}.",
         monotone=0,
     )
     for code in BKCLASS_CODES

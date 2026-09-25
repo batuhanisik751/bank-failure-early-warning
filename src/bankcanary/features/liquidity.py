@@ -43,8 +43,8 @@ SPECS: list[FeatureSpec] = [
         "liquidity",
         "(othbor + bro) / asset",
         "ratio",
-        "Borrowed money (including FHLB advances, already inside othbor) plus brokered "
-        "deposits over assets; funding that reprices or runs under stress.",
+        "Borrowed money (Federal Home Loan Bank advances included) plus brokered deposits "
+        "over assets; funding that reprices or runs under stress.",
         monotone=1,
     ),
 ]

@@ -18,6 +18,18 @@ import pandas as pd
 #: OI = other insured institution.
 BKCLASS_CODES: tuple[str, ...] = ("N", "NM", "SM", "SB", "SI", "SL", "NC", "OI")
 
+#: Plain-English name of each charter class, used in the one-hot explanations.
+BKCLASS_NAMES: dict[str, str] = {
+    "N": "a national bank supervised by the OCC",
+    "NM": "a state-chartered bank that is not a Federal Reserve member",
+    "SM": "a state-chartered bank that is a Federal Reserve member",
+    "SB": "a savings bank",
+    "SI": "a stock savings institution",
+    "SL": "a savings and loan association",
+    "NC": "a non-insured commercial bank",
+    "OI": "another kind of insured institution",
+}
+
 #: Ratios that would be infinite are capped here (Texas ratio, reserve coverage).
 RATIO_CAP = 10.0
 

@@ -335,3 +335,21 @@ open for the owner to revisit.
   suffix assertion became a contiguous-slice check since macro now ends the table. Rebuilt
   `features_v2`: 710,691 rows x 83 features (40 P2) in 12 s; `features_v1` sha256 unchanged.
   SVB 2022Q4: `macro_t10y3m` = -0.96, `macro_fedfunds_change_4q` = 4.49.
+- 2026-09-25 — **D5 registry audit and generated feature docs.** `docs/FEATURES.md` is
+  written by `scripts/write_feature_docs.py` from the registry (one table per group in
+  CAMELS order, then concentration, trends, structure, macro) and
+  `tests/test_registry_audit.py` fails when the committed file differs from the current
+  render, so the documentation cannot drift from the code. The explanation shown in the
+  table is the registry text minus the trailing monotone sentence, which the `sign`
+  column already carries. The audit adds a plain-English rule on top of the contract:
+  an explanation may not contain a raw Call Report code (any `column` in
+  `config/fields.yaml`, except the English words `asset`/`cb`) unless it is also a
+  registered feature name; that flagged `wholesale_funding_ratio` (mentioned `othbor`)
+  and the eight `bkclass_*` one-hots, which now spell out the charter class
+  (`spec.BKCLASS_NAMES`). Only explanation strings changed, so `features_v1` /
+  `features_v2` need no rebuild. Identifier independence is tested by relabelling every
+  `cert` bijectively, renaming the bank and shuffling rows: `build_features("v2")` must
+  return the same frame. `(same cert)` in the trend formulas is accepted as the grouping
+  note. `reports/features_v2_summary.md` (`--summary`) reads the Parquet tables directly
+  and reuses the `failure_contrast` filter (label-complete, not dropped) for the P2
+  medians; it renders in under two seconds.
