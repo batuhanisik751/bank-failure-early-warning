@@ -247,5 +247,10 @@ def evaluate(
     typer.echo(f"figures: {len(figures)} under {figures['recall_at_k'].parent}")
 
 
+from bankcanary.commands import register_all  # noqa: E402
+
+register_all(app)
+
+
 if __name__ == "__main__":
     app()
