@@ -158,10 +158,6 @@ def test_repdte_as_datetime64_seconds_resolution() -> None:
     assert lag(df, "netinc", 1).tolist()[1] == 10.0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="deaccumulate/average/lag raise ValueError when repdte holds datetime.date objects",
-)
 def test_repdte_as_python_date_objects_gives_the_same_answer_as_datetime64() -> None:
     # quarter_number/previous_quarter_end call pd.to_datetime, so date objects are
     # accepted there; the lookup must match them on the same calendar day too.
@@ -179,10 +175,6 @@ def test_repdte_as_python_date_objects_gives_the_same_answer_as_datetime64() -> 
     assert lag(df, "netinc", 1).tolist()[1] == 10.0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="deaccumulate/average/lag raise KeyError when the input index has a name",
-)
 def test_named_index_does_not_break_the_lookup() -> None:
     df = frame([(14, "2008-03-31", 10.0), (14, "2008-06-30", 25.0)]).rename_axis("row")
     out = deaccumulate(df, ["netinc"])
@@ -191,10 +183,6 @@ def test_named_index_does_not_break_the_lookup() -> None:
     assert lag(df, "netinc", 1).tolist()[1] == 10.0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="repdte with a time-of-day silently misses its own previous quarter",
-)
 def test_repdte_with_time_of_day_still_matches_the_same_quarter_end() -> None:
     # The target date is normalised to midnight but the looked-up rows are not, so a
     # timestamp at noon never matches itself and Q2 is wrongly flagged as 25 / 2.

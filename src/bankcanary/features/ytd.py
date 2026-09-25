@@ -35,14 +35,26 @@ def _shifted_lookup(df: pd.DataFrame, cols: list[str], target_dates: pd.Series) 
     ``_present`` that is True when the same cert has *any* row at the target date. Only
     the row whose ``repdte`` equals the target date is used, so a bank that skipped a
     quarter gets NaN instead of the value from whatever row happens to sit before it.
+
+    Both ``repdte`` and ``target_dates`` are coerced to datetime and normalised to
+    midnight before matching, so date objects, second-resolution timestamps and dates
+    carrying a time-of-day all match on the calendar day. Rows are aligned by position
+    (the index is copied back onto the result), so the index name, non-unique labels
+    or a column literally called ``index`` cannot break the lookup. A duplicated
+    ``(cert, repdte)`` key has no well-defined previous quarter and raises ``ValueError``.
     """
-    right = df[KEY + cols].rename(columns={"repdte": "_target"}).assign(_present=True)
-    left = pd.DataFrame(
-        {"cert": df["cert"].to_numpy(), "_target": pd.to_datetime(target_dates).to_numpy()},
-        index=df.index,
-    )
-    merged = left.reset_index().merge(right, on=["cert", "_target"], how="left")
-    merged = merged.set_index("index").reindex(df.index)
+    certs = df["cert"].to_numpy()
+    observed = pd.to_datetime(df["repdte"]).dt.normalize().to_numpy()
+    targets = pd.to_datetime(target_dates).dt.normalize().to_numpy()
+    right = pd.DataFrame({"cert": certs, "_target": observed})
+    if right.duplicated().any():
+        raise ValueError("duplicated (cert, repdte) rows: previous quarter is ambiguous")
+    for col in cols:
+        right[col] = df[col].array
+    right["_present"] = True
+    left = pd.DataFrame({"cert": certs, "_target": targets})
+    merged = left.merge(right, on=["cert", "_target"], how="left", sort=False)
+    merged.index = df.index
     merged["_present"] = merged["_present"].fillna(False).astype(bool)
     return merged[cols + ["_present"]]
 

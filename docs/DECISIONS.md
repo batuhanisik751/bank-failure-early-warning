@@ -115,3 +115,12 @@ open for the owner to revisit.
   skips years with no usable test row and warns on partial years (e.g. 4q in 2025), so
   callers pick `last_test_year` as the latest complete year. `test_mask` carries
   `__test__ = False` so pytest does not collect it from test modules.
+- 2026-09-25 — **`features.ytd._shifted_lookup` matches on the calendar day and aligns by
+  position:** both `repdte` and the target dates go through `pd.to_datetime(...).dt.normalize()`
+  before the merge, so `datetime.date` objects, second-resolution timestamps and timestamps
+  carrying a time-of-day all find their previous quarter (the contract says dates are
+  `datetime64[ns]`, but a silent mismatch on a noon timestamp was worse than being lenient).
+  The result's index is copied from the input rather than round-tripped through
+  `reset_index`/`set_index("index")`, so a named index, a non-unique index or a column called
+  `index` no longer break the helpers. Duplicated `(cert, repdte)` keys raise an explicit
+  `ValueError` instead of relying on `reindex` refusing duplicate labels.
