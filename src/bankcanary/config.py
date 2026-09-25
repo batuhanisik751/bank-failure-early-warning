@@ -22,6 +22,16 @@ class FdicSettings(BaseModel):
     max_retries: int = 6
 
 
+class FredSettings(BaseModel):
+    """FRED endpoints: the JSON API when a key is set, the keyless CSV export otherwise."""
+
+    api_url: str = "https://api.stlouisfed.org/fred/series/observations"
+    csv_url: str = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+    requests_per_second: float = 2.0
+    timeout_seconds: float = 60.0
+    max_retries: int = 5
+
+
 class FixedSplit(BaseModel):
     train_start: dt.date
     train_end: dt.date
@@ -42,6 +52,7 @@ class Settings(BaseModel):
         default_factory=lambda: [100_000, 1_000_000, 10_000_000, 100_000_000]
     )
     fdic: FdicSettings = Field(default_factory=FdicSettings)
+    fred: FredSettings = Field(default_factory=FredSettings)
 
     def resolve(self, root: Path = PROJECT_ROOT) -> Settings:
         """Return a copy whose relative directories are anchored at ``root``."""

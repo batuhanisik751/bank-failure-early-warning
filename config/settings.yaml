@@ -32,3 +32,10 @@ fdic:
   requests_per_second: 4      # the API advertises a 20-request window; stay well under it
   timeout_seconds: 120
   max_retries: 6
+
+fred:
+  api_url: "https://api.stlouisfed.org/fred/series/observations"   # used when FRED_API_KEY is set
+  csv_url: "https://fred.stlouisfed.org/graph/fredgraph.csv"        # keyless fallback
+  requests_per_second: 2
+  timeout_seconds: 60
+  max_retries: 5

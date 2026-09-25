@@ -261,3 +261,25 @@ open for the owner to revisit.
   LightGBM is used automatically once it imports. `lifelines` was removed because it pins
   `pandas < 3` and had silently downgraded pandas to 2.3 (one dtype test failed); the optional
   Cox model (spec §8.1 item 6) is deferred, the required discrete-time hazard model is not.
+- 2026-09-25 — **D1 cross-check and FFIEC downloader.** `crosswalk_rssd` is a projection of
+  `institutions` (27,834 certs, 267 with `FED_RSSD` = 0, stored as null). The FFIEC bulk page
+  works with plain `httpx`: GET the form, POST the product selection (`__EVENTTARGET` =
+  the product list box) to fill the period list, whose option values are opaque ids
+  (`12/31/2022` → `135`, not the date), then POST period id + `TSVRadioButton` + the Download
+  button; the 2022Q4 bundle is 6.9 MB zipped, not 50-150 MB. Schedules RC-B and RC-O (and
+  others) are split into `(1 of 2)` parts joined on `IDRSSD`; cells marked `CONF` are
+  confidential and parsed as missing. All fifteen FDIC values for SVB, Signature and First
+  Republic at 2022-12-31 equal the RC-B/RC-O items to the dollar, so the FDIC fields are used
+  directly (spec §3.2). Note that `RCON1773` (domestic offices only) differs from `RCFD1773`
+  for SVB (21.98B vs 25.98B): the consolidated `RCFD` item is the one that matches `SCAF`.
+- 2026-09-25 — **macro_state (step D4a).** Publication lags are applied to the period *end*
+  (FRED dates are period starts): state unemployment 45 days after month end, state HPI 75
+  days after quarter end, FEDFUNDS/T10Y3M/DGS10 one day. Missing observations (`.`) are
+  dropped so the latest published value carries; the boundary is inclusive (period end +
+  lag == avail_date is usable). Four-quarter changes re-evaluate the series at
+  `(repdte − 4 quarter ends) + availability_lag_days`, never at the row four positions
+  earlier, so gaps in a state's panel grid cannot shift the comparison. `fedfunds` and
+  `dgs10` levels are stored beside the contract's five columns because they are free and
+  step D5 may want them. Rows with a null `stalp` (102 panel rows) are excluded from the
+  grid; the five territories in the panel (AS, FM, GU, PR, VI) keep the national columns
+  only. Only current vintages are used (no ALFRED): a known limitation.
