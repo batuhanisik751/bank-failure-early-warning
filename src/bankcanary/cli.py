@@ -95,5 +95,24 @@ def ingest(
             typer.echo(counts.to_string())
 
 
+@app.command("build-panel")
+def build_panel_cmd() -> None:
+    """Join financials_raw with institution attributes and exit facts into the panel table."""
+    from bankcanary.config import load_settings
+    from bankcanary.panel.build import build_panel
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    _, s = build_panel(load_settings())
+    typer.echo(f"panel: {s['rows']} rows, {s['banks']} banks (duckdb {s['duckdb_rows']} rows)")
+    typer.echo(f"banks with no institutions record: {s['banks_missing_institution']}")
+    typer.echo(
+        f"failed banks 2001 onward: {s['failed_banks']}, matched to a prior report: "
+        f"{s['failed_matched']} ({s['failed_matched_share']:.1%}, target >= 95%)"
+    )
+    typer.echo("exit_reason counts (one row per bank):")
+    for reason, n in s["exit_reasons"].items():
+        typer.echo(f"  {reason}: {n}")
+
+
 if __name__ == "__main__":
     app()

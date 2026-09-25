@@ -59,3 +59,20 @@ open for the owner to revisit.
   flag and the `DEPSMB` count) is float64; `cb` is bool, `cert`/`rssdhcr`/`fed_rssd` are
   nullable Int64, `estymd` is parsed from the integer `YYYYMMDD` the API sends. No row had
   null or non-positive `ASSET` in the 2001Q1-2026Q2 pull, so the drop rule removed nothing.
+- 2026-09-25 — **Exit reason matching:** the institution-level `history` event is matched on
+  `subject_cert` (`out_cert` filled with `cert`, because the FDIC records failure events
+  with a null `CERT`) within 7 days of `endefymd`; the closest event wins and ties go to the
+  most exit-like code (failure > merger family > voluntary closing > charter change > other),
+  so a bank whose charter change is booked as a same-day merger of the old cert into the
+  new one is a `merger`, not a `charter_change` (no bank ends up as `charter_change`). 691
+  banks (nearly all 1970s-90s RTC-era thrifts) exit on a failure-type code with no
+  `failures` row at all and are labelled `failure_unmatched`; a failure-type code on a cert
+  that has only `ASSISTANCE` rows is `other`. Failed and open banks have `exit_date` and
+  `exit_reason` null (`exit_reason` is not `unknown` there; `unknown` means an exit with no
+  event in the window, 1,284 banks). 22 inactive banks have no `endefymd` and get no exit.
+- 2026-09-25 — **Panel keeps quarter-level attributes:** `bkclass`, `stalp`, `estymd` and
+  `cb` from `financials_raw` are point-in-time and stay; only their gaps are filled from
+  `institutions`. `rssdhcr` is never filled (a null quarter means no holding company then,
+  and the institution value would leak later affiliations); `fed_rssd`, `latitude` and
+  `longitude` come from `institutions` only. 162 reporting banks (7,131 rows, none failed,
+  56 still filing in 2026Q2) have no `institutions` record and therefore no exit facts.
