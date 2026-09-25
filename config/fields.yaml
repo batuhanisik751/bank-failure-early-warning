@@ -97,7 +97,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: ASSET2
   column: asset2
@@ -105,7 +105,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LIAB
   column: liab
@@ -113,7 +113,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: DEP
   column: dep
@@ -121,7 +121,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: DEPDOM
   column: depdom
@@ -129,7 +129,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: EQ
   column: eq
@@ -137,7 +137,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: INTAN
   column: intan
@@ -145,7 +145,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: INTANGW
   column: intangw
@@ -153,7 +153,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNLSGR
   column: lnlsgr
@@ -161,7 +161,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNLSNET
   column: lnlsnet
@@ -169,7 +169,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNATRES
   column: lnatres
@@ -177,7 +177,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: SC
   column: sc
@@ -185,7 +185,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: CHBAL
   column: chbal
@@ -193,7 +193,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: FREPO
   column: frepo
@@ -201,7 +201,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: FREPP
   column: frepp
@@ -209,7 +209,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: TRADE
   column: trade
@@ -217,7 +217,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: ORE
   column: ore
@@ -225,7 +225,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: OTHBFHLB
   column: othbfhlb
@@ -233,7 +233,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: OTHBOR
   column: othbor
@@ -241,7 +241,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: SUBND
   column: subnd
@@ -249,7 +249,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: ERNAST
   column: ernast
@@ -257,7 +257,7 @@ fields:
   unit: thousands_usd
   group: balance_sheet
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNRE
   column: lnre
@@ -265,7 +265,7 @@ fields:
   unit: thousands_usd
   group: loan_mix
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNRECONS
   column: lnrecons
@@ -273,7 +273,7 @@ fields:
   unit: thousands_usd
   group: loan_mix
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNRENRES
   column: lnrenres
@@ -281,7 +281,7 @@ fields:
   unit: thousands_usd
   group: loan_mix
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNRENROW
   column: lnrenrow
@@ -289,7 +289,7 @@ fields:
   unit: thousands_usd
   group: loan_mix
   prototype: P1
-  first_available: null
+  first_available: '2007-03-31'
   in_dictionary: true
 - code: LNRENROT
   column: lnrenrot
@@ -297,7 +297,7 @@ fields:
   unit: thousands_usd
   group: loan_mix
   prototype: P1
-  first_available: null
+  first_available: '2007-03-31'
   in_dictionary: true
 - code: LNREMULT
   column: lnremult
@@ -305,7 +305,7 @@ fields:
   unit: thousands_usd
   group: loan_mix
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNRERES
   column: lnreres
@@ -313,7 +313,7 @@ fields:
   unit: thousands_usd
   group: loan_mix
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNRELOC
   column: lnreloc
@@ -321,7 +321,7 @@ fields:
   unit: thousands_usd
   group: loan_mix
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNCI
   column: lnci
@@ -329,7 +329,7 @@ fields:
   unit: thousands_usd
   group: loan_mix
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNCON
   column: lncon
@@ -337,7 +337,7 @@ fields:
   unit: thousands_usd
   group: loan_mix
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNCRCD
   column: lncrcd
@@ -345,7 +345,7 @@ fields:
   unit: thousands_usd
   group: loan_mix
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNAG
   column: lnag
@@ -353,7 +353,7 @@ fields:
   unit: thousands_usd
   group: loan_mix
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NCLNLS
   column: nclnls
@@ -361,7 +361,7 @@ fields:
   unit: thousands_usd
   group: asset_quality
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: P3LNLS
   column: p3lnls
@@ -369,7 +369,7 @@ fields:
   unit: thousands_usd
   group: asset_quality
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: P9LNLS
   column: p9lnls
@@ -377,7 +377,7 @@ fields:
   unit: thousands_usd
   group: asset_quality
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NALNLS
   column: nalnls
@@ -385,7 +385,7 @@ fields:
   unit: thousands_usd
   group: asset_quality
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: P3ASSET
   column: p3asset
@@ -393,7 +393,7 @@ fields:
   unit: thousands_usd
   group: asset_quality
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: P9ASSET
   column: p9asset
@@ -401,7 +401,7 @@ fields:
   unit: thousands_usd
   group: asset_quality
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NAASSET
   column: naasset
@@ -409,7 +409,7 @@ fields:
   unit: thousands_usd
   group: asset_quality
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NCLNLSR
   column: nclnlsr
@@ -417,7 +417,7 @@ fields:
   unit: percent
   group: asset_quality
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NETINC
   column: netinc
@@ -425,7 +425,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: INTINC
   column: intinc
@@ -433,7 +433,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: EINTEXP
   column: eintexp
@@ -441,7 +441,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NIM
   column: nim
@@ -449,7 +449,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NONII
   column: nonii
@@ -457,7 +457,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NONIX
   column: nonix
@@ -465,7 +465,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: ELNATR
   column: elnatr
@@ -473,7 +473,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NTLNLS
   column: ntlnls
@@ -481,7 +481,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: DRLNLS
   column: drlnls
@@ -489,7 +489,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: CRLNLS
   column: crlnls
@@ -497,7 +497,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: IGLSEC
   column: iglsec
@@ -505,7 +505,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: ITAX
   column: itax
@@ -513,7 +513,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NOIJ
   column: noij
@@ -521,7 +521,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: EDEP
   column: edep
@@ -529,7 +529,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: EDEPDOM
   column: edepdom
@@ -537,7 +537,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NETINCQ
   column: netincq
@@ -545,7 +545,7 @@ fields:
   unit: thousands_usd
   group: income_ytd
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: RBC1AAJ
   column: rbc1aaj
@@ -553,7 +553,7 @@ fields:
   unit: percent
   group: capital
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: RBCRWAJ
   column: rbcrwaj
@@ -561,7 +561,7 @@ fields:
   unit: percent
   group: capital
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: IDT1RWAJR
   column: idt1rwajr
@@ -569,7 +569,7 @@ fields:
   unit: percent
   group: capital
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: RBC1RWAJ
   column: rbc1rwaj
@@ -577,7 +577,7 @@ fields:
   unit: percent
   group: capital
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: RBCT1CER
   column: rbct1cer
@@ -585,7 +585,7 @@ fields:
   unit: percent
   group: capital
   prototype: P1
-  first_available: null
+  first_available: '2014-03-31'
   in_dictionary: true
 - code: RBCT1C
   column: rbct1c
@@ -593,7 +593,7 @@ fields:
   unit: thousands_usd
   group: capital
   prototype: P1
-  first_available: null
+  first_available: '2014-03-31'
   in_dictionary: true
 - code: RBCT2
   column: rbct2
@@ -601,7 +601,7 @@ fields:
   unit: thousands_usd
   group: capital
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: RWAJ
   column: rwaj
@@ -609,7 +609,7 @@ fields:
   unit: thousands_usd
   group: capital
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: CBLRIND
   column: cblrind
@@ -617,7 +617,7 @@ fields:
   unit: flag
   group: capital
   prototype: P1
-  first_available: null
+  first_available: '2020-03-31'
   in_dictionary: true
 - code: BRO
   column: bro
@@ -625,7 +625,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: BROINS
   column: broins
@@ -633,7 +633,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: DEPI
   column: depi
@@ -641,7 +641,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: DEPNI
   column: depni
@@ -649,7 +649,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: COREDEP
   column: coredep
@@ -657,7 +657,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: TRN
   column: trn
@@ -665,7 +665,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: DEPINS
   column: depins
@@ -673,7 +673,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: DEPUNINS
   column: depunins
@@ -681,7 +681,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: DEPLGAMT
   column: deplgamt
@@ -689,7 +689,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: DEPSMB
   column: depsmb
@@ -697,7 +697,7 @@ fields:
   unit: count
   group: funding
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: CD3LES
   column: cd3les
@@ -705,7 +705,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: CD3T12
   column: cd3t12
@@ -713,7 +713,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: CD1T3
   column: cd1t3
@@ -721,7 +721,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: CDOV3
   column: cdov3
@@ -729,7 +729,7 @@ fields:
   unit: thousands_usd
   group: funding
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: SCAF
   column: scaf
@@ -737,7 +737,7 @@ fields:
   unit: thousands_usd
   group: securities
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: SCAA
   column: scaa
@@ -745,7 +745,7 @@ fields:
   unit: thousands_usd
   group: securities
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: SCHF
   column: schf
@@ -753,7 +753,7 @@ fields:
   unit: thousands_usd
   group: securities
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: ROA
   column: roa
@@ -761,7 +761,7 @@ fields:
   unit: percent
   group: other
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: ROAQ
   column: roaq
@@ -769,7 +769,7 @@ fields:
   unit: percent
   group: other
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: ROE
   column: roe
@@ -777,7 +777,7 @@ fields:
   unit: percent
   group: other
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NIMY
   column: nimy
@@ -785,7 +785,7 @@ fields:
   unit: percent
   group: other
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NIMYQ
   column: nimyq
@@ -793,7 +793,7 @@ fields:
   unit: percent
   group: other
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: EEFFR
   column: eeffr
@@ -801,7 +801,7 @@ fields:
   unit: percent
   group: other
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: EEFFQR
   column: eeffqr
@@ -809,7 +809,7 @@ fields:
   unit: percent
   group: other
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: NONIIAY
   column: noniiay
@@ -817,7 +817,7 @@ fields:
   unit: percent
   group: other
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNLSDEPR
   column: lnlsdepr
@@ -825,7 +825,7 @@ fields:
   unit: percent
   group: other
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: LNLSNTV
   column: lnlsntv
@@ -833,7 +833,7 @@ fields:
   unit: percent
   group: other
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: RBCT1J
   column: rbct1j
@@ -841,7 +841,7 @@ fields:
   unit: thousands_usd
   group: capital
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: RBC
   column: rbc
@@ -849,7 +849,7 @@ fields:
   unit: thousands_usd
   group: capital
   prototype: P1
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 - code: SCHA
   column: scha
@@ -857,7 +857,7 @@ fields:
   unit: thousands_usd
   group: securities
   prototype: P2
-  first_available: null
+  first_available: '2001-03-31'
   in_dictionary: true
 not_found:
 - DEPUNS

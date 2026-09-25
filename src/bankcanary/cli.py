@@ -136,5 +136,26 @@ def build_labels_cmd() -> None:
         )
 
 
+@app.command("dq-report")
+def dq_report_cmd() -> None:
+    """Write reports/data_quality.md and fill first_available in config/fields.yaml."""
+    from bankcanary.config import load_settings
+    from bankcanary.quality.report import build_report
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    path, s = build_report(load_settings())
+    m = s["matching"]
+    typer.echo(f"report: {path}")
+    typer.echo(
+        f"financials_raw: {s['rows']} rows, {s['quarters']} quarters, latest {s['latest_repdte']}"
+    )
+    typer.echo(f"first_available updated for {s['fields_updated']} field(s) in config/fields.yaml")
+    typer.echo(
+        f"failures 2001 onward: {m['failures']}, matched to a prior report: {m['matched']} "
+        f"({m['share']:.1%})"
+    )
+    typer.echo(f"structural missingness changes: {len(s['structural_changes'])}")
+
+
 if __name__ == "__main__":
     app()

@@ -87,3 +87,13 @@ open for the owner to revisit.
   `(avail_date, window_end]`; assistance-only banks are plain negatives. `window_end` uses
   `DateOffset(months=3*H)`, which clamps a leap-day `avail_date` (2008-02-29) to
   2009-02-28; the tests pin that.
+- 2026-09-25 — **Data-quality report reads the Parquet files, not `warehouse.duckdb`:**
+  `bankcanary dq-report` opens an in-memory DuckDB with one view per Parquet table, so the
+  report is tied to the canonical store and tests can point it at a `tmp_path` warehouse.
+  "Structural" missingness = a null share moving by ≥ 30% between consecutive years (the
+  threshold catches the 2007 real-estate breakdown items, the 2014 and 2020 capital-rule
+  changes and CBLR filers dropping `rbc1rwaj`/`rbct1cer` from 2020); fields with ≥ 5% nulls
+  in the latest full year are listed separately. `first_available` in `config/fields.yaml`
+  is only ever written for financial columns present in `financials_raw`; identity and
+  attribute fields stay `null`. The report has no timestamp so a rebuild from the same
+  tables is byte-identical.
