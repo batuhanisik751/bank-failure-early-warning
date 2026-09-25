@@ -15,7 +15,7 @@ import logging
 import pandas as pd
 
 from bankcanary.config import Settings
-from bankcanary.features import registry
+from bankcanary.features import macro, registry
 from bankcanary.features.ytd import KEY, YTD_PREV_MISSING, deaccumulate
 
 log = logging.getLogger(__name__)
@@ -53,6 +53,13 @@ def column_order(version: str = "v1") -> list[str]:
     return p1 + [YTD_PREV_MISSING] + p2
 
 
+def with_macro_state(version: str, deps: dict, settings: Settings | None = None) -> dict:
+    """``deps`` plus ``macro_state`` from Parquet when the version needs it and none came in."""
+    if macro in registry.modules(version) and deps.get("macro_state") is None:
+        deps = {**deps, "macro_state": macro.load_macro_state(settings)}
+    return deps
+
+
 def build_features(panel: pd.DataFrame, version: str = "v1", **deps: object) -> pd.DataFrame:
     """Every registered feature of ``version`` for every panel row, plus ``ytd_prev_missing``.
 
@@ -63,6 +70,7 @@ def build_features(panel: pd.DataFrame, version: str = "v1", **deps: object) -> 
     quarter-end row exists), so it is computed once from ``netinc``.
     """
     table_name(version)
+    deps = with_macro_state(version, deps)
     built = pd.DataFrame(index=panel.index)
     for module in registry.modules(version):
         frame = module.build(panel, features=built, **deps)
@@ -103,7 +111,9 @@ def build_features_table(
 
     name = table_name(version)
     panel = read_table("panel", settings=settings)
-    features = build_features(panel, version=version, **(deps or {}))
+    features = build_features(
+        panel, version=version, **with_macro_state(version, deps or {}, settings)
+    )
     path = write_table(features, name, key=TABLE_KEY, settings=settings)
     rows = replace_table(name, path, settings=settings)
     n_features = len(registry.feature_names(version=version))

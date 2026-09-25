@@ -20,6 +20,7 @@ from bankcanary.features import (
     concentration,
     earnings,
     liquidity,
+    macro,
     management,
     run_risk,
     sensitivity,
@@ -48,7 +49,7 @@ MODULES_V1: tuple[ModuleType, ...] = (
 
 #: Prototype 2 modules appended after the P1 set (CONTRACT section 12). The macro module
 #: goes last, after ``structure_p2``.
-MODULES_P2: tuple[ModuleType, ...] = (sensitivity, run_risk, trends, structure_p2)
+MODULES_P2: tuple[ModuleType, ...] = (sensitivity, run_risk, trends, structure_p2, macro)
 
 #: Module order per feature-table version.
 MODULES_BY_VERSION: dict[str, tuple[ModuleType, ...]] = {

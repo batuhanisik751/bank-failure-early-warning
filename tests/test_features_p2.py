@@ -33,7 +33,23 @@ P2_ROWS = {
     "cdov3": [100.0, 2.0, 0.0],
     "stalp": ["GA", "GA", "PR"],
     "cb": [True, True, False],
+    "avail_date": pd.to_datetime(["2008-05-30", "2008-08-29", "2008-08-29"]),
 }
+
+#: A tiny ``macro_state`` for the P2 rows above (GA has state series, PR only national).
+MACRO_STATE = pd.DataFrame(
+    {
+        "stalp": ["GA", "GA", "PR", "PR"],
+        "avail_date": pd.to_datetime(["2008-05-30", "2008-08-29"] * 2),
+        "unemp_rate": [5.3, 6.2, np.nan, np.nan],
+        "unemp_change_4q": [0.7, 1.5, np.nan, np.nan],
+        "hpi_change_4q": [-0.02, -0.05, np.nan, np.nan],
+        "fedfunds": [1.98, 2.0, 1.98, 2.0],
+        "fedfunds_change_4q": [-3.27, -3.02, -3.27, -3.02],
+        "t10y3m": [1.9, 2.1, 1.9, 2.1],
+        "dgs10": [3.9, 3.8, 3.9, 3.8],
+    }
+)
 
 
 @pytest.fixture
@@ -134,7 +150,7 @@ def test_registry_versions_and_monotone_signs() -> None:
 
 def test_build_features_v2_extends_v1_layout(panel: pd.DataFrame) -> None:
     v1 = build_features(panel)
-    v2 = build_features(panel, version="v2")
+    v2 = build_features(panel, version="v2", macro_state=MACRO_STATE)
     assert list(v1.columns) == ["cert", "repdte"] + registry.feature_names() + ["ytd_prev_missing"]
     assert list(v2.columns)[: len(v1.columns) + len(P2_NAMES)] == list(v1.columns) + P2_NAMES
     assert list(v2.columns) == ["cert", "repdte"] + column_order("v2")

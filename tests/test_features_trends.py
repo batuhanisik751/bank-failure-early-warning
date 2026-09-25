@@ -127,7 +127,8 @@ def test_structure_p2_build_one_hots_and_community_flag() -> None:
 def test_registry_order_signs_and_v2_build(panel_p2: pd.DataFrame) -> None:
     v2 = registry.feature_names(version="v2")
     new = [s.name for s in trends.SPECS + structure_p2.SPECS]
-    assert v2[-len(new) :] == new and len(v2) == 77
+    start = v2.index(new[0])
+    assert v2[start : start + len(new)] == new and len(v2) == 83  # macro follows
     assert v2.index("d1q_noncurrent_ratio") > v2.index("uninsured_share")
     signs = dict(zip(v2, registry.monotone_constraints(v2)))
     assert signs["d1q_noncurrent_ratio"] == 1 and signs["d4q_texas_ratio"] == 1
@@ -138,8 +139,11 @@ def test_registry_order_signs_and_v2_build(panel_p2: pd.DataFrame) -> None:
     assert all(signs[f"region_{c}"] == 0 for c in structure_p2.REGION_CODES)
     for s in trends.SPECS + structure_p2.SPECS:
         assert s.prototype == "P2" and s.explanation.endswith(MONOTONE_TEXT[s.monotone])
-    frame = build_features(panel_p2, version="v2")
-    assert list(frame.columns)[-len(new) :] == new
+    from tests.test_features_p2 import MACRO_STATE
+
+    frame = build_features(panel_p2, version="v2", macro_state=MACRO_STATE)
+    cols = list(frame.columns)
+    assert cols[cols.index(new[0]) : cols.index(new[0]) + len(new)] == new
     assert frame["consecutive_loss_quarters"].notna().all()
     # Bank 1's Q2 row sees its Q1 row one quarter earlier; bank 2 has no history.
     assert frame["d1q_equity_to_assets"].iloc[1] == pytest.approx(0.12 - 0.01)

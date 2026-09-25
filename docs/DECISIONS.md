@@ -319,3 +319,19 @@ open for the owner to revisit.
   "v2 == v1 + P2 names" assertions became prefix checks so later modules can append.
   Rebuilt `features_v2`: 710,691 rows x 77 features (34 P2) in 11 s. SVB 2022Q4:
   `d4q_unrealized_loss_to_tier1` = -0.964.
+- 2026-09-25 — **D4b macro features joined into `features_v2`.** `features/macro.py` is a pure
+  join of `macro_state`: the three state series on `(stalp, avail_date)` and the three
+  national series (`t10y3m`, `dgs10`, `fedfunds_change_4q`) on `avail_date` alone, so the
+  102 null-`stalp` rows and the territories keep the national columns while their state
+  columns stay NaN (1,423 rows, 0.20 % of the table; the trees read the gap as its own
+  signal). `macro_dgs10` is registered beside the contract's five columns because the level
+  is free and step D5 may use it. Signs: unemployment level and change +1, HPI change -1,
+  curve slope -1 (inversion precedes recessions and squeezes maturity transformation), fed
+  funds change +1 (the 2023 mechanism), `dgs10` 0 (both high and low levels have coincided
+  with crises). `build_features` reads `macro_state` from Parquet only for a version whose
+  module list includes `macro` and only when no frame is passed, so v1 builds and the unit
+  tests (which pass a four-row `MACRO_STATE` fixture) never touch `data/`. The D2 fixture
+  gained `avail_date` and the two existing v2 layout tests now pass that fixture; the D3
+  suffix assertion became a contiguous-slice check since macro now ends the table. Rebuilt
+  `features_v2`: 710,691 rows x 83 features (40 P2) in 12 s; `features_v1` sha256 unchanged.
+  SVB 2022Q4: `macro_t10y3m` = -0.96, `macro_fedfunds_change_4q` = 4.49.
