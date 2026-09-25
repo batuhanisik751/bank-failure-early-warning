@@ -155,3 +155,22 @@ open for the owner to revisit.
   `total_rbc_ratio_missing = True`). The API never returns null for the ratio: all 45,423
   CBLR-filer rows (2020+) and roughly 70-120 rows a year before that carry an exact 0, which
   no going-concern bank has. Negative ratios (a real, insolvent bank) are kept as signal.
+- 2026-09-25 — **Baselines (C4):** the `Winsorizer` leaves binary (0/1) columns and
+  all-missing columns unclipped: a rare flag such as `texas_ratio_capped` (0.15% of rows)
+  would otherwise be clipped to all zeros at the 99.5th percentile. The Texas-ratio
+  baseline is a one-step pipeline (no winsorise/impute/scale): the ratio is already capped
+  at 10 and clipping its top half-percent would tie exactly the banks a ranking metric
+  cares about. Missing Texas ratio scores -1, below every real value. Artefacts for the
+  primary horizon live in `models/<name>/`; other horizons get `models/<name>_<H>q/` and
+  `reports/p1_baselines_<H>q.md`. `bankcanary evaluate` re-scores the saved pipeline on the
+  test split instead of reading `metrics.json` back, so the artefact itself is checked.
+- 2026-09-25 — **`.gitignore` anchoring (C4):** the unanchored `models/` pattern also hid
+  the new `src/bankcanary/models/` package from git, so it is now `/models/` (repo-root
+  artefact directory only). `data/` is left as is; no source directory carries that name.
+- 2026-09-25 — **Regularised logit below the Texas ratio (C4):** on the fixed 4q split
+  the all-feature logit (C=1.0, balanced) scores PR-AUC 0.20 against 0.37 for the Texas
+  ratio and 0.37 for the six-feature logit. Coefficients show the four collinear capital
+  measures with large, sign-flipped weights. Stronger L2 helps but does not close the gap
+  (PR-AUC 0.20 at C=0.1, 0.22 at C=0.01, 0.26 at C=0.001), so C stays at the contract's
+  1.0 and the spec acceptance criterion "logit beats Texas on PR-AUC" is open for the
+  feature-selection / gradient-boosting steps rather than patched here.

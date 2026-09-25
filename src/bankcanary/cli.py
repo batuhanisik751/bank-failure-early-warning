@@ -173,5 +173,68 @@ def dq_report_cmd() -> None:
     typer.echo(f"structural missingness changes: {len(s['structural_changes'])}")
 
 
+@app.command()
+def train(
+    model: str = typer.Option(..., "--model", help="texas | logit_small | logit | all"),
+    horizon: int = typer.Option(4, "--horizon", help="Label horizon in quarters (4 or 8)."),
+) -> None:
+    """Fit a baseline on the fixed out-of-time split and save it under models/<name>/."""
+    from bankcanary.config import load_settings
+    from bankcanary.models.baselines import MODEL_NAMES
+    from bankcanary.models.train import load_training_frame, train_model
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    if model != "all" and model not in MODEL_NAMES:
+        raise typer.BadParameter(f"--model must be one of {MODEL_NAMES + ('all',)}")
+    settings = load_settings()
+    frame = load_training_frame(settings)
+    for name in MODEL_NAMES if model == "all" else [model]:
+        r = train_model(name, horizon, settings, frame=frame)
+        c = r.config
+        typer.echo(
+            f"{name} {horizon}q: train {c['train_repdte_min']}..{c['train_repdte_max']} "
+            f"({c['n_train']} rows, {c['positives_train']} positives), test "
+            f"{c['test_repdte_min']}..{c['test_repdte_max']} ({c['n_test']} rows, "
+            f"{c['positives_test']} positives)"
+        )
+        typer.echo(
+            f"  pr_auc {r.metrics['pr_auc']:.4f}  roc_auc {r.metrics['roc_auc']:.4f}  "
+            f"recall@2% {r.metrics['recall_at_2pct']:.3f}  "
+            f"recall@top100 {r.metrics['recall_at_top100']:.3f} -> {r.paths['dir']}"
+        )
+
+
+@app.command()
+def evaluate(
+    model: str | None = typer.Option(None, "--model", help="One model; default: all trained."),
+    horizon: int = typer.Option(4, "--horizon", help="Label horizon in quarters (4 or 8)."),
+) -> None:
+    """Re-score saved baselines on the fixed test split and write reports/p1_baselines.md."""
+    from bankcanary.config import load_settings
+    from bankcanary.models.train import (
+        evaluate_model,
+        load_training_frame,
+        report_path,
+        write_baselines_report,
+    )
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    settings = load_settings()
+    frame = load_training_frame(settings)
+    results = evaluate_model(model, horizon, settings, frame=frame)
+    if not results:
+        typer.echo("no trained model found; run `bankcanary train --model all` first")
+        raise typer.Exit(code=1)
+    for name, r in results.items():
+        m = r.metrics
+        typer.echo(
+            f"{name} {horizon}q: pr_auc {m['pr_auc']:.4f} roc_auc {m['roc_auc']:.4f} "
+            f"recall@2% {m['recall_at_2pct']:.3f} recall@top100 {m['recall_at_top100']:.3f} "
+            f"(n {m['n']}, failures {m['n_failures']})"
+        )
+    path = write_baselines_report(results, settings, horizon, report_path(settings, horizon))
+    typer.echo(f"report: {path}")
+
+
 if __name__ == "__main__":
     app()

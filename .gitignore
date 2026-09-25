@@ -1,6 +1,6 @@
 # Data, models and secrets never enter git
 data/
-models/
+/models/
 .env
 *.duckdb
 *.duckdb.wal
