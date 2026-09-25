@@ -17,3 +17,8 @@ open for the owner to revisit.
 - 2026-09-25 — **API key:** the FDIC BankFind API served every probed endpoint without a
   key (rate-limit window of 20 requests advertised in response headers). `FDIC_API_KEY`
   stays optional; the client sends it only when set.
+- 2026-09-25 — **FDIC cache validation:** a cached file is honoured only when its stored
+  canonical query (endpoint, filters, sorted fields, sort) matches the request; a name
+  collision with a different field list refetches and overwrites instead of silently
+  returning stale columns. Retry back-off (`wait`) is injectable so tests run with zero
+  waits; HTTP 4xx other than 429 are not retried (the API returns 404 for bad paths).

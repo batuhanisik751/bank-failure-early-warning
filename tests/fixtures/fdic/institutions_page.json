@@ -1,0 +1,9 @@
+{
+  "meta": {"total": 3, "parameters": {"fields": "CERT,NAME,STALP", "limit": "10000", "offset": "0"}},
+  "data": [
+    {"data": {"CERT": 3511, "NAME": "WELLS FARGO BANK, NATIONAL ASSOCIATION", "STALP": "SD"}, "score": 0},
+    {"data": {"CERT": 24735, "NAME": "SILICON VALLEY BANK", "STALP": "CA"}, "score": 0},
+    {"data": {"CERT": 628, "NAME": "JPMORGAN CHASE BANK, NATIONAL ASSOCIATION", "STALP": "OH"}, "score": 0}
+  ],
+  "totals": {"count": 3}
+}

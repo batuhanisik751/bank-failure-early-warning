@@ -1,0 +1,22 @@
+title: RIS financial data properties (trimmed fixture)
+type: object
+properties:
+  data:
+    type: object
+    properties:
+      CERT:
+        title: FDIC Certificate #
+        description: A unique number assigned by the FDIC used to identify institutions.
+        type: number
+      REPDTE:
+        title: Report Date
+        description: The last day of the financial reporting period.
+        type: string
+      ASSET:
+        title: Total assets
+        description: The sum of all assets owned by the institution, in thousands of dollars.
+        type: number
+      NCLNLS:
+        title: Noncurrent loans and leases
+        description: Loans 90 days or more past due plus loans in nonaccrual status.
+        type: number

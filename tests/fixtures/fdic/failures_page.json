@@ -1,0 +1,8 @@
+{
+  "meta": {"total": 2, "parameters": {"filters": "FAILYR:2023", "limit": "10000", "offset": "0"}},
+  "data": [
+    {"data": {"CERT": 24735, "NAME": "SILICON VALLEY BANK", "FAILDATE": "03/10/2023", "FAILYR": 2023, "RESTYPE": "FAILURE", "RESTYPE1": "PA", "COST": 20000000, "QBFASSET": 209026000, "QBFDEP": 175380000, "CITYST": "SANTA CLARA, CA", "PSTALP": "CA", "CHCLASS1": "NM"}, "score": 0},
+    {"data": {"CERT": 57053, "NAME": "SIGNATURE BANK", "FAILDATE": "03/12/2023", "FAILYR": 2023, "RESTYPE": "FAILURE", "RESTYPE1": "PA", "COST": 2400000, "QBFASSET": 110363650, "QBFDEP": 88612000, "CITYST": "NEW YORK, NY", "PSTALP": "NY", "CHCLASS1": "NM"}, "score": 0}
+  ],
+  "totals": {"count": 2}
+}
