@@ -182,3 +182,13 @@ open for the owner to revisit.
   second. The first cell adds `src/` to `sys.path` because the editable install's `.pth`
   is not honoured in this checkout (`uv run bankcanary` needs `PYTHONPATH=src`); the
   README's Reproduce block records the same workaround.
+- 2026-09-25 — **Acceptance evidence re-measured, root cause of the `.pth` gotcha:** the
+  five Prototype 1 criteria in `docs/P1_CHECKLIST.md` were re-verified from the commands
+  themselves (hashes before/after a full `build-panel`/`build-labels`/`build-features`
+  re-run, DuckDB counts, `metrics.json`, a timed `nbconvert --execute`) rather than from
+  the reports; the logit-versus-Texas criterion stays unticked. The `ModuleNotFoundError`
+  behind the `PYTHONPATH=src` workaround is not an install problem: every file under
+  `.venv/` has the macOS `hidden` flag set, and Python 3.12's `site.addpackage` skips
+  hidden `.pth` files (`site._trace` prints "Skipping hidden .pth file"). `chflags
+  nohidden` on the `.pth` files fixes it, but the flag was re-applied within minutes, so
+  the `PYTHONPATH=src` prefix remains the documented way to run the CLI and the tests.
