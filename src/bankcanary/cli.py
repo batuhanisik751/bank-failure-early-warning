@@ -136,6 +136,22 @@ def build_labels_cmd() -> None:
         )
 
 
+@app.command("build-features")
+def build_features_cmd() -> None:
+    """Compute the Prototype 1 CAMELS feature set from the panel into features_v1."""
+    from bankcanary.config import load_settings
+    from bankcanary.features.build import build_features_table
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    _, s = build_features_table(load_settings())
+    typer.echo(
+        f"features_v1: {s['rows']} rows, {s['features']} features (duckdb {s['duckdb_rows']} rows)"
+    )
+    if "contrast" in s:
+        typer.echo("median feature values, label-complete rows, y_4q = 0 vs 1:")
+        typer.echo(s["contrast"].round(4).to_string())
+
+
 @app.command("dq-report")
 def dq_report_cmd() -> None:
     """Write reports/data_quality.md and fill first_available in config/fields.yaml."""

@@ -139,3 +139,19 @@ open for the owner to revisit.
   string column so the `pooled` row fits. Lead time counts calendar quarters between the
   first flagged report date and the failure date. Figures strip the `Software` and
   creation-time metadata so re-runs are byte-identical.
+- 2026-09-25 (C2 features): `wholesale_funding_ratio = (othbor + bro) / asset`, without
+  adding `othbfhlb`: the FDIC defines "other borrowed money" as *including* FHLB advances
+  (and in the panel `othbor == othbfhlb` on 83% of rows, never meaningfully below it), so
+  adding the advances again would double count them. Concentration ratios divide by `rbc`
+  (total risk-based capital, dollars) and fall back to `rbct1j + lnatres` when `rbc <= 0`,
+  which covers the 45,601 CBLR-filer rows that report `rbc = 0`. `cre_to_capital` uses the
+  non-owner-occupied split `lnrenrot` where reported (2007 onward) and total `lnrenres`
+  before that. `texas_ratio` and `reserve_coverage` are capped at 10; a computed Texas
+  ratio above 10 is clipped and flagged like a non-positive denominator. Missing `intan`
+  counts as zero (0.25% of rows). Management growth proxies live in `features/structure.py`
+  (no separate module). Rows with `asset <= 0` (none in the panel) are kept, with NaN
+  ratios, so `features_v1` stays one-to-one with `panel`; any exclusion is a modelling step.
+- 2026-09-25 (C2 features): `total_rbc_ratio` treats `rbcrwaj == 0` as not reported (NaN,
+  `total_rbc_ratio_missing = True`). The API never returns null for the ratio: all 45,423
+  CBLR-filer rows (2020+) and roughly 70-120 rows a year before that carry an exact 0, which
+  no going-concern bank has. Negative ratios (a real, insolvent bank) are kept as signal.
