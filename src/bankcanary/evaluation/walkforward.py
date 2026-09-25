@@ -9,7 +9,10 @@ reported in ``Y``. The per-year artefacts land in ``models/walkforward/<Y>/<mode
 ``data/walkforward/<Y>_<model>_<H>q.parquet``, and :func:`rebuild_scores_table` folds
 those files into the ``walkforward_scores`` table (CONTRACT section 11) so that the
 Parquet and DuckDB copies are always a deterministic function of the per-year files.
-Each (year, model, horizon) fit logs one run through :mod:`bankcanary.tracking`.
+Hyper-parameters are re-selected for every test year on a validation slice carved from
+that year's own training period (:func:`inner_masks`, :func:`tune_year`; spec rule 6.7),
+so no test year ever informs the model that scores it. Each (year, model, horizon) fit
+logs one run through :mod:`bankcanary.tracking`, and each tuning candidate another.
 """
 
 from __future__ import annotations
@@ -46,6 +49,22 @@ SCORE_COLUMNS: tuple[str, ...] = TABLE_KEY + (
     "censored",
 )
 QUARTERS_PER_YEAR = 4
+#: Nested tuning (spec rule 6.7): each test year's hyper-parameters are chosen on the last
+#: ``VALIDATION_QUARTERS`` report quarters of *its own* training period, widened backwards a
+#: year at a time until both the validation slice and the inner training set hold at least
+#: ``MIN_VALIDATION_POSITIVES`` failures. Nothing dated on or after the test year is seen.
+VALIDATION_QUARTERS = 8
+MIN_VALIDATION_POSITIVES = 5
+TUNING_RUN = "tune_walkforward"
+#: Inverse L2 strengths for ``logit`` and ``hazard`` (the D6/D7 grid, strongest last).
+C_GRID: tuple[float, ...] = (1.0, 0.1, 0.03, 0.01, 0.003, 0.001, 0.0003)
+#: Booster grid around ``settings.models.gbdt.params`` (iteration count and monotone
+#: decision are taken from the settings, not re-tuned per year).
+GBDT_GRID: dict[str, tuple] = {
+    "learning_rate": (0.03, 0.1),
+    "num_leaves": (15, 63),
+    "min_samples_leaf": (50, 200),
+}
 
 
 def latest_complete_year(labels: pd.DataFrame, horizon: int) -> int:
@@ -97,6 +116,66 @@ def year_masks(
     return train, test
 
 
+def inner_masks(
+    frame: pd.DataFrame, horizon: int, year: int, fit_horizon: int | None = None, lag_days=None
+) -> tuple[pd.Series, pd.Series, dict]:
+    """``(inner_train, validation, bounds)`` nested inside test year ``year``'s training period.
+
+    Spec rule 6.7: hyper-parameters are chosen on data the final model may train on,
+    never on the test year. The validation slice is the last :data:`VALIDATION_QUARTERS`
+    report quarters of :func:`training_mask` at the *scoring* horizon (so every
+    validation outcome was known on the year's first prediction date); the inner training
+    rows are the year's training rows at ``fit_horizon`` whose windows closed before the
+    slice's first prediction date, re-checked with :func:`assert_no_leakage`. When either
+    side holds fewer than :data:`MIN_VALIDATION_POSITIVES` failures the slice is widened
+    backwards a year at a time; ``bounds["sufficient"]`` is ``False`` when no width works
+    (the caller then falls back to a fixed default, never to a value chosen on later data).
+    """
+    from bankcanary.splits.time_split import DEFAULT_LAG_DAYS
+
+    lag = DEFAULT_LAG_DAYS if lag_days is None else int(lag_days)
+    fit_h = horizon if fit_horizon is None else int(fit_horizon)
+    start, _ = year_bounds(year)
+    outer = training_mask(frame, horizon, start, lag)
+    outer_fit = training_mask(frame, fit_h, start, lag)
+    quarters = sorted(pd.Timestamp(q) for q in frame.loc[outer, "repdte"].unique())
+    if not quarters:
+        raise ValueError(f"walk-forward {horizon}q {year}: no training rows to tune on")
+    y_valid, y_fit = horizon_columns(horizon)[0], horizon_columns(fit_h)[0]
+    vend = quarters[-1]
+    n = min(VALIDATION_QUARTERS, len(quarters))
+    first = None
+    while True:
+        vstart = quarters[-n]
+        validation = test_mask(frame, horizon, vstart, vend) & outer
+        inner = training_mask(frame, fit_h, vstart, lag) & outer_fit
+        bounds = {
+            "validation_start": _fmt(vstart),
+            "validation_end": _fmt(vend),
+            "validation_quarters": int(n),
+            "inner_train_repdte_max": _fmt(frame.loc[inner, "repdte"].max()),
+            "n_inner_train": int(inner.sum()),
+            "positives_inner_train": int(frame.loc[inner, y_fit].sum()),
+            "n_validation": int(validation.sum()),
+            "positives_validation": int(frame.loc[validation, y_valid].sum()),
+        }
+        enough = MIN_VALIDATION_POSITIVES
+        bounds["sufficient"] = (
+            bounds["positives_validation"] >= enough and bounds["positives_inner_train"] >= enough
+        )
+        if first is None:
+            first = (inner, validation, bounds)
+        if bounds["sufficient"] or n + QUARTERS_PER_YEAR > len(quarters):
+            break
+        n += QUARTERS_PER_YEAR
+    if not bounds["sufficient"]:
+        inner, validation, bounds = first
+    if inner.any():
+        assert_no_leakage(frame.loc[inner], fit_h, bounds["validation_start"], lag)
+    names = (f"inner_train_{fit_h}q_{year}", f"validation_{horizon}q_{year}")
+    return inner.rename(names[0]), validation.rename(names[1]), bounds
+
+
 def fit_horizon_of(model: str, horizon: int) -> int:
     """The label a model is fitted on: the hazard always learns the one-quarter event."""
     from bankcanary.models.hazard import HAZARD_HORIZON
@@ -104,15 +183,56 @@ def fit_horizon_of(model: str, horizon: int) -> int:
     return HAZARD_HORIZON if model == "hazard" else int(horizon)
 
 
-def build_model(model: str, settings: Settings, n_estimators: int | None = None):
+def candidate_grid(model: str, settings: Settings) -> list[dict]:
+    """The hyper-parameter candidates :func:`tune_year` ranks for ``model`` (empty for texas).
+
+    ``logit`` and ``hazard`` vary ``C`` over :data:`C_GRID`; ``gbdt`` varies the
+    :data:`GBDT_GRID` axes with every other parameter from ``settings.models.gbdt``.
+    """
+    import itertools
+
+    if model in ("logit", "hazard"):
+        return [{"C": float(c)} for c in C_GRID]
+    if model == "gbdt":
+        base = dict(settings.models.gbdt.params)
+        out = []
+        for values in itertools.product(*GBDT_GRID.values()):
+            out.append({**base, **dict(zip(GBDT_GRID.keys(), values, strict=True))})
+        return out
+    return []
+
+
+def fallback_params(model: str, settings: Settings) -> dict:
+    """The most regularised grid point: used only when a year has too few failures to tune."""
+    grid = candidate_grid(model, settings)
+    if model in ("logit", "hazard"):
+        return {"C": min(C_GRID)}
+    if model == "gbdt":
+        return {
+            **grid[0],
+            "learning_rate": min(GBDT_GRID["learning_rate"]),
+            "num_leaves": min(GBDT_GRID["num_leaves"]),
+            "min_samples_leaf": max(GBDT_GRID["min_samples_leaf"]),
+        }
+    return {}
+
+
+def build_model(
+    model: str, settings: Settings, n_estimators: int | None = None, params: dict | None = None
+):
     """``(unfitted pipeline, feature list, config)`` for one walk-forward model.
 
     ``texas`` ranks by the Texas ratio alone; ``logit`` is the Prototype 1 regularised
-    logit (``LOGIT_C``, no class weighting) on every v2 feature; ``gbdt`` takes backend,
-    constraints and parameters from ``settings.models.gbdt`` (``n_estimators`` overrides
-    the iteration count when a year's training set needs capping); ``hazard`` is the
-    unweighted 1q logit at ``HAZARD_C`` whose output is converted with ``1 - (1 - h)^H``.
+    logit (no class weighting) on every v2 feature; ``gbdt`` takes backend and
+    constraints from ``settings.models.gbdt`` (``n_estimators`` overrides the iteration
+    count when a year's training set needs capping); ``hazard`` is the unweighted 1q
+    logit whose output is converted with ``1 - (1 - h)^H``. ``params`` are the year's
+    tuned hyper-parameters from :func:`tune_year` (``C`` for the logits, the booster
+    parameters for ``gbdt``); without them the fixed-split constants (``LOGIT_C``,
+    ``HAZARD_C``, ``settings.models.gbdt.params``) apply, which is only leak-free for
+    test years from 2010 on and is therefore never what :func:`fit_year` does.
     """
+    params = dict(params or {})
     from bankcanary.features.registry import feature_names
     from bankcanary.models import baselines, gbdt, hazard
 
@@ -126,12 +246,13 @@ def build_model(model: str, settings: Settings, n_estimators: int | None = None)
 
         from bankcanary.models.preprocess import make_pipeline
 
-        pipe = make_pipeline(LogisticRegression(C=baselines.LOGIT_C, max_iter=2000))
-        config.update({"C": baselines.LOGIT_C, "class_weight": None})
+        c = float(params.get("C", baselines.LOGIT_C))
+        pipe = make_pipeline(LogisticRegression(C=c, max_iter=2000))
+        config.update({"C": c, "class_weight": None})
         return pipe, features, config
     if model == "gbdt":
         cfg = settings.models.gbdt
-        params = dict(cfg.params)
+        params = {**cfg.params, **params}
         if n_estimators is not None:
             params["n_estimators"] = int(n_estimators)
         pipe = gbdt.make_gbdt(cfg.backend, cfg.monotone, features, **params)
@@ -146,9 +267,87 @@ def build_model(model: str, settings: Settings, n_estimators: int | None = None)
         )
         return pipe, features, config
     if model == "hazard":
-        config.update({"C": hazard.HAZARD_C, "class_weight": None, "conversion": "1 - (1 - h)^H"})
-        return hazard.make_hazard(), features, config
+        c = float(params.get("C", hazard.HAZARD_C))
+        config.update({"C": c, "class_weight": None, "conversion": "1 - (1 - h)^H"})
+        return hazard.make_hazard(c), features, config
     raise ValueError(f"unknown walk-forward model {model!r}; choose one of {MODELS}")
+
+
+def tune_year(
+    frame: pd.DataFrame,
+    settings: Settings,
+    year: int,
+    model: str,
+    horizon: int = PRIMARY_HORIZON,
+    n_estimators: int | None = None,
+) -> dict:
+    """Choose ``model``'s hyper-parameters for test year ``year`` on its nested slice.
+
+    Every candidate from :func:`candidate_grid` is fitted on the inner training rows of
+    :func:`inner_masks` and scored on the validation rows at the scoring horizon (the
+    hazard's 1q output is converted first); the winner is the highest validation PR-AUC,
+    the first in grid order on ties. Each candidate logs a ``runs/tune_walkforward/``
+    record and a re-run reads the cached metrics instead of refitting. The returned dict
+    carries the slice bounds, the scored ``grid`` and the ``selected`` parameters; when the
+    slice is too thin (``sufficient`` False) ``selected`` is :func:`fallback_params` and
+    ``fallback`` says why. ``texas`` has nothing to tune and returns an empty selection.
+    """
+    from bankcanary import tracking
+    from bankcanary.evaluation.metrics import evaluate
+    from bankcanary.models.baselines import score_pipeline
+    from bankcanary.models.hazard import convert_hazard
+
+    horizon, year = int(horizon), int(year)
+    grid = candidate_grid(model, settings)
+    if not grid:
+        return {"selected": {}, "grid": [], "metric": None, "fallback": "nothing to tune"}
+    fit_h = fit_horizon_of(model, horizon)
+    inner, validation, bounds = inner_masks(
+        frame, horizon, year, fit_h, settings.availability_lag_days
+    )
+    if not bounds["sufficient"]:
+        reason = (
+            f"fewer than {MIN_VALIDATION_POSITIVES} failures in the validation slice or the "
+            "inner training rows: most regularised grid point used"
+        )
+        log.warning("walk-forward %dq %d %s tuning: %s", horizon, year, model, reason)
+        selected = fallback_params(model, settings)
+        return {**bounds, "selected": selected, "grid": [], "metric": None, "fallback": reason}
+    y_fit, y_val = horizon_columns(fit_h)[0], horizon_columns(horizon)[0]
+    tr, va = frame.loc[inner], frame.loc[validation]
+    base = {
+        "model": model,
+        "horizon": horizon,
+        "fit_horizon": fit_h,
+        "test_year": year,
+        "features_version": FEATURE_VERSION,
+        "availability_lag_days": int(settings.availability_lag_days),
+        **{k: bounds[k] for k in ("validation_start", "validation_end", "n_inner_train")},
+    }
+    rows = []
+    for params in grid:
+        config = {**base, "params": params}
+        metrics = tracking.find_metrics(TUNING_RUN, config, settings)
+        if metrics is None:
+            pipe, features, _ = build_model(model, settings, n_estimators, params)
+            pipe.fit(tr[list(features)], tr[y_fit].astype(int).to_numpy())
+            score = score_pipeline(pipe, va[list(features)])
+            if model == "hazard":
+                score = convert_hazard(score, horizon)
+            y = va[y_val].astype(int).to_numpy()
+            metrics = evaluate(y, score, tie_breaker=va["cert"].to_numpy())
+            run = tracking.start_run(TUNING_RUN, config, settings)
+            run.log_metrics(metrics)
+            run.finish()
+        keep = ("pr_auc", "roc_auc", "recall_at_2pct", "recall_at_top100")
+        rows.append({"params": params, **{k: metrics.get(k) for k in keep}})
+    ranked = sorted(
+        range(len(rows)),
+        key=lambda i: (-(rows[i]["pr_auc"] if pd.notna(rows[i]["pr_auc"]) else -np.inf), i),
+    )
+    selected = dict(rows[ranked[0]]["params"])
+    log.info("walk-forward %dq %d %s tuning: selected %s", horizon, year, model, selected)
+    return {**bounds, "selected": selected, "grid": rows, "metric": "pr_auc", "fallback": None}
 
 
 def model_dir(settings: Settings, year: int, model: str, horizon: int = PRIMARY_HORIZON) -> Path:
@@ -179,6 +378,7 @@ class YearResult:
     metrics: dict
     scores: pd.DataFrame = field(repr=False)
     paths: dict[str, Path] = field(default_factory=dict)
+    tuning: dict = field(default_factory=dict, repr=False)
 
 
 def _fmt(ts) -> str | None:
@@ -239,10 +439,12 @@ def fit_year(
     n_estimators: int | None = None,
     save: bool = True,
 ) -> YearResult:
-    """Fit ``model`` for test year ``year``, score the year, save artefacts, log a run.
+    """Tune and fit ``model`` for test year ``year``, score the year, save artefacts, log a run.
 
     ``frame`` is ``features_v2`` joined with ``labels`` (see
-    :func:`bankcanary.models.gbdt.load_training_frame`). Training rows are selected by
+    :func:`bankcanary.models.gbdt.load_training_frame`). Hyper-parameters come from
+    :func:`tune_year` on the year's own nested slice (rule 6.7) and are recorded under
+    ``config["tuning"]``. Training rows are selected by
     :func:`year_masks` at the model's own fit label and re-checked for leakage; the
     Texas ranking has nothing to learn but is "fitted" on the same rows so that every
     model loads and scores the same way. With ``save`` the pipeline, config and feature
@@ -252,7 +454,8 @@ def fit_year(
 
     horizon, year = int(horizon), int(year)
     fit_h = fit_horizon_of(model, horizon)
-    pipeline, features, config = build_model(model, settings, n_estimators)
+    tuning = tune_year(frame, settings, year, model, horizon, n_estimators)
+    pipeline, features, config = build_model(model, settings, n_estimators, tuning["selected"])
     y_fit = horizon_columns(fit_h)[0]
     missing = [c for c in list(features) + [y_fit] if c not in frame.columns]
     if missing:
@@ -293,9 +496,12 @@ def fit_year(
             "n_test": int(len(scores)),
             "positives_test": int(scores["y"].sum()),
             "n_features": len(features),
+            "tuning": {k: v for k, v in tuning.items() if k != "grid"},
         }
     )
-    result = YearResult(year, model, horizon, pipeline, list(features), config, metrics, scores)
+    result = YearResult(
+        year, model, horizon, pipeline, list(features), config, metrics, scores, tuning=tuning
+    )
     log.info(
         "walk-forward %dq %d %s: pr_auc %s roc_auc %s",
         horizon,
@@ -317,7 +523,7 @@ def _round(value) -> str:
 
 
 def save_year(result: YearResult, settings: Settings) -> dict[str, Path]:
-    """Write ``pipeline.joblib``, ``config.json``, ``features.json`` and the score file."""
+    """Write ``pipeline.joblib``, the config/features/metrics/tuning JSON files and the scores."""
     out = model_dir(settings, result.year, result.model, result.horizon)
     out.mkdir(parents=True, exist_ok=True)
     paths = {"dir": out, "pipeline": out / "pipeline.joblib"}
@@ -326,6 +532,7 @@ def save_year(result: YearResult, settings: Settings) -> dict[str, Path]:
         ("config", _json_ready(result.config)),
         ("features", list(result.features)),
         ("metrics", _json_ready(result.metrics)),
+        ("tuning", _json_ready(result.tuning)),
     ):
         paths[stem] = out / f"{stem}.json"
         paths[stem].write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
@@ -545,9 +752,16 @@ def write_walkforward_report(
         "test rows are the label-complete reports dated in Y. Scores of all years are pooled "
         "into one ranking for the pooled rows. `texas` ranks by the Texas ratio without a "
         "fit; `logit` is the Prototype 1 regularised logit refitted on the v2 features; "
-        "`gbdt` is the tuned gradient booster from `config/settings.yaml`; `hazard` is the "
-        "one-quarter hazard converted with `1 - (1 - h)^H`. Metrics per year use the "
-        "year's own ranking; `brier` is reported only for probability outputs.",
+        "`gbdt` is the gradient booster (backend and monotone decision from "
+        "`config/settings.yaml`); `hazard` is the one-quarter hazard converted with "
+        "`1 - (1 - h)^H`. Every model's hyper-parameters (`C` for the logits; learning "
+        "rate, leaves and leaf size for the booster) are re-selected for each test year on "
+        f"a nested validation slice: the last {VALIDATION_QUARTERS} report quarters of that "
+        "year's own training period, widened backwards a year at a time while either it or "
+        f"the inner training rows hold fewer than {MIN_VALIDATION_POSITIVES} failures, with "
+        "inner models trained on windows closed before the slice (spec rule 6.7). The "
+        "chosen values are in `models/walkforward/<Y>/<model>/tuning.json`. Metrics per "
+        "year use the year's own ranking; `brier` is reported only for probability outputs.",
         "",
     ]
     ordered = [int(horizon)] + [h for h in horizons if h != int(horizon)]

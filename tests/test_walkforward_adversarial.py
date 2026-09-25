@@ -16,7 +16,7 @@ import pytest
 from bankcanary.evaluation import walkforward as w
 from bankcanary.labels.build import horizon_columns
 from bankcanary.models.hazard import brier, convert_hazard
-from bankcanary.splits import prediction_date, test_mask, training_mask
+from bankcanary.splits import prediction_date, training_mask
 from bankcanary.storage.parquet import table_path, write_table
 from tests.test_hazard import LAG, make_frame, make_settings
 
@@ -280,40 +280,47 @@ def test_a_test_year_without_failures_is_reported_as_undefined_not_crashed(tmp_p
     assert (tmp_path / "runs" / "walkforward").exists()
 
 
-# The slice every reused hyper-parameter was chosen on: scripts/tune_logit_c.py (LOGIT_C),
-# scripts/tune_gbdt.py (settings.models.gbdt.params) and models.hazard.tune_c (HAZARD_C,
-# selected at the 4q label), all "reports 2007Q1-2008Q4".
-TUNING_VALIDATION = ("2007-03-31", "2008-12-31")
+# Spec rule 6.7: the hyper-parameters a test year's model uses must be chosen on rows the
+# model may train on. The D6/D7 constants were picked on reports 2007Q1-2008Q4, which is the
+# 2008 test year itself and lies past 2009's training cut, so the harness re-selects per
+# year on a slice inside that year's own training period.
 TUNING_HORIZON = 4
-RULE_67 = (
-    "walk-forward reuses hyper-parameters tuned on reports 2007Q1-2008Q4 for test years "
-    "2008 and 2009, whose training periods close before those reports' windows "
-    "(2008's validation rows are its own test rows): spec rule 6.7"
-)
 
 
-@pytest.mark.parametrize(
-    "year",
-    [
-        pytest.param(2008, marks=pytest.mark.xfail(strict=True, reason=RULE_67)),
-        pytest.param(2009, marks=pytest.mark.xfail(strict=True, reason=RULE_67)),
-        2010,
-        2015,
-    ],
-)
-def test_hyper_parameters_were_selected_inside_the_years_training_period(tmp_path, frame, year):
-    from bankcanary.models import baselines, hazard
-
+@pytest.mark.parametrize("year", [2008, 2009, 2010, 2015])
+@pytest.mark.parametrize("model", ("logit", "gbdt", "hazard"))
+def test_hyper_parameters_were_selected_inside_the_years_training_period(
+    tmp_path, frame, year, model
+):
     settings = make_settings(tmp_path)
-    assert (hazard.VALIDATION_START, hazard.VALIDATION_END) == TUNING_VALIDATION
-    # The harness has no per-year tuning: the same constants serve every test year.
-    assert w.build_model("logit", settings)[2]["C"] == baselines.LOGIT_C
-    assert w.build_model("hazard", settings)[2]["C"] == hazard.HAZARD_C
-    assert w.build_model("gbdt", settings)[2]["params"] == settings.models.gbdt.params
     start, _ = w.year_bounds(year)
-    validation = test_mask(frame, TUNING_HORIZON, *TUNING_VALIDATION)
-    assert int(validation.sum()) == 8 * N_CERTS
+    fit_h = w.fit_horizon_of(model, TUNING_HORIZON)
     train = training_mask(frame, TUNING_HORIZON, start, LAG)
+    fit_train = training_mask(frame, fit_h, start, LAG)
     _, test = w.year_masks(frame, TUNING_HORIZON, year, lag_days=LAG)
+    inner, validation, bounds = w.inner_masks(frame, TUNING_HORIZON, year, fit_h, LAG)
+    assert bounds["sufficient"] and validation.any() and inner.any()
     assert not (validation & test).any(), "tuned on the test year itself"
     assert int((validation & ~train).sum()) == 0, "tuned on rows outside the training period"
+    assert int((inner & ~fit_train).sum()) == 0, "inner model saw rows past the training cut"
+    assert not (inner & validation).any()
+    cutoff = prediction_date(pd.Timestamp(bounds["validation_start"]), LAG)
+    assert (frame.loc[inner, horizon_columns(fit_h)[1]] < cutoff).all()
+    assert frame.loc[validation, "repdte"].max() == frame.loc[train, "repdte"].max()
+    if year == 2008:
+        assert (bounds["validation_start"], bounds["validation_end"]) == (
+            "2005-03-31",
+            "2006-12-31",
+        )
+    result = w.fit_year(frame, settings, year, model, TUNING_HORIZON, save=False)
+    tuning = result.config["tuning"]
+    assert tuning["fallback"] is None
+    assert (tuning["validation_start"], tuning["validation_end"]) == (
+        bounds["validation_start"],
+        bounds["validation_end"],
+    )
+    assert tuning["selected"] in w.candidate_grid(model, settings)
+    if model == "gbdt":
+        assert result.config["params"] == tuning["selected"]
+    else:
+        assert result.config["C"] == tuning["selected"]["C"]

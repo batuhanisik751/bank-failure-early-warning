@@ -435,3 +435,23 @@ open for the owner to revisit.
   do not beat it here. The P1 fixed-split logit (0.3867 / 0.7143) is a different test
   period and is only quoted for orientation. At 8q logit 0.2835 / 0.5488 against gbdt
   0.1169 / 0.2710, consistent with the D7 finding that the booster collapses at 8q.
+- 2026-09-25 — **Walk-forward hyper-parameters are re-selected per test year (rule 6.7).**
+  The D6/D7 constants (`LOGIT_C`, `HAZARD_C`, `settings.models.gbdt.params`) were chosen on
+  reports 2007Q1-2008Q4, which is the 2008 test year itself and lies past 2009's training
+  cut. `evaluation.walkforward.inner_masks` now carves, for every test year, a validation
+  slice from the last 8 report quarters of that year's own `training_mask` at the scoring
+  horizon (so every validation outcome was known on the year's first prediction date),
+  widened backwards a year at a time while the slice or the inner training rows hold
+  fewer than 5 failures; inner models train on windows closed before the slice
+  (`assert_no_leakage`). `tune_year` ranks the D6/D7 `C` grid (logit, hazard; the hazard
+  selected on its converted 4q PR-AUC) and a 2x2x2 booster grid (learning rate, leaves,
+  leaf size; iteration count and the monotone decision stay in settings) by validation
+  PR-AUC, caches every candidate under `runs/tune_walkforward/`, and `fit_year` fits the
+  winner, recording the slice and choice in `config.json["tuning"]` and `tuning.json`.
+  When no width reaches 5 failures the most regularised grid point is used and flagged
+  (`fallback`), never a value chosen on later data; real data never needs it. From 2010
+  on the slice coincides with the D6 one (2007Q1-2008Q4, inner cut 2005Q4). 2008 tunes on
+  2005Q1-2006Q4 (9 failures) with inner training through 2003Q4. Runs are one model per
+  CLI call (`--model logit,hazard` then `--model texas,gbdt`), about 30-45 s per model-year
+  on an idle machine. Regeneration of the 4q artefacts reached 2019 before this note;
+  the remaining years and the 8q horizon are re-fitted in the follow-up step.

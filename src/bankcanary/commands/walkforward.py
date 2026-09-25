@@ -22,13 +22,17 @@ def register(app: typer.Typer) -> None:
             False, "--no-rebuild", help="Skip rebuilding the walkforward_scores table."
         ),
     ) -> None:
-        """Fit and score every requested model for one test year, then rebuild the table.
+        """Tune, fit and score every requested model for one test year, then rebuild the table.
 
-        One call handles one year so that no command exceeds the two-minute budget.
-        Artefacts land in ``models/walkforward/<Y>/<model>/``, scores in
+        Hyper-parameters are re-selected per year on a validation slice inside that
+        year's own training period (spec rule 6.7; ``tuning.json`` next to the model).
+        One call handles one year, and ``--model logit,hazard`` / ``--model texas,gbdt``
+        keep each call inside the two-minute budget. Artefacts land in
+        ``models/walkforward/<Y>/<model>/``, scores in
         ``data/walkforward/<Y>_<model>_<H>q.parquet``; the ``walkforward_scores`` Parquet
         and DuckDB copies are rebuilt from every per-year file afterwards. Each fit logs a
-        ``runs/walkforward/`` record keyed by its config.
+        ``runs/walkforward/`` record and each tuning candidate a ``runs/tune_walkforward/``
+        record, both keyed by their config.
         """
         from bankcanary.config import load_settings
         from bankcanary.evaluation import walkforward as w
@@ -52,7 +56,8 @@ def register(app: typer.Typer) -> None:
                 f"{year} {name} {horizon}q: n {m['n']} failures {m['n_failures']} "
                 f"pr_auc {w._round(m['pr_auc'])} roc_auc {w._round(m['roc_auc'])} "
                 f"recall@2% {w._round(m['recall_at_2pct'])} "
-                f"(train rows {result.config['n_train']}, last {result.config['train_repdte_max']})"
+                f"(train rows {result.config['n_train']}, last "
+                f"{result.config['train_repdte_max']}; tuned {result.tuning['selected']})"
             )
         if not no_rebuild:
             table = w.rebuild_scores_table(settings)
