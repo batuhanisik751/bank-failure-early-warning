@@ -5,7 +5,6 @@ Commands are registered by the modules that implement them; this file only wires
 
 from __future__ import annotations
 
-import importlib.util
 import logging
 
 import typer
@@ -38,7 +37,16 @@ def ingest(
     what: str = typer.Option(
         "all", "--what", help="failures | institutions | history | financials | all"
     ),
+    start: str | None = typer.Option(
+        None, "--start", help="financials: first quarter end (YYYY-MM-DD), default settings"
+    ),
+    end: str | None = typer.Option(
+        None, "--end", help="financials: last quarter end (YYYY-MM-DD), default latest published"
+    ),
     force: bool = typer.Option(False, "--force", help="Re-download even when cached."),
+    build: bool = typer.Option(
+        True, "--build/--no-build", help="financials: rebuild the table after the pull"
+    ),
 ) -> None:
     """Pull FDIC tables into Parquet (data/parquet) and DuckDB (data/warehouse.duckdb)."""
     from bankcanary.config import load_settings
@@ -70,13 +78,21 @@ def ingest(
                 failures.check_benchmarks(df)
                 typer.echo(f"benchmark years {failures.BENCHMARK_YEARS} match")
     if "financials" in wanted:
-        if importlib.util.find_spec("bankcanary.ingest.financials") is None:
-            typer.echo("financials: not available yet (bankcanary.ingest.financials missing)")
-        else:
-            from bankcanary.ingest import financials
+        import datetime as dt
 
-            entry = getattr(financials, "ingest_financials", None) or financials.fetch_financials
-            entry(settings, force=force)
+        from bankcanary.ingest import financials
+
+        df = financials.ingest_financials(
+            settings,
+            start=dt.date.fromisoformat(start) if start else None,
+            end=dt.date.fromisoformat(end) if end else None,
+            force=force,
+            build=build,
+        )
+        if df is not None:
+            counts = financials.quarter_counts(df)
+            typer.echo(f"financials_raw: {len(df)} rows, {len(counts)} quarters")
+            typer.echo(counts.to_string())
 
 
 if __name__ == "__main__":

@@ -1,0 +1,9 @@
+{
+  "meta": {"total": 3, "parameters": {"filters": "REPDTE:20090331", "limit": "10000", "offset": "0"}},
+  "data": [
+    {"data": {"CERT": 3511, "REPDTE": "20090331", "NAME": "WELLS FARGO BANK, NATIONAL ASSOCIATION", "STALP": "SD", "BKCLASS": "N", "CB": 0, "RSSDHCR": 1120754, "FED_RSSD": 451965, "ESTYMD": "1/1/1870", "ASSET": 555024000, "DEP": 431500000, "NETINC": "2125000", "LNLSNET": 380000000, "RBCT1J": 40000000, "RBC": 48000000, "SCHA": 1000000, "CBLRIND": 0}, "score": 0},
+    {"data": {"CERT": 24735, "REPDTE": "20090331", "NAME": "SILICON VALLEY BANK", "STALP": "CA", "BKCLASS": "SM", "CB": 0, "RSSDHCR": 1031449, "FED_RSSD": 802866, "ESTYMD": "10/17/1983", "ASSET": 9989000, "DEP": 8100000, "NETINC": "", "LNLSNET": 5400000, "RBCT1J": null, "RBC": 1100000, "SCHA": 0, "CBLRIND": 0}, "score": 0},
+    {"data": {"CERT": 91, "REPDTE": "20090331", "NAME": "EMPTY SHELL BANK", "STALP": "TX", "BKCLASS": "NM", "CB": 1, "RSSDHCR": "", "FED_RSSD": 1, "ESTYMD": "", "ASSET": 0, "DEP": 0, "NETINC": 0}, "score": 0}
+  ],
+  "totals": {"count": 3}
+}

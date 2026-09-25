@@ -45,3 +45,17 @@ open for the owner to revisit.
 - 2026-09-25 — **Dates in Parquet are `datetime64[ns]`:** pandas 3 infers microsecond
   resolution from strings, so `write_table`/`read_table` coerce every datetime column to
   nanoseconds. DuckDB stores them as `TIMESTAMP`; cast with `::DATE` in SQL.
+- 2026-09-25 — **Financials pull is one request per quarter, chunked from the CLI:** `ingest
+  --what financials --start Q --end Q --no-build` pulls up to 8 quarters per invocation
+  (about 5 s per quarter, ~9,600 rows in 2001 down to 4,313 in 2026Q2) into
+  `data/raw/fdic/financials/<YYYYMMDD>.json`; a plain `ingest --what financials` then serves
+  every quarter from cache, probes the latest published `REPDTE` with one forced request
+  (`CERT:3511`, `cache_name=latest_probe`) and rebuilds `financials_raw` in ~45 s. The
+  `--build/--no-build` flag exists only so chunked pulls skip the rebuild.
+- 2026-09-25 — **`FED_RSSD` is empty on `/financials`:** the endpoint silently drops the
+  field (absent from all 710,691 records), so `financials_raw.fed_rssd` is all-null. Take
+  the institution RSSD id from `institutions.fed_rssd` when it is needed.
+- 2026-09-25 — **`financials_raw` typing:** every financial code (including the `CBLRIND`
+  flag and the `DEPSMB` count) is float64; `cb` is bool, `cert`/`rssdhcr`/`fed_rssd` are
+  nullable Int64, `estymd` is parsed from the integer `YYYYMMDD` the API sends. No row had
+  null or non-positive `ASSET` in the 2001Q1-2026Q2 pull, so the drop rule removed nothing.
