@@ -1,0 +1,157 @@
+# Trimmed sample of api.fdic.gov/banks/docs/risview_properties.yaml (32 codes) for tests.
+type: object
+properties:
+  data:
+    type: object
+    properties:
+      CERT:
+        type: number
+        title: 'FDIC Certificate #'
+        description: A unique NUMBER assigned by the FDIC used to identify institutions and for the issuance
+          of insurance certificates.
+      REPDTE:
+        type: string
+        title: Report Date
+        description: The last day of the financial reporting period selected.
+      NAME:
+        type: string
+        title: INSTITUTION NAME
+        description: null
+      STALP:
+        type: string
+        title: FIPS STATE ALPHA CODE
+        description: null
+      BKCLASS:
+        type: string
+        title: INSTITUTION CLASS
+        description: "A classification code assigned by the FDIC based on the institution's charter type\
+          \ (commercial bank or savings institution), charter agent (state or federal), Federal Reserve\
+          \ membership status (Fed member, Fed non-member) and its primary federal regulator (state chartered\
+          \ institutions are subject to both federal and state supervision). N - Commercial bank, national\
+          \ (federal) charter, Fed member, and supervised by the Office of the Comptroller of the Currency\
+          \ (OCC); NM - Commercial bank, state charter, Fed non-member, and supervised by the Federal\
+          \ Deposit Insurance Corporation (FDIC); OI - Insured U.S. branch of a foreign chartered institution\
+          \ (IBA) and supervised by the OCC or FDIC; SB \u2013 Federal savings banks, federal charter,\
+          \ supervised by the OCC or before July 21,2011 the Office of Thrift Supervision (OTS); SI -\
+          \ State chartered stock savings banks, supervised by the FDIC; SL - State chartered stock savings\
+          \ and loan associations, supervised by the FDIC or before July 21,2011 the OTS; SM - Commercial\
+          \ bank, state charter, Fed member, and supervised by the Federal Reserve Bank (FRB); NC \u2013\
+          \ Noninsured non-deposit commercial banks and/or trust companies regulated by the OCC, a state,\
+          \ or a territory; NS - Noninsured stock savings bank supervised by a state or territory; CU\
+          \ - state or federally chartered credit unions supervised by the National Credit Union Association\
+          \ (NCUA)."
+      RSSDHCR:
+        type: string
+        title: RSSDID - High Regulatory Holder
+        description: The unique number assigned by the Federal Reserve Board to the regulatory high holding
+          company of the institution.
+      ASSET:
+        type: number
+        title: Total assets
+        description: The sum of all assets owned by the institution including cash, loans, securities,
+          bank premises and other assets. This total does not include off-balance-sheet accounts.
+      DEP:
+        type: number
+        title: Total deposits
+        description: The sum of all deposits including demand deposits, money market deposits, other savings
+          deposits, time deposits and deposits in foreign offices.
+      EQ:
+        type: number
+        title: Equity capital
+        description: Total equity capital (includes preferred and common stock, surplus and undivided
+          profits).
+      LNLSGR:
+        type: number
+        title: LOANS AND LEASES-TOTAL
+        description: null
+      LNATRES:
+        type: number
+        title: ALLOW FOR LOANS LOSS ADJUSTED
+        description: null
+      SC:
+        type: number
+        title: SECURITIES
+        description: null
+      NCLNLS:
+        type: number
+        title: TOTAL N/C-LOANS & LEASES
+        description: null
+      NETINC:
+        type: number
+        title: Net income
+        description: Net interest income plus total noninterest income plus realized gains (losses) on
+          securities and extraordinary items, less total noninterest expense, loan loss provisions and
+          income taxes.
+      INTINC:
+        type: number
+        title: TOTAL INTEREST INCOME
+        description: null
+      EINTEXP:
+        type: number
+        title: TOTAL INTEREST EXPENSE
+        description: null
+      NTLNLS:
+        type: number
+        title: TOTAL LN&LS NET CHARGE-OFFS
+        description: null
+      ELNATR:
+        type: number
+        title: PROVISIONS FOR CREDIT LOSSES
+        description: null
+      RBC1AAJ:
+        type: number
+        title: LEVERAGE RATIO-PCA
+        description: null
+      RBCRWAJ:
+        type: number
+        title: TOTAL RBC RATIO-PCA
+        description: null
+      RBCT1J:
+        type: number
+        title: TIER 1 RBC ADJUSTED LLR - PCA
+        description: null
+      RBCT1:
+        type: number
+        title: TIER 1 RBC-PCA
+        description: null
+      RBC:
+        type: number
+        title: RBC-TOTAL-PCA
+        description: null
+      RBCT1W:
+        type: number
+        title: TIER 1 CAPITAL - REPORTED
+        description: null
+      SCHA:
+        type: number
+        title: SECURITIES-HA
+        description: null
+      SCHF:
+        type: number
+        title: TOTAL HELD-TO-MATURITY AT FAIR VALUE SECURITIES ON A CONSOLIDATED BASIS
+        description: null
+      SCHAR:
+        type: number
+        title: SECURITIES-HA RATIO
+        description: null
+      BRO:
+        type: number
+        title: BROKERED DEP
+        description: null
+      DEPINS:
+        type: number
+        title: ESTIMATED INSURED DEPOSITS
+        description: null
+      DEPUNINS:
+        type: number
+        title: ESTIMATED UNINSURED DEPOSITS IN DOMESTIC OFFICES AND IN INSURED BRANCHES IN US TERRITORIES
+          AND POSSESSIONS
+        description: null
+      CD3LES:
+        type: number
+        title: TIME DEP $250,000 OR MORE REMAINING MATURITY REPRICING OF 3 MONTH OR LESS
+        description: null
+      IDT1RWAJR:
+        type: number
+        title: TIER 1 RISK-BASED CAPITAL RATIO
+        description: null

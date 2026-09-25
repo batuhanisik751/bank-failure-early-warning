@@ -22,3 +22,14 @@ open for the owner to revisit.
   collision with a different field list refetches and overwrites instead of silently
   returning stale columns. Retry back-off (`wait`) is injectable so tests run with zero
   waits; HTTP 4xx other than 429 are not retried (the API returns 404 for bad paths).
+- 2026-09-25 — **Field map (B1):** `config/fields.yaml` pulls 107 `/financials` codes.
+  Dollar Tier 1 capital = `RBCT1J` (PCA definition, allowance-adjusted; the ratio
+  `RBC1AAJ` is built from it), total risk-based capital dollars = `RBC` (`RBC-TOTAL-PCA`,
+  the only total-RBC dollar item in the dictionary; not yet probed on the live endpoint),
+  HTM securities at amortized cost = `SCHA` (`SECURITIES-HA`, paired with `SCHF` at fair
+  value). `FED_RSSD` is absent from `risview_properties.yaml` but returned live, so it is
+  kept with `in_dictionary: false`. Prototype 2 rate/run-risk items (`SCAA`, `SCAF`,
+  `SCHF`, `SCHA`, `DEPINS`, `DEPUNINS`, `ERNAST`, `CD3LES`/`CD3T12`/`CD1T3`/`CDOV3`) are
+  in the pull list now so financials never need re-downloading. Spec guesses `SCHTM`,
+  `SCAFFV`, `SCHTMFV`, `RBCTOT`, `TD250K`, `ELECTCBLR`, `DEPUNS`, `FRBHLBADV`, `IDNCLNLS`
+  do not exist and are recorded under `not_found`.
