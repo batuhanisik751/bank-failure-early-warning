@@ -127,3 +127,10 @@ BankCanary is an educational project. It is **not a credit rating, not investmen
 and not an official supervisory assessment**. Deposits at FDIC-insured banks are insured up
 to $250,000 per depositor, per bank, per ownership category. See
 [fdic.gov](https://www.fdic.gov/resources/deposit-insurance/) for official information.
+
+## License and data terms
+
+Code is released under the [MIT License](LICENSE). The underlying data comes from the FDIC
+BankFind Suite (US government work, public domain) and, in later prototypes, FFIEC Call
+Report bulk files and FRED, each subject to its publisher's terms. Derived tables and model
+outputs are provided for educational use only.
