@@ -1,0 +1,26 @@
+{
+  "availability_lag_days": 60,
+  "backend": "lightgbm",
+  "features_version": "v2",
+  "first_test_prediction_date": "2011-05-30",
+  "fit_horizon": 8,
+  "fit_label": "y_8q",
+  "horizon": 8,
+  "iterations_capped": false,
+  "model": "gbdt",
+  "monotone": false,
+  "n_features": 83,
+  "n_test": 30165,
+  "n_train": 291677,
+  "params": {
+    "learning_rate": 0.03,
+    "min_samples_leaf": 200,
+    "n_estimators": 200,
+    "num_leaves": 63
+  },
+  "positives_test": 352,
+  "positives_train": 1821,
+  "test_year": 2011,
+  "train_repdte_max": "2008-12-31",
+  "train_repdte_min": "2001-03-31"
+}

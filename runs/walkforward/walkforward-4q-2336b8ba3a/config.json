@@ -1,0 +1,18 @@
+{
+  "availability_lag_days": 60,
+  "features_version": "v1",
+  "first_test_prediction_date": "2019-05-30",
+  "fit": "none (ranking by texas_ratio)",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "model": "texas",
+  "n_features": 1,
+  "n_test": 21362,
+  "n_train": 543165,
+  "positives_test": 18,
+  "positives_train": 2194,
+  "test_year": 2019,
+  "train_repdte_max": "2017-12-31",
+  "train_repdte_min": "2001-03-31"
+}

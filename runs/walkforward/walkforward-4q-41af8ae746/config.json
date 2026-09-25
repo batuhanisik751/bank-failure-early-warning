@@ -1,0 +1,19 @@
+{
+  "C": 0.003,
+  "availability_lag_days": 60,
+  "class_weight": null,
+  "features_version": "v2",
+  "first_test_prediction_date": "2018-05-30",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "model": "logit",
+  "n_features": 83,
+  "n_test": 22301,
+  "n_train": 519844,
+  "positives_test": 10,
+  "positives_train": 2189,
+  "test_year": 2018,
+  "train_repdte_max": "2016-12-31",
+  "train_repdte_min": "2001-03-31"
+}

@@ -1,0 +1,20 @@
+{
+  "C": 0.0003,
+  "availability_lag_days": 60,
+  "class_weight": null,
+  "conversion": "1 - (1 - h)^H",
+  "features_version": "v2",
+  "first_test_prediction_date": "2024-05-30",
+  "fit_horizon": 1,
+  "fit_label": "y_1q",
+  "horizon": 4,
+  "model": "hazard",
+  "n_features": 83,
+  "n_test": 18398,
+  "n_train": 665326,
+  "positives_test": 9,
+  "positives_train": 565,
+  "test_year": 2024,
+  "train_repdte_max": "2023-12-31",
+  "train_repdte_min": "2001-03-31"
+}

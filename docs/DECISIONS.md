@@ -412,3 +412,26 @@ open for the owner to revisit.
   hazard artefacts live in `models/hazard/` without a horizon suffix, and successive
   `train-hazard --horizon H` calls merge their converted block into its `metrics.json`
   (a re-fit keeps earlier blocks) so `reports/p2_hazard.md` is re-rendered from disk.
+- 2026-09-25 — **D8 walk-forward harness.** `bankcanary walkforward --year Y` fits every
+  model for one test year (about 30 s per year for all four, so no gradient-boosting
+  iteration cap was needed; `--gbdt-iterations` exists and is recorded in `config.json`
+  as `iterations_capped` should a larger panel need it). Rule 6.2 is applied at the label
+  a model is *fitted* on: the hazard trains on `training_mask(labels, 1, first quarter
+  of Y)` (three more quarters than the 4q mask, leak-free for its 1q event) and is scored
+  with `1 - (1 - h)^H` on the horizon's test rows; every other model trains at the
+  scoring horizon. The Texas ranking is "fitted" on the same rows so that every year
+  directory loads through one `load_year`. Horizon-8 artefacts live in
+  `models/walkforward/<Y>/<model>_8q/` (same suffix rule as `models/<name>_8q`). The
+  `walkforward_scores` table is rebuilt from `data/walkforward/*.parquet` on every call
+  (files read in name order, rows sorted by the table key), never appended to. Pooled
+  rows rank the raw scores of seventeen yearly models as one list, as spec 8.2 asks;
+  because a booster's score scale drifts from year to year that pooling costs `gbdt`
+  more than the logits (pooled 4q ROC-AUC 0.85 against per-year values above 0.95 from
+  2010 on), and 2008's booster is weak on its own (PR-AUC 0.18: its training window
+  closes at 2006Q4 with 37 positives, the same starvation seen in the D6 inner slice).
+  2021 has no 4q failure, so its per-year metrics are undefined. Pooled 4q results:
+  logit PR-AUC 0.3843 / recall@2% 0.7713, gbdt 0.3085 / 0.6743, hazard 0.3068 / 0.6881,
+  texas 0.2606 / 0.7437; the walk-forward logit is the best model and the P2 candidates
+  do not beat it here. The P1 fixed-split logit (0.3867 / 0.7143) is a different test
+  period and is only quoted for orientation. At 8q logit 0.2835 / 0.5488 against gbdt
+  0.1169 / 0.2710, consistent with the D7 finding that the booster collapses at 8q.
