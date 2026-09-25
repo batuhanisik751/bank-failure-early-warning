@@ -1,4 +1,4 @@
-"""Structure and growth features (size, age, charter, and the management growth proxies).
+"""Structure features (size, age, charter) and the growth helper used by ``management``.
 
 Management quality is not observable in the Call Report, so growth is used as its
 proxy: banks that expand far faster than peers tend to be loosening underwriting.
@@ -11,10 +11,51 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from bankcanary.features.registry import BKCLASS_CODES, log_ratio
+from bankcanary.features.spec import BKCLASS_CODES, FeatureSpec, log_ratio, spec
 from bankcanary.features.ytd import lag
 
 DAYS_PER_YEAR = 365.25
+
+
+SPECS: list[FeatureSpec] = [
+    spec(
+        "log_assets",
+        "structure",
+        "log(asset)",
+        "log_thousands_usd",
+        "Natural log of total assets in thousands of dollars; bank size on a scale where a "
+        "doubling is a constant step.",
+        monotone=-1,
+    ),
+    spec(
+        "bank_age_years",
+        "structure",
+        "(repdte - estymd) / 365.25 days",
+        "years",
+        "Years since the charter was established; young (de novo) banks fail more often.",
+        monotone=-1,
+    ),
+    spec(
+        "has_holding_company",
+        "structure",
+        "rssdhcr present",
+        "flag",
+        "True when the bank sits under a holding company that can inject capital.",
+        monotone=-1,
+    ),
+]
+
+SPECS.extend(
+    spec(
+        f"bkclass_{code}",
+        "structure",
+        f"bkclass == '{code}'",
+        "flag",
+        f"One-hot charter class indicator for bkclass code {code}.",
+        monotone=0,
+    )
+    for code in BKCLASS_CODES
+)
 
 
 def growth(panel: pd.DataFrame) -> pd.DataFrame:
@@ -38,9 +79,9 @@ def one_hot_bkclass(bkclass: pd.Series) -> pd.DataFrame:
     return out
 
 
-def compute(panel: pd.DataFrame) -> pd.DataFrame:
+def build(panel: pd.DataFrame, **deps: object) -> pd.DataFrame:
     """Structure + management features aligned to ``panel``'s index."""
-    out = growth(panel)
+    out = pd.DataFrame(index=panel.index)
     asset = panel["asset"].astype("float64")
     with np.errstate(divide="ignore", invalid="ignore"):
         out["log_assets"] = np.log(asset.where(asset > 0).to_numpy())

@@ -95,8 +95,10 @@ Dollar amounts are **thousands of dollars** (the FDIC unit); ratios are as publi
 ## 7. Feature registry (`bankcanary.features.registry`)
 
 Every feature is registered once with: `name, camels_group, formula, unit, explanation,
-prototype ("P1"/"P2")`. `build_features(panel) -> DataFrame` evaluates the registry in
-order. Names for P1 (spec §7.2): `equity_to_assets, tier1_leverage, total_rbc_ratio,
+prototype ("P1"/"P2"), monotone (+1/-1/0, stated in the explanation)`. Each module exposes
+`SPECS` and `build(panel, **deps)`; `registry.modules(version)` fixes the order and
+`build_features(panel, version="v1"|"v2") -> DataFrame` runs the builders in that order
+(the P1 growth ratios live in the `management` module, third in the v1 order). Names for P1 (spec §7.2): `equity_to_assets, tier1_leverage, total_rbc_ratio,
 total_rbc_ratio_missing, tangible_equity_to_assets, noncurrent_ratio, npa_to_assets,
 early_delinquency, nco_rate, reserve_coverage, texas_ratio, texas_ratio_capped,
 asset_growth_4q, asset_growth_12q, loan_growth_4q, roa_q, nim_q, efficiency_ratio,

@@ -12,6 +12,7 @@ from bankcanary.features import (
     concentration,
     earnings,
     liquidity,
+    management,
     structure,
 )
 from bankcanary.features.build import build_features
@@ -71,7 +72,7 @@ def panel() -> pd.DataFrame:
 
 
 def test_capital_formulas_and_missing_indicator(panel: pd.DataFrame) -> None:
-    out = capital.compute(panel)
+    out = capital.build(panel)
     assert out["equity_to_assets"].tolist() == pytest.approx([0.1, 0.1, 0.1])
     assert out["tier1_leverage"].tolist()[:2] == [9.5, 9.0]
     assert out["total_rbc_ratio_missing"].tolist() == [False, True, False]
@@ -81,7 +82,7 @@ def test_capital_formulas_and_missing_indicator(panel: pd.DataFrame) -> None:
 
 
 def test_asset_quality_formulas(panel: pd.DataFrame) -> None:
-    out = asset_quality.compute(panel)
+    out = asset_quality.build(panel)
     assert out["noncurrent_ratio"].tolist() == pytest.approx([0.02, 0.05, 0.0])
     assert out["npa_to_assets"].tolist() == pytest.approx([0.015, 50 / 1200, 0.0])
     assert out["early_delinquency"].tolist() == pytest.approx([0.01, 0.02, 0.01])
@@ -113,7 +114,7 @@ def test_asset_quality_guards() -> None:
             "ntlnls": [1.0, 1.0, 1.0],
         }
     )
-    out = asset_quality.compute(frame)
+    out = asset_quality.build(frame)
     # Zero loans: ratios over lnlsgr are NaN, never inf.
     assert np.isnan(out["noncurrent_ratio"].iloc[0]) and np.isnan(out["nco_rate"].iloc[0])
     # No noncurrent loans: coverage is the cap, not inf.
@@ -126,7 +127,7 @@ def test_asset_quality_guards() -> None:
 
 
 def test_earnings_formulas(panel: pd.DataFrame) -> None:
-    out = earnings.compute(panel)
+    out = earnings.build(panel)
     # Q2 net income 16 - 5 = 11, annualised 44, over average assets 1100.
     assert out["roa_q"].iloc[1] == pytest.approx(44 / 1100)
     # Q2 net interest (45 - 20) - (17 - 8) = 16, annualised 64, over avg earning assets 1000.
@@ -140,7 +141,7 @@ def test_earnings_formulas(panel: pd.DataFrame) -> None:
 
 
 def test_liquidity_formulas_and_zero_deposits(panel: pd.DataFrame) -> None:
-    out = liquidity.compute(panel)
+    out = liquidity.build(panel)
     assert out["brokered_share"].iloc[0] == pytest.approx(50 / 800)
     assert out["loans_to_deposits"].iloc[0] == pytest.approx(590 / 800)
     assert out["liquid_assets_ratio"].iloc[0] == pytest.approx(200 / 1000)
@@ -150,7 +151,7 @@ def test_liquidity_formulas_and_zero_deposits(panel: pd.DataFrame) -> None:
 
 
 def test_concentration_capital_fallback_and_shares(panel: pd.DataFrame) -> None:
-    out = concentration.compute(panel)
+    out = concentration.build(panel)
     # Q1: rbc = 110 and no owner-occupied split, so total nonfarm nonres is used.
     assert out["construction_to_capital"].iloc[0] == pytest.approx(110 / 110)
     assert out["cre_to_capital"].iloc[0] == pytest.approx((110 + 30 + 120) / 110)
@@ -163,7 +164,7 @@ def test_concentration_capital_fallback_and_shares(panel: pd.DataFrame) -> None:
 
 def test_zero_risk_based_ratio_is_not_reported(panel: pd.DataFrame) -> None:
     frame = panel.assign(rbcrwaj=[0.0, -3.5, 12.0])
-    out = capital.compute(frame)
+    out = capital.build(frame)
     assert np.isnan(out["total_rbc_ratio"].iloc[0])
     assert out["total_rbc_ratio"].iloc[1] == -3.5  # negative capital is real signal
     assert out["total_rbc_ratio_missing"].tolist() == [True, False, False]
@@ -182,7 +183,7 @@ def test_structure_growth_age_and_one_hot() -> None:
             "bkclass": ["NM", "sb ", "XX"],
         }
     )
-    out = structure.compute(frame)
+    out = pd.concat([management.build(frame), structure.build(frame)], axis=1)
     assert np.isnan(out["asset_growth_4q"].iloc[0])
     assert out["asset_growth_4q"].iloc[1] == pytest.approx(np.log(1.1))
     # 2010-03-31 has no row 4 quarters earlier (NaN) but is exactly 12 after 2007-03-31.
@@ -203,7 +204,8 @@ def test_structure_growth_age_and_one_hot() -> None:
 def test_registry_is_complete_and_unique() -> None:
     names = feature_names()
     assert len(names) == len(set(names))
-    assert {s.prototype for s in REGISTRY} == {"P1"}
+    assert {s.prototype for s in REGISTRY} == {"P1", "P2"}
+    assert {s.prototype for s in REGISTRY if s.name in names} == {"P1"}
     assert all(s.explanation.endswith(".") and s.camels_group for s in REGISTRY)
     assert names[:3] == ["equity_to_assets", "tier1_leverage", "total_rbc_ratio"]
     assert names[-len(BKCLASS_CODES) :] == [f"bkclass_{c}" for c in BKCLASS_CODES]

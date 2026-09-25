@@ -9,11 +9,49 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bankcanary.features.registry import safe_ratio
+from bankcanary.features.spec import FeatureSpec, safe_ratio, spec
 from bankcanary.features.ytd import annualize, average_with_previous, deaccumulate
 
 #: Year-to-date income columns this module de-accumulates.
 INCOME_COLS = ["netinc", "intinc", "eintexp", "nim", "nonii", "nonix", "elnatr"]
+
+
+SPECS: list[FeatureSpec] = [
+    spec(
+        "roa_q",
+        "earnings",
+        "annualised netinc_q / average asset",
+        "ratio",
+        "Annualised quarterly return on average assets; the core measure of profitability.",
+        monotone=-1,
+    ),
+    spec(
+        "nim_q",
+        "earnings",
+        "annualised (intinc_q - eintexp_q) / average ernast (else asset)",
+        "ratio",
+        "Annualised net interest margin over average earning assets; the spread the bank "
+        "earns on its lending.",
+        monotone=0,
+    ),
+    spec(
+        "efficiency_ratio",
+        "earnings",
+        "nonix_q / (nim_q + nonii_q)",
+        "ratio",
+        "Noninterest expense per dollar of revenue; higher means a costlier operation.",
+        monotone=1,
+    ),
+    spec(
+        "provision_rate",
+        "earnings",
+        "annualised elnatr_q / average lnlsgr",
+        "ratio",
+        "Annualised loan-loss provisions as a share of average loans; what management expects "
+        "to lose.",
+        monotone=1,
+    ),
+]
 
 
 def _earning_asset_base(panel: pd.DataFrame) -> pd.Series:
@@ -29,7 +67,7 @@ def _earning_asset_base(panel: pd.DataFrame) -> pd.Series:
     return avg_earning.where(avg_earning.notna() & (avg_earning > 0), avg_assets)
 
 
-def compute(panel: pd.DataFrame) -> pd.DataFrame:
+def build(panel: pd.DataFrame, **deps: object) -> pd.DataFrame:
     """Earnings features aligned to ``panel``'s index (see registry for definitions).
 
     Note the name clash that is *not* a bug: the de-accumulated net interest income is

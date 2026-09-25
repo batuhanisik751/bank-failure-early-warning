@@ -10,8 +10,74 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bankcanary.features.registry import RATIO_CAP, safe_ratio
+from bankcanary.features.spec import RATIO_CAP, FeatureSpec, safe_ratio, spec
 from bankcanary.features.ytd import annualize, average_with_previous, deaccumulate
+
+SPECS: list[FeatureSpec] = [
+    spec(
+        "noncurrent_ratio",
+        "asset_quality",
+        "nclnls / lnlsgr",
+        "ratio",
+        "Share of loans 90+ days past due or on nonaccrual; the most direct read on credit "
+        "losses already in the pipeline.",
+        monotone=1,
+    ),
+    spec(
+        "npa_to_assets",
+        "asset_quality",
+        "(nclnls + ore) / asset",
+        "ratio",
+        "Non-performing assets, including foreclosed property, relative to the whole balance "
+        "sheet.",
+        monotone=1,
+    ),
+    spec(
+        "early_delinquency",
+        "asset_quality",
+        "p3asset / lnlsgr",
+        "ratio",
+        "Assets 30-89 days past due over gross loans; an early signal before loans turn "
+        "noncurrent.",
+        monotone=1,
+    ),
+    spec(
+        "nco_rate",
+        "asset_quality",
+        "annualised ntlnls_q / average lnlsgr",
+        "ratio",
+        "Annualised net charge-offs as a share of average loans; the losses actually realised "
+        "this quarter.",
+        monotone=1,
+    ),
+    spec(
+        "reserve_coverage",
+        "asset_quality",
+        "lnatres / nclnls, capped at 10",
+        "ratio",
+        "Loan-loss allowance per dollar of noncurrent loans; low coverage means future losses "
+        "will hit earnings and capital.",
+        monotone=-1,
+    ),
+    spec(
+        "texas_ratio",
+        "asset_quality",
+        "(nclnls + ore) / (eq - intan + lnatres), capped at 10",
+        "ratio",
+        "Problem assets over tangible equity plus reserves; values near or above 1 have "
+        "historically preceded most failures.",
+        monotone=1,
+    ),
+    spec(
+        "texas_ratio_capped",
+        "asset_quality",
+        "texas_ratio hit the cap",
+        "flag",
+        "True when tangible capital plus reserves was zero or negative (or the ratio exceeded "
+        "10), so the reported value is the cap rather than a computed ratio.",
+        monotone=1,
+    ),
+]
 
 
 def texas_ratio(panel: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
@@ -40,7 +106,7 @@ def reserve_coverage(panel: pd.DataFrame) -> pd.Series:
     return ratio.where(noncurrent != 0, RATIO_CAP).where(reserves.notna())
 
 
-def compute(panel: pd.DataFrame) -> pd.DataFrame:
+def build(panel: pd.DataFrame, **deps: object) -> pd.DataFrame:
     """Asset-quality features aligned to ``panel``'s index (see registry for definitions)."""
     out = pd.DataFrame(index=panel.index)
     out["noncurrent_ratio"] = safe_ratio(panel["nclnls"], panel["lnlsgr"])

@@ -283,3 +283,22 @@ open for the owner to revisit.
   step D5 may want them. Rows with a null `stalp` (102 panel rows) are excluded from the
   grid; the five territories in the panel (AS, FM, GU, PR, VI) keep the national columns
   only. Only current vintages are used (no ALFRED): a known limitation.
+- 2026-09-25 — **D2 rate/run-risk features and the per-module registry.** Every feature module
+  now owns its `SPECS` and `build(panel, **deps)`; `registry.py` fixes the module order per
+  version (`v1`: capital, asset_quality, management, earnings, liquidity, concentration,
+  structure; `v2` appends sensitivity, run_risk) and `build.py` runs them in that order,
+  handing each module the columns built so far as `deps["features"]`. The three growth ratios
+  got their own `management` module only because the P1 table put them between asset quality
+  and earnings: keeping them in `structure` reordered `features_v1`, and the byte-identical
+  parquet (sha256 `8a4e5874…f070cd`, checked against a build with the pre-refactor code in the
+  same environment) is the reproducibility proof. The primitives (`FeatureSpec`, `safe_ratio`
+  ...) moved to `features/spec.py` so the modules can import them while the registry imports
+  the modules; `registry` re-exports them. `FeatureSpec.monotone` is stated in words at the end
+  of every explanation. Signs that are deliberately 0: growth (both tails are risky), `nim_q`
+  (high margins can mean high-yield lending), loan-mix shares other than construction and
+  nonfarm nonresidential, the CBLR missing flag and the one-hots. `adjusted_tier1_leverage`
+  divides by period-end `asset` (the panel has no quarterly-average assets), deducts losses
+  only and leaves gains out. `features_v2` is written with an explicit key (`TABLE_KEYS` in
+  `storage/parquet.py` untouched). SVB 2022Q4: `unrealized_loss_to_tier1` = -1.041,
+  `uninsured_share` = 0.864; Signature and First Republic sit inside the >$10B peer band on
+  unrealised losses but at the top of it on uninsured deposits (reports/figures/svb_unrealized_losses.png).
