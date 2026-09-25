@@ -477,3 +477,25 @@ open for the owner to revisit.
   censored rows lifts every metric slightly (rescued banks are hard negatives), and a
   90-day lag costs the booster 0.07 PR-AUC while the logit loses 0.02; the logit stays
   the less sensitive model and the PR-AUC ranking never flips.
+- 2026-09-25 — **SHAP drivers (D10) are computed per walk-forward year with that year's
+  booster, and the quarters past the backtest with the newest one.** `explain.shap_drivers`
+  runs `shap.TreeExplainer` on the `gbdt` estimator after the pipeline's own fitted
+  `Winsorizer` has clipped the rows (so `feature_value` is what the trees saw); the values
+  are log-odds contributions that sum with the expected value to the raw score (checked to
+  1e-13 on 2024). The `drivers` key `(cert, repdte, model, rank)` uses ranks 1-5 for the
+  largest positive contributions (`raises`) and 6-10 for the most negative (`lowers`); a
+  contribution of exactly zero is never a driver, so rows can be fewer than ten. `model` is
+  `gbdt` for test-year rows and `gbdt_production` for the rows after the last complete
+  test year (2025Q1 onward, scored by the 2024 booster, never evaluated); `model_year`
+  records which booster explained the row. Only the 4q boosters are explained: the 8q
+  booster collapses (D8) and the table key carries no horizon. Per-year files live in
+  `data/drivers/<Y>_gbdt.parquet` and the table is rebuilt from them like
+  `walkforward_scores`. Each year logs an `explain` run whose metrics hold the mean |SHAP|
+  per feature, and `reports/shap_summary.md` is written from those records (the beeswarm
+  recomputes the latest year, about 6 s) rather than from stored SHAP matrices. One year
+  takes about 10 s on this machine, so `explain --all` (17 years + production) exceeds the
+  two-minute budget; the artefacts were produced with `--year Y --no-rebuild` in batches of
+  six and `--latest` last. Rule 6.6 result: no feature exceeds 40 percent of the pooled
+  mean |SHAP| (`texas_ratio` leads at 7.2 percent, top three 17.6 percent); the 2008-2010
+  boosters lean on `macro_hpi_change_4q` and construction shares, 2022-2024 on
+  `macro_fedfunds_change_4q`, `adjusted_tier1_leverage` and `unrealized_loss_to_tier1`.
