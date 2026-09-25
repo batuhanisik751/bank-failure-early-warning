@@ -174,3 +174,11 @@ open for the owner to revisit.
   (PR-AUC 0.20 at C=0.1, 0.22 at C=0.01, 0.26 at C=0.001), so C stays at the contract's
   1.0 and the spec acceptance criterion "logit beats Texas on PR-AUC" is open for the
   feature-selection / gradient-boosting steps rather than patched here.
+- 2026-09-25 — **Foundation notebook (C6):** `notebooks/01_foundation.ipynb` is generated
+  by `scripts/make_notebook_01.py` (nbformat) and executed in place, so the committed
+  notebook is reproducible from source and its outputs come from the same cached tables
+  as the reports. It never retrains: the baseline table and the PR curve come from
+  `evaluate_model`, which re-scores the saved pipelines on the test split in about a
+  second. The first cell adds `src/` to `sys.path` because the editable install's `.pth`
+  is not honoured in this checkout (`uv run bankcanary` needs `PYTHONPATH=src`); the
+  README's Reproduce block records the same workaround.
