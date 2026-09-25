@@ -1,0 +1,115 @@
+{
+ "meta": {
+  "total": 4,
+  "parameters": {
+   "limit": "10000",
+   "offset": "0"
+  }
+ },
+ "data": [
+  {
+   "data": {
+    "ULTCERT": "3510",
+    "ACTIVE": 0,
+    "BKCLASS": "NM",
+    "LONGITUDE": -72.878597,
+    "FED_RSSD": "573401",
+    "NEWCERT": 16855,
+    "NAME": "The Southington Bank and Trust Company",
+    "CHARTER": "0",
+    "CITY": "Southington",
+    "CLCODE": "21",
+    "INACTIVE": 1,
+    "ENDEFYMD": "02/01/1982",
+    "CERT": 4,
+    "STALP": "CT",
+    "LATITUDE": 41.60141,
+    "ESTYMD": "04/18/1916",
+    "PROCDATE": "02/05/1982",
+    "ID": "4"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "ULTCERT": "3511",
+    "ACTIVE": 1,
+    "BKCLASS": "N",
+    "LONGITUDE": -96.72291695919,
+    "FED_RSSD": "451965",
+    "NEWCERT": 0,
+    "ASSET": 1907928000,
+    "NAME": "Wells Fargo Bank, National Association",
+    "CHARTER": "1",
+    "CITY": "Sioux Falls",
+    "CLCODE": "3",
+    "INACTIVE": 0,
+    "RSSDHCR": "1120754",
+    "ENDEFYMD": "12/31/9999",
+    "CERT": 3511,
+    "STALP": "SD",
+    "LATITUDE": 43.580844403981,
+    "ESTYMD": "01/01/1870",
+    "CB": "0",
+    "PROCDATE": "03/25/2026",
+    "ID": "3511"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "ULTCERT": "11063",
+    "ACTIVE": 0,
+    "BKCLASS": "SM",
+    "LONGITUDE": -121.981817969113,
+    "FED_RSSD": "802866",
+    "NEWCERT": 59331,
+    "ASSET": 209026000,
+    "NAME": "Silicon Valley Bank",
+    "CHARTER": "0",
+    "CITY": "Santa Clara",
+    "CLCODE": "13",
+    "INACTIVE": 1,
+    "RSSDHCR": "1031449",
+    "ENDEFYMD": "03/10/2023",
+    "CERT": 24735,
+    "STALP": "CA",
+    "LATITUDE": 37.4042819800807,
+    "ESTYMD": "10/17/1983",
+    "CB": "0",
+    "PROCDATE": "03/13/2023",
+    "ID": "24735"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "ULTCERT": "32541",
+    "ACTIVE": 0,
+    "BKCLASS": "NM",
+    "LONGITUDE": -73.9785057650779,
+    "FED_RSSD": "2942690",
+    "NEWCERT": 59332,
+    "ASSET": 110363650,
+    "NAME": "Signature Bank",
+    "CHARTER": "0",
+    "CITY": "New York",
+    "CLCODE": "21",
+    "INACTIVE": 1,
+    "RSSDHCR": "",
+    "ENDEFYMD": "03/12/2023",
+    "CERT": 57053,
+    "STALP": "NY",
+    "LATITUDE": 40.7558920796755,
+    "ESTYMD": "04/12/2001",
+    "CB": "0",
+    "PROCDATE": "03/13/2023",
+    "ID": "57053"
+   },
+   "score": 0
+  }
+ ],
+ "totals": {
+  "count": 4
+ }
+}

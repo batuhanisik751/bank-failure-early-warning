@@ -1,0 +1,135 @@
+{
+ "meta": {
+  "total": 6,
+  "parameters": {
+   "fields": "CERT,...",
+   "limit": "10000",
+   "offset": "0"
+  }
+ },
+ "data": [
+  {
+   "data": {
+    "RESDATE": "12/31/1980",
+    "QBFDEP": 40680,
+    "PSTALP": "AL",
+    "FAILDATE": "12/31/1980",
+    "CITYST": "GADSDEN, AL",
+    "RESTYPE": "FAILURE",
+    "RESTYPE1": "PA",
+    "NAME": "EAST GADSDEN BANK",
+    "CHCLASS1": "NM",
+    "COST": 957.432,
+    "QBFASSET": 43980,
+    "UNINSDEP": "",
+    "CERT": 40,
+    "FAILYR": "1980",
+    "ID": "584"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "RESDATE": "8/16/1985",
+    "QBFDEP": 76446,
+    "PSTALP": "AL",
+    "FAILDATE": "8/16/1985",
+    "CITYST": "ANDALUSIA, AL",
+    "RESTYPE": "ASSISTANCE",
+    "RESTYPE1": "A/A",
+    "NAME": "THE COMMERCIAL BANK",
+    "CHCLASS1": "NM",
+    "COST": 0,
+    "QBFASSET": 77816,
+    "UNINSDEP": "",
+    "CERT": 55,
+    "FAILYR": "1985",
+    "ID": "1052"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "RESDATE": "3/26/2023",
+    "QBFDEP": 175378000,
+    "PSTALP": "CA",
+    "FAILDATE": "3/10/2023",
+    "CITYST": "SANTA CLARA, CA",
+    "RESTYPE": "FAILURE",
+    "RESTYPE1": "PA",
+    "NAME": "SILICON VALLEY BANK",
+    "CHCLASS1": "SM",
+    "COST": 18744254.463,
+    "QBFASSET": 209026000,
+    "UNINSDEP": "",
+    "CERT": 24735,
+    "FAILYR": "2023",
+    "ID": "4105"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "RESDATE": "3/20/2023",
+    "QBFDEP": 88612911,
+    "PSTALP": "NY",
+    "FAILDATE": "3/12/2023",
+    "CITYST": "NEW YORK, NY",
+    "RESTYPE": "FAILURE",
+    "RESTYPE1": "PA",
+    "NAME": "SIGNATURE BANK",
+    "CHCLASS1": "NM",
+    "COST": 0,
+    "QBFASSET": 110363650,
+    "UNINSDEP": "",
+    "CERT": 57053,
+    "FAILYR": "2023",
+    "ID": "4106"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "RESDATE": null,
+    "QBFDEP": 238,
+    "PSTALP": "IL",
+    "FAILDATE": "5/28/1934",
+    "CITYST": "EAST PEORIA, IL",
+    "RESTYPE": "FAILURE",
+    "RESTYPE1": "PO",
+    "NAME": "FON DU LAC STATE BANK",
+    "CHCLASS1": "NM",
+    "COST": null,
+    "QBFASSET": 374,
+    "UNINSDEP": "",
+    "CERT": null,
+    "FAILYR": "1934",
+    "ID": "1"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "RESDATE": null,
+    "QBFDEP": 590,
+    "PSTALP": "NJ",
+    "FAILDATE": "1/3/1935",
+    "CITYST": "GRANTWOOD, NJ",
+    "RESTYPE": "FAILURE",
+    "RESTYPE1": "PO",
+    "NAME": "CLIFFSIDE PARK TITLE GUARANTEE & TRUST CO.",
+    "CHCLASS1": "NM",
+    "COST": null,
+    "QBFASSET": 2305,
+    "UNINSDEP": "",
+    "CERT": null,
+    "FAILYR": "1935",
+    "ID": "10"
+   },
+   "score": 0
+  }
+ ],
+ "totals": {
+  "count": 6
+ }
+}

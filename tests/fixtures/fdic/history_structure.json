@@ -1,0 +1,69 @@
+{
+ "meta": {
+  "total": 4,
+  "parameters": {
+   "filters": "CHANGECODE:[1 TO 499]",
+   "limit": "10000",
+   "offset": "0"
+  }
+ },
+ "data": [
+  {
+   "data": {
+    "TRANSNUM": 200102849,
+    "CHANGECODE_DESC": "New Institution",
+    "CHANGECODE": 110,
+    "EFFDATE": "2001-04-12T00:00:00",
+    "CERT": 57053,
+    "ID": "200102849_110_356455__"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "TRANSNUM": 830002924,
+    "CHANGECODE_DESC": "New Institution",
+    "CHANGECODE": 110,
+    "EFFDATE": "1983-10-17T00:00:00",
+    "CERT": 24735,
+    "ID": "830002924_110_17167__"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "TRANSNUM": 2023009929,
+    "ACQ_UNINUM": 655043,
+    "CHANGECODE_DESC": "Failure - Whole Institution",
+    "CHANGECODE": 211,
+    "OUT_INSTNAME": "Silicon Valley Bank",
+    "ACQ_CERT": 59331,
+    "EFFDATE": "2023-03-10T00:00:00",
+    "ACQ_INSTNAME": "Deposit Insurance National Bank of Santa Clara",
+    "OUT_UNINUM": 17167,
+    "OUT_CERT": 24735,
+    "ID": "2023009929_211_17167_655043_17167"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "TRANSNUM": 2023009936,
+    "ACQ_UNINUM": 655045,
+    "CHANGECODE_DESC": "Failure - Whole Institution",
+    "CHANGECODE": 211,
+    "OUT_INSTNAME": "Signature Bank",
+    "ACQ_CERT": 59332,
+    "EFFDATE": "2023-03-12T00:00:00",
+    "ACQ_INSTNAME": "Signature Bridge Bank, National Association",
+    "OUT_UNINUM": 356455,
+    "OUT_CERT": 57053,
+    "ID": "2023009936_211_356455_655045_356455"
+   },
+   "score": 0
+  }
+ ],
+ "totals": {
+  "count": 4
+ }
+}

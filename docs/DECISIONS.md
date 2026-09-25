@@ -33,3 +33,15 @@ open for the owner to revisit.
   in the pull list now so financials never need re-downloading. Spec guesses `SCHTM`,
   `SCAFFV`, `SCHTMFV`, `RBCTOT`, `TD250K`, `ELECTCBLR`, `DEPUNS`, `FRBHLBADV`, `IDNCLNLS`
   do not exist and are recorded under `not_found`.
+- 2026-09-25 — **Failures table keeps every FDIC row (B2):** 488 pre-1966 failures have no
+  `CERT`, so the contract key `(cert, fail_date)` is not unique for them. All 4,117 rows are
+  kept (3,524 `FAILURE`, 593 `ASSISTANCE`); an `fdic_id` column (the API's record `ID`)
+  breaks ties so the Parquet file is reproducible. The panel only uses rows with a cert.
+- 2026-09-25 — **History key is not unique (B2):** `/history` `TRANSNUM` repeats within a
+  cert (10,056 repeated `(cert, transnum)` pairs, mostly `transnum` 0) and the API rejects
+  `sort_by=ID`, so the pull stays sorted by `TRANSNUM` and the clean table is sorted
+  through `(cert, transnum, effdate, changecode, acq_cert, out_cert)`. Whole-row duplicates
+  are dropped (none in the 93,897-row pull). Match events on `(cert, effdate, changecode)`.
+- 2026-09-25 — **Dates in Parquet are `datetime64[ns]`:** pandas 3 infers microsecond
+  resolution from strings, so `write_table`/`read_table` coerce every datetime column to
+  nanoseconds. DuckDB stores them as `TIMESTAMP`; cast with `::DATE` in SQL.
