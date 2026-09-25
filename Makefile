@@ -1,8 +1,11 @@
-.PHONY: setup test lint format ingest panel labels features train evaluate
+.PHONY: setup fix-venv test lint format ingest panel labels features train evaluate
 
 setup:
 	uv sync
 	uv run pre-commit install
+
+fix-venv:
+	chflags -R nohidden .venv
 
 test:
 	uv run pytest

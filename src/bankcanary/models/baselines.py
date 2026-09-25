@@ -37,6 +37,11 @@ SMALL_FEATURES: tuple[str, ...] = (
 #: Score assigned to a missing Texas ratio: below every real (non-negative) value.
 TEXAS_MISSING_SCORE = -1.0
 
+#: Inverse L2 strength of the all-feature logit, chosen on the inner validation slice
+#: (reports 2007Q1-2008Q4, trained on windows closed before 2007-05-30) by
+#: ``scripts/tune_logit_c.py``; the grid and its scores are in ``docs/DECISIONS.md``.
+LOGIT_C = 0.003
+
 
 class TexasRatioScorer(BaseEstimator):
     """Score = the ``texas_ratio`` column itself; a missing ratio ranks last.
@@ -88,17 +93,24 @@ def model_features(name: str) -> list[str]:
 def make_model(name: str, max_iter: int = 2000) -> Pipeline:
     """Build the unfitted pipeline for a baseline name.
 
-    Both logistic models use L2 regularisation at ``C=1.0`` with ``class_weight="balanced"``
-    (failures are about 0.3 percent of rows) and the shared winsorise-impute-scale front
-    end. The Texas baseline is wrapped in a one-step pipeline so every model loads and
-    scores the same way.
+    ``logit_small`` uses L2 at ``C=1.0`` with ``class_weight="balanced"`` (failures are
+    about 0.2 percent of training rows) so its six odds ratios read as in the literature.
+    ``logit`` uses plain L2 at ``C=LOGIT_C`` and *no* class weighting: with 43 collinear
+    inputs and 554 training failures, balanced weights let a handful of failed banks pull
+    the capital coefficients to opposite signs, and ``scripts/tune_logit_c.py`` (a
+    time-based validation slice inside the training period, spec rule 6.7) picks the
+    strength. Both share the winsorise-impute-scale front end. The Texas baseline is
+    wrapped in a one-step pipeline so every model loads and scores the same way.
     """
     if name == "texas":
         return Pipeline([("model", TexasRatioScorer())])
-    if name in ("logit_small", "logit"):
+    if name == "logit_small":
         estimator = LogisticRegression(
             C=1.0, class_weight="balanced", max_iter=max_iter, solver="lbfgs"
         )
+        return make_pipeline(estimator)
+    if name == "logit":
+        estimator = LogisticRegression(C=LOGIT_C, max_iter=max_iter, solver="lbfgs")
         return make_pipeline(estimator)
     raise ValueError(f"unknown model {name!r}; choose one of {MODEL_NAMES}")
 

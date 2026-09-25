@@ -209,13 +209,14 @@ def evaluate(
     model: str | None = typer.Option(None, "--model", help="One model; default: all trained."),
     horizon: int = typer.Option(4, "--horizon", help="Label horizon in quarters (4 or 8)."),
 ) -> None:
-    """Re-score saved baselines on the fixed test split and write reports/p1_baselines.md."""
+    """Re-score saved baselines on the fixed test split; write reports/p1_baselines.md + figures."""
     from bankcanary.config import load_settings
     from bankcanary.models.train import (
         evaluate_model,
         load_training_frame,
         report_path,
         write_baselines_report,
+        write_figures,
     )
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -232,8 +233,18 @@ def evaluate(
             f"recall@2% {m['recall_at_2pct']:.3f} recall@top100 {m['recall_at_top100']:.3f} "
             f"(n {m['n']}, failures {m['n_failures']})"
         )
-    path = write_baselines_report(results, settings, horizon, report_path(settings, horizon))
+        typer.echo(
+            f"  censored dropped: pr_auc {r.sensitivity['pr_auc']:.4f} "
+            f"(n_dropped {r.sensitivity['n_dropped']}); per event: pr_auc "
+            f"{r.by_event['pr_auc']:.4f} (events {r.by_event['n_events']}, "
+            f"multi-bank {r.by_event['n_multi_bank_events']})"
+        )
+    figures = write_figures(results, settings, horizon)
+    path = write_baselines_report(
+        results, settings, horizon, report_path(settings, horizon), figures=figures
+    )
     typer.echo(f"report: {path}")
+    typer.echo(f"figures: {len(figures)} under {figures['recall_at_k'].parent}")
 
 
 if __name__ == "__main__":

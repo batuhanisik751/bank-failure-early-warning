@@ -80,14 +80,19 @@ failures; test on 2010Q1-2013Q4, 118,696 rows / 833 failures; from
 |---|---|---|---|---|
 | texas (rank by Texas ratio) | 0.3726 | 0.9739 | 0.761 | 0.072 |
 | logit_small (6 features) | 0.3720 | 0.9791 | 0.738 | 0.079 |
-| logit (all 43 features, L2, balanced) | 0.1985 | 0.9635 | 0.539 | 0.040 |
+| logit (all 43 features, L2, C = 0.003) | 0.3867 | 0.9755 | 0.714 | 0.080 |
 
 The honest reading: the signal is clearly there (a plain Texas-ratio ranking puts three
-quarters of the banks that failed within a year inside its top 2%), but the models have
-not yet added to it, since the six-feature logistic only ties the Texas ratio and the
-all-feature logistic is worse because its collinear capital measures overfit the 554
-training failures. Beating the Texas ratio on PR-AUC is the open acceptance criterion
-that Prototype 2 (feature selection, gradient boosting, walk-forward backtest) has to close.
+quarters of the banks that failed within a year inside its top 2%), the six-feature
+logistic only ties the Texas ratio, and the all-feature logistic beats it on PR-AUC by a
+small margin. That margin came from a lesson, not from a richer model: with balanced class
+weights the same logistic scored 0.20, because weighting 554 training failures up by a
+factor of 450 let its collinear capital measures overfit. The regularisation strength is
+chosen on a validation slice inside the training years (`scripts/tune_logit_c.py`), never
+on the test years. The report also gives every number with censored rows dropped and per
+failure event (same-day holding-company failures counted once), and `reports/figures/`
+holds the PR curves, score histograms and recall@k chart. Prototype 2 (feature selection,
+gradient boosting, walk-forward backtest) has to widen the gap.
 
 ### Reproduce
 
@@ -99,15 +104,16 @@ uv run bankcanary build-labels
 uv run bankcanary build-features
 uv run bankcanary dq-report              # reports/data_quality.md
 uv run bankcanary train --model all      # models/{texas,logit_small,logit}/
-uv run bankcanary evaluate               # reports/p1_baselines.md
+uv run bankcanary evaluate               # reports/p1_baselines.md + reports/figures/
 uv run python scripts/make_notebook_01.py
 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/01_foundation.ipynb
 ```
 
 The first `ingest` downloads about 100 quarters of financials and takes a while; every
 later run reads the JSON cache and rebuilds the Parquet tables byte-identically. If the
-`bankcanary` console script cannot find the package, prefix the commands with
-`PYTHONPATH=src`.
+`bankcanary` console script cannot find the package (macOS can mark the editable
+install's `.pth` file hidden, which Python then skips), run `make fix-venv` or prefix the
+commands with `PYTHONPATH=src`; `uv run pytest` works either way.
 
 ## Disclaimer
 

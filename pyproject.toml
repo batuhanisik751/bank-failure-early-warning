@@ -54,5 +54,6 @@ ignore = ["N803", "N806", "B905"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "-q"
 filterwarnings = ["ignore::DeprecationWarning"]

@@ -208,3 +208,56 @@ def lead_time_quarters(
         )
     cols = [cert_col, fail_date_col, "first_flag_repdte", "lead_time_quarters", "n_quarters_scored"]
     return pd.DataFrame(rows, columns=cols)
+
+
+def evaluate_by_event(
+    df: pd.DataFrame,
+    score_col: str,
+    label_col: str,
+    cert_col: str = "cert",
+    repdte_col: str = "repdte",
+    hc_col: str = "rssdhcr",
+    fail_date_col: str = "fail_date",
+    **kwargs,
+) -> dict:
+    """Metrics per *failure event* rather than per bank (spec section 5, rule 6).
+
+    When several subsidiaries of one holding company fail on the same day (FBOP's nine
+    banks on 2009-10-30, for instance) a per-bank ranking counts one supervisory event
+    several times. Here every positive row that shares ``(repdte, rssdhcr, fail_date)``
+    with another positive row is collapsed into one unit whose score is the *highest*
+    score among the sister banks: the event counts as caught when any of them was
+    flagged. Non-failing rows and failed banks without a holding company stay one row
+    per bank. Returns the usual :func:`evaluate` keys plus ``n_events`` (positives after
+    collapsing), ``n_multi_bank_events`` and ``n_banks_in_multi_events``.
+    """
+    d = df[[cert_col, repdte_col, score_col, label_col]].copy()
+    y = np.nan_to_num(d[label_col].astype(float).to_numpy(), nan=0.0).astype(int)
+    hc = pd.to_numeric(df[hc_col], errors="coerce") if hc_col in df.columns else None
+    fail = pd.to_datetime(df[fail_date_col]) if fail_date_col in df.columns else None
+    has_event = (y == 1) & (hc is not None) & (fail is not None)
+    if hc is not None and fail is not None:
+        has_event &= hc.fillna(0).to_numpy() > 0
+        has_event &= fail.notna().to_numpy()
+    event = d[cert_col].astype(str)
+    if has_event.any():
+        tag = "hc" + hc.astype("Int64").astype(str) + "@" + fail.dt.strftime("%Y-%m-%d")
+        event = event.where(~has_event, tag.astype(str))
+    d["_event"] = event.to_numpy()
+    d["_y"] = y
+    grouped = (
+        d.groupby([repdte_col, "_event"], sort=True)
+        .agg(score=(score_col, "max"), y=("_y", "max"), cert=(cert_col, "min"), n=("_y", "size"))
+        .reset_index()
+    )
+    m = evaluate(
+        grouped["y"].to_numpy(),
+        grouped["score"].to_numpy(),
+        tie_breaker=grouped["cert"].to_numpy(),
+        **kwargs,
+    )
+    multi = grouped[(grouped["y"] == 1) & (grouped["n"] > 1)]
+    m["n_events"] = int(grouped["y"].sum())
+    m["n_multi_bank_events"] = int(len(multi))
+    m["n_banks_in_multi_events"] = int(multi["n"].sum())
+    return m

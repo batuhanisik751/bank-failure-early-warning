@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -19,7 +20,7 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 
 from bankcanary.config import Settings
-from bankcanary.evaluation.metrics import evaluate, evaluate_by_year
+from bankcanary.evaluation.metrics import evaluate, evaluate_by_event, evaluate_by_year
 from bankcanary.labels.build import horizon_columns
 from bankcanary.models.baselines import (
     MODEL_NAMES,
@@ -35,6 +36,8 @@ log = logging.getLogger(__name__)
 
 PRIMARY_HORIZON = 4
 KEY = ["cert", "repdte"]
+#: Panel columns carried into the score frame for the per-failure-event evaluation.
+EVENT_COLUMNS = ["rssdhcr", "fail_date"]
 
 
 @dataclass
@@ -50,6 +53,10 @@ class TrainResult:
     config: dict
     scores: pd.DataFrame = field(repr=False)
     paths: dict[str, Path] = field(default_factory=dict)
+    #: Test metrics with the censored rows (non-failure exits inside the window) dropped.
+    sensitivity: dict = field(default_factory=dict)
+    #: Test metrics per failure event (same-day holding-company failures collapsed).
+    by_event: dict = field(default_factory=dict)
 
 
 def model_dir(settings: Settings, name: str, horizon: int = PRIMARY_HORIZON) -> Path:
@@ -70,7 +77,10 @@ def load_training_frame(settings: Settings) -> pd.DataFrame:
             len(labels),
             len(frame),
         )
-    return frame
+    # Holding-company id and failure date ride along for the per-event evaluation
+    # (spec 5, rule 6); they are never model inputs (features come from the registry).
+    facts = read_table("panel", settings)[KEY + EVENT_COLUMNS]
+    return frame.merge(facts, on=KEY, how="left", validate="one_to_one")
 
 
 def _fmt(ts) -> str | None:
@@ -137,12 +147,24 @@ def train_model(
     scores = score_test_split(pipeline, frame.loc[test], features, y_col, horizon)
     metrics = _score_metrics(scores)
     by_year = evaluate_by_year(scores, "score", "y", "year", tie_col="cert")
+    sensitivity, by_event = _extra_metrics(scores)
     config = {
         "model": name,
         "n_features": len(features),
         **_split_config(frame, train, test, settings, horizon, y_col),
     }
-    result = TrainResult(name, horizon, pipeline, features, metrics, by_year, config, scores)
+    result = TrainResult(
+        name,
+        horizon,
+        pipeline,
+        features,
+        metrics,
+        by_year,
+        config,
+        scores,
+        sensitivity=sensitivity,
+        by_event=by_event,
+    )
     log.info(
         "%s %dq test: pr_auc %.4f roc_auc %.4f",
         name,
@@ -161,8 +183,12 @@ def _score_metrics(scores: pd.DataFrame) -> dict:
 
 
 def score_test_split(pipeline, test_rows: pd.DataFrame, features, y_col: str, horizon: int):
-    """Frame of ``cert, repdte, year, y, score`` for the rows a model is evaluated on."""
-    return pd.DataFrame(
+    """Frame of ``cert, repdte, year, y, score`` for the rows a model is evaluated on.
+
+    ``censored`` (the horizon's ``censored_in_window`` flag), ``rssdhcr`` and ``fail_date``
+    are added when the input carries them; the sensitivity and per-event metrics need them.
+    """
+    out = pd.DataFrame(
         {
             "cert": test_rows["cert"].to_numpy(),
             "repdte": test_rows["repdte"].to_numpy(),
@@ -171,6 +197,26 @@ def score_test_split(pipeline, test_rows: pd.DataFrame, features, y_col: str, ho
             "score": score_pipeline(pipeline, test_rows[features]),
         }
     )
+    censored_col = horizon_columns(horizon)[2]
+    if censored_col in test_rows.columns:
+        out["censored"] = test_rows[censored_col].fillna(False).astype(bool).to_numpy()
+    for col in EVENT_COLUMNS:
+        if col in test_rows.columns:
+            out[col] = test_rows[col].to_numpy()
+    return out
+
+
+def _extra_metrics(scores: pd.DataFrame) -> tuple[dict, dict]:
+    """Spec 5 rule 3 sensitivity (censored rows dropped) and rule 6 per-event metrics."""
+    censored = (
+        scores["censored"].to_numpy(dtype=bool)
+        if "censored" in scores.columns
+        else np.zeros(len(scores), dtype=bool)
+    )
+    sensitivity = _score_metrics(scores.loc[~censored])
+    sensitivity["n_dropped"] = int(censored.sum())
+    by_event = evaluate_by_event(scores, "score", "y")
+    return sensitivity, by_event
 
 
 def _json_ready(value):
@@ -195,6 +241,8 @@ def save_artifacts(result: TrainResult, out_dir: Path) -> dict[str, Path]:
     payload = {
         "test": _json_ready(result.metrics),
         "by_year": _json_ready(result.by_year.to_dict(orient="records")),
+        "sensitivity_censored_dropped": _json_ready(result.sensitivity),
+        "per_event": _json_ready(result.by_event),
     }
     for stem, content in (
         ("metrics", payload),
@@ -243,6 +291,7 @@ def evaluate_model(
         scores = score_test_split(pipeline, frame.loc[test], features, y_col, horizon)
         metrics = _score_metrics(scores)
         by_year = evaluate_by_year(scores, "score", "y", "year", tie_col="cert")
+        sensitivity, by_event = _extra_metrics(scores)
         results[model_name] = TrainResult(
             model_name,
             horizon,
@@ -253,6 +302,8 @@ def evaluate_model(
             config,
             scores,
             {"dir": model_dir(settings, model_name, horizon)},
+            sensitivity=sensitivity,
+            by_event=by_event,
         )
     return results
 
@@ -263,6 +314,47 @@ def report_path(settings: Settings, horizon: int = PRIMARY_HORIZON) -> Path:
 
 
 REPORT_METRICS = ("pr_auc", "roc_auc", "recall_at_2pct", "recall_at_top100", "n", "n_failures")
+SENSITIVITY_METRICS = REPORT_METRICS + ("n_dropped",)
+EVENT_METRICS = (
+    "pr_auc",
+    "roc_auc",
+    "recall_at_2pct",
+    "recall_at_top100",
+    "n_events",
+    "n_multi_bank_events",
+    "n_banks_in_multi_events",
+)
+
+
+def figures_dir(settings: Settings) -> Path:
+    return Path(settings.reports_dir) / "figures"
+
+
+def write_figures(
+    results: dict[str, TrainResult], settings: Settings, horizon: int
+) -> dict[str, Path]:
+    """Save the report figures under ``reports/figures/`` and return them by name.
+
+    One precision-recall curve and one score-distribution histogram per model (their
+    scores live on different scales: a Texas ratio against a probability), plus one
+    recall@k bar chart comparing every model. Non-primary horizons get a ``_<H>q`` suffix.
+    """
+    from bankcanary.evaluation import plots
+
+    suffix = "" if horizon == PRIMARY_HORIZON else f"_{horizon}q"
+    out_dir = figures_dir(settings)
+    paths: dict[str, Path] = {}
+    for name, r in results.items():
+        y, s = r.scores["y"].to_numpy(), r.scores["score"].to_numpy()
+        paths[f"pr_curve_{name}"] = plots.pr_curve(y, s, out_dir / f"pr_curve_{name}{suffix}.png")
+        paths[f"score_distributions_{name}"] = plots.score_distributions(
+            y, s, out_dir / f"score_distributions_{name}{suffix}.png"
+        )
+    paths["recall_at_k"] = plots.recall_at_k_bars(
+        {n: r.metrics for n, r in results.items()}, out_dir / f"recall_at_k{suffix}.png"
+    )
+    log.info("wrote %d figures to %s", len(paths), out_dir)
+    return paths
 
 
 def _md_table(df: pd.DataFrame, floatfmt: str = "{:.4f}") -> str:
@@ -292,10 +384,34 @@ def _leakage_note(table: pd.DataFrame) -> str:
     )
 
 
+def _section_table(results: dict[str, TrainResult], attr: str, keys: tuple[str, ...]) -> str:
+    rows = pd.DataFrame(
+        [{"model": n, **{k: getattr(r, attr).get(k) for k in keys}} for n, r in results.items()]
+    )
+    return _md_table(rows)
+
+
+def _figure_lines(figures: dict[str, Path], report_path: Path) -> list[str]:
+    lines = ["", "## Figures", ""]
+    for key, fig in figures.items():
+        rel = os.path.relpath(Path(fig), Path(report_path).parent)
+        lines.append(f"- {key.replace('_', ' ')}: [`{rel}`]({rel})")
+    return lines
+
+
 def write_baselines_report(
-    results: dict[str, TrainResult], settings: Settings, horizon: int, path: Path
+    results: dict[str, TrainResult],
+    settings: Settings,
+    horizon: int,
+    path: Path,
+    figures: dict[str, Path] | None = None,
 ) -> Path:
-    """Write the Prototype 1 baseline comparison as markdown and return its path."""
+    """Write the Prototype 1 baseline comparison as markdown and return its path.
+
+    Besides the headline test metrics the report carries the spec 5 rule 3 sensitivity
+    run (censored rows dropped), the rule 6 per-failure-event view and, when
+    ``figures`` is given (see :func:`write_figures`), links to the saved plots.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     first = next(iter(results.values()))
@@ -328,6 +444,27 @@ def write_baselines_report(
             f"PR-AUC ({results['logit'].metrics['pr_auc']:.4f} vs "
             f"{results['texas'].metrics['pr_auc']:.4f}).",
         ]
+    out += [
+        "",
+        "## Sensitivity: censored rows dropped (spec 5, rule 3)",
+        "",
+        "Test rows where the bank left the industry without failing inside the window "
+        f"(`censored_in_window_{horizon}q`: merged, closed voluntarily, ...) are removed "
+        "before scoring; `n_dropped` counts them. They carry `y = 0` in the main run.",
+        "",
+        _section_table(results, "sensitivity", SENSITIVITY_METRICS),
+        "",
+        "## Per failure event (spec 5, rule 6)",
+        "",
+        "Sister banks of one holding company (`rssdhcr`) that failed on the same day are "
+        "collapsed into one event per report quarter, scored by the best-ranked sister; every "
+        "other row stays one per bank. `n_events` is the number of positive units after "
+        "collapsing, `n_multi_bank_events` how many of them bundle several banks.",
+        "",
+        _section_table(results, "by_event", EVENT_METRICS),
+    ]
+    if figures:
+        out += _figure_lines(figures, path)
     for name, r in results.items():
         if name not in ("logit_small", "logit"):
             continue

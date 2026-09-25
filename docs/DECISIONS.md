@@ -192,3 +192,37 @@ open for the owner to revisit.
   hidden `.pth` files (`site._trace` prints "Skipping hidden .pth file"). `chflags
   nohidden` on the `.pth` files fixes it, but the flag was re-applied within minutes, so
   the `PYTHONPATH=src` prefix remains the documented way to run the CLI and the tests.
+- 2026-09-25 — **All-feature logit re-specified (P1 gap review):** the contract's
+  `class_weight="balanced"` was the cause of the 0.20 PR-AUC, not the feature set. With
+  554 training failures against 252k rows, balanced weights scale each failure by about
+  450, so a handful of failed banks set the capital coefficients (|coef| up to 3.7 with
+  opposite signs on collinear measures). `scripts/tune_logit_c.py` fits every candidate
+  on an inner split carved from the training period (spec rule 6.7: validation = usable
+  reports 2007Q1-2008Q4, 509 positives; inner training = windows closed before
+  2007-05-30, 148,198 rows / 37 positives) and never reads the test years. Validation
+  PR-AUC: unweighted C=0.003 0.246, C=0.0003 0.246, C=0.001 0.240, C=0.01 0.193,
+  C=1 0.028; every balanced variant is below 0.035. The winner (unweighted, C=0.003) is
+  `bankcanary.models.baselines.LOGIT_C`; on the untouched test split it scores PR-AUC
+  0.3867 against 0.3726 for the Texas ratio, so the spec acceptance criterion is met
+  without tuning on the test years. `logit_small` keeps C=1, balanced: its odds ratios
+  are the point of that model and it already ties the Texas ratio. Contract section 8
+  updated accordingly.
+- 2026-09-25 — **Sensitivity and per-event evaluation (spec 5 rules 3 and 6):** every
+  training and evaluation run now also reports the test metrics with the
+  `censored_in_window_Hq` rows dropped (3,877 of 118,696 test rows for 4q; PR-AUC rises
+  by about 0.01 for every model because the dropped rows are all negatives) and per
+  failure event: positive rows sharing `(repdte, rssdhcr, fail_date)` collapse into one
+  unit scored by the best-ranked sister bank, so a holding company whose subsidiaries
+  fail on the same day counts once. In 2010-2013 that is 12 two-bank events (821 events
+  for 833 bank-quarters), which moves PR-AUC by less than 0.002. `load_training_frame`
+  left-joins `rssdhcr` and `fail_date` from `panel` for this; they are never features.
+  Both blocks are stored in `metrics.json` (`sensitivity_censored_dropped`, `per_event`)
+  and in `reports/p1_baselines.md`.
+- 2026-09-25 — **Figures and the `.pth` workaround:** `bankcanary evaluate` now writes
+  `reports/figures/` (PR curve and score histogram per model, one recall@k chart; about
+  140 KB, committed). `[tool.pytest.ini_options].pythonpath = ["src"]` makes `uv run
+  pytest` independent of the editable-install `.pth`, whose macOS `hidden` flag keeps
+  being re-applied to everything under `.venv/` in this checkout (not by `uv`: a plain
+  `uv run` leaves a cleared flag alone, but files `uv` writes into `.venv/` come back
+  hidden within minutes). `make fix-venv` (`chflags -R nohidden .venv`) restores
+  `uv run bankcanary` until it happens again; `PYTHONPATH=src` remains the fallback.

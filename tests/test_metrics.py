@@ -129,3 +129,31 @@ def test_plots_write_deterministic_pngs(tmp_path):
     assert bars.stat().st_size > 0 and dist.stat().st_size > 0
     # Degenerate input still produces a file.
     assert plots.pr_curve([0, 0], [0.1, 0.2], tmp_path / "empty.png").exists()
+
+
+def test_evaluate_by_event_collapses_same_day_holding_company_failures():
+    # Banks 1 and 2 belong to holding company 7 and fail the same day: one event, scored
+    # by the better-ranked sister (0.9). Bank 3 fails alone; bank 4 shares the holding
+    # company but survives and must stay its own row.
+    df = pd.DataFrame(
+        {
+            "cert": [1, 2, 3, 4, 5, 6, 7],
+            "repdte": ["2009-06-30"] * 7,
+            "score": [0.9, 0.1, 0.8, 0.7, 0.6, 0.5, 0.4],
+            "y": [1, 1, 1, 0, 0, 0, 0],
+            "rssdhcr": [7, 7, None, 7, None, None, None],
+            "fail_date": ["2009-10-30", "2009-10-30", "2009-11-06", None, None, None, None],
+        }
+    )
+    per_bank = metrics.evaluate(df["y"], df["score"])
+    assert per_bank["n_failures"] == 3 and per_bank["pr_auc"] < 1.0  # bank 2 ranks last
+    m = metrics.evaluate_by_event(df, "score", "y")
+    assert m["n"] == 6 and m["n_failures"] == 2 and m["n_events"] == 2
+    assert m["n_multi_bank_events"] == 1 and m["n_banks_in_multi_events"] == 2
+    assert m["pr_auc"] == 1.0 and m["roc_auc"] == 1.0
+    # the same two banks in a *different* quarter are a separate unit
+    two_quarters = pd.concat([df, df.assign(repdte="2009-09-30")], ignore_index=True)
+    assert metrics.evaluate_by_event(two_quarters, "score", "y")["n_events"] == 4
+    # without holding-company columns the result is the per-bank evaluation
+    plain = metrics.evaluate_by_event(df.drop(columns=["rssdhcr", "fail_date"]), "score", "y")
+    assert plain["n_events"] == 3 and plain["pr_auc"] == pytest.approx(per_bank["pr_auc"])

@@ -208,7 +208,9 @@ gap year keeps every training label window closed before the test period starts)
 - **texas**: rank banks by the Texas ratio, no fitting at all;
 - **logit_small**: logistic regression on six ratios (equity/assets, noncurrent ratio,
   ROA, brokered share, construction loans/capital, log assets);
-- **logit**: L2-regularised, class-balanced logistic regression on every Prototype 1 feature.
+- **logit**: L2-regularised logistic regression on every Prototype 1 feature, no class
+  weighting, with the regularisation strength picked on a validation slice inside the
+  training period (`scripts/tune_logit_c.py`).
 
 The cell re-scores the saved pipelines under `models/` on the test rows (about a second)
 rather than reading `metrics.json` back, so the artefacts themselves are what is checked.
@@ -257,12 +259,14 @@ and Capital, which is why it is such a strong baseline for the 2008-2013 wave.
 
 The results are honest rather than flattering. The six-feature logistic regression matches
 the Texas ratio on PR-AUC (0.372 vs 0.373) and beats it on ROC-AUC and recall in the top 100,
-but it does not clearly beat it. The all-feature `logit` is **worse** (PR-AUC 0.199): its
-four collinear capital measures take large, sign-flipped coefficients and the model
-overfits the 2002-2008 training years, when there were only 554 positives. Stronger L2
-regularisation does not close the gap (see `docs/DECISIONS.md`), so the acceptance
-criterion "regularised logit beats the Texas ratio on PR-AUC" is left open for the feature
-selection and gradient-boosting work of Prototype 2.
+but it does not clearly beat it. The all-feature `logit` edges ahead (PR-AUC 0.387), and
+only after a lesson: with balanced class weights the same model scored 0.199, because
+weighting 554 training failures up by a factor of 450 let a handful of failed banks push
+its four collinear capital measures to large, sign-flipped coefficients. Dropping the class
+weights and choosing the L2 strength on a validation slice carved from the training years
+(never the test years; see `docs/DECISIONS.md`) fixes that, which is what the acceptance
+criterion "regularised logit beats the Texas ratio on PR-AUC" now rests on. The report
+also shows the same numbers with censored rows dropped and per failure event.
 """)
 
 code("""
@@ -278,8 +282,8 @@ md("""
    *t*, predict year *t + 1*, repeat from 2006 onward, so the model is judged on every
    crisis year and on the quiet years after it.
 2. **Feature selection and a gradient-boosting model** (LightGBM) with monotone
-   constraints, plus a discrete-time hazard model; the collinear capital block that sank
-   the all-feature logit needs pruning or a tree model that does not care.
+   constraints, plus a discrete-time hazard model; the collinear capital block that
+   nearly sank the all-feature logit needs pruning or a tree model that does not care.
 3. **Interest-rate and funding features** (securities duration, unrealised losses,
    uninsured-deposit share) so the model can see a 2023-style run, which the credit-quality
    features above cannot.

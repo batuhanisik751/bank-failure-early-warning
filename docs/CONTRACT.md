@@ -123,7 +123,14 @@ pipeline step fitted on the training fold (§8).
   recall_at_5pct, recall_at_top50, recall_at_top100, n, n_failures`.
 - Texas-ratio baseline = rank by `texas_ratio` descending. Small logistic = 6 features
   (`equity_to_assets, noncurrent_ratio, roa_q, brokered_share, construction_to_capital,
-  log_assets`). Regularised logistic = all P1 features, L2, `class_weight="balanced"`.
+  log_assets`), L2 at `C=1.0`, `class_weight="balanced"`. Regularised logistic = all P1
+  features, L2, **no class weighting**, `C = bankcanary.models.baselines.LOGIT_C` chosen by
+  `scripts/tune_logit_c.py` on a validation slice inside the training period (rule 6.7;
+  see `docs/DECISIONS.md`). Every training and evaluation run also reports the spec §5
+  rule 3 sensitivity (censored rows dropped) and the rule 6 per-failure-event metrics
+  (`metrics.evaluate_by_event`), stored in `metrics.json` under
+  `sensitivity_censored_dropped` and `per_event`; `bankcanary evaluate` writes the
+  figures to `reports/figures/`.
 
 ## 9. CLI (`bankcanary …`)
 

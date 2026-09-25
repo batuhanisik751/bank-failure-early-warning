@@ -28,7 +28,7 @@ the reports.
   (panel: 710,691 rows, `repdte` 2001-03-31..2026-06-30).
 
 - [x] **All label and leakage unit tests pass; the Rule 6.2 split function is used by every
-  training path.** `uv run pytest`: 214 passed in 4.0 s. Label tests
+  training path.** `uv run pytest`: 216 passed in about 5 s. Label tests
   (`tests/test_labels.py`, `tests/test_labels_adversarial.py`): 72 passed. Split, leakage and
   model tests (`tests/test_time_split*.py`, `tests/test_models.py`): 37 passed.
   `grep -rn -E "fixed_split_masks|training_mask" src/bankcanary/models` hits only
@@ -40,13 +40,15 @@ the reports.
   path selects rows any other way. The 4q split: train 252,330 rows / 554 positives,
   test 118,696 rows / 833 positives.
 
-- [ ] **The regularised logistic model beats the Texas ratio on PR-AUC on the fixed test
-  split.** Not met. `models/<name>/metrics.json`, `test.pr_auc` (4q, n = 118,696,
-  833 failures): texas 0.3726, logit_small 0.3720, logit 0.1985 (ROC-AUC 0.974 / 0.979 /
-  0.964). The all-feature logit is hurt by collinear capital measures with sign-flipped
-  coefficients; stronger L2 lifts it only to about 0.26 (`docs/DECISIONS.md`). Left open
-  for Prototype 2 feature selection and the gradient-boosting model rather than tuned on
-  the test split.
+- [x] **The regularised logistic model beats the Texas ratio on PR-AUC on the fixed test
+  split.** `models/<name>/metrics.json`, `test.pr_auc` (4q, n = 118,696, 833 failures):
+  texas 0.3726, logit_small 0.3720, logit 0.3867 (ROC-AUC 0.974 / 0.979 / 0.976). The
+  logit is unweighted L2 with `C = 0.003`, chosen by `uv run python
+  scripts/tune_logit_c.py` on a validation slice inside the training period (reports
+  2007Q1-2008Q4; the test years are never read), see `docs/DECISIONS.md`. The earlier
+  class-balanced fit scored 0.1985. With censored test rows dropped (spec 5 rule 3) the
+  ordering is the same (0.3815 / 0.3840 / 0.3973), and per failure event (rule 6; 821
+  events, 12 of them two-bank) it is 0.3728 / 0.3706 / 0.3858 (`reports/p1_baselines.md`).
 
 - [x] **The notebook runs top-to-bottom on a laptop in < 10 minutes after data is cached.**
   `uv run jupyter nbconvert --to notebook --execute --output /tmp/nb_check.ipynb
@@ -70,13 +72,14 @@ the reports.
 | 6 label builder with unit tests | done | `bankcanary.labels`, 72 passed |
 | 7 ~20 features with YTD de-accumulation and tests | done | 43 features in `features_v1`, `tests/test_features.py`, `tests/test_ytd*.py` |
 | 8 Texas, small logistic, regularised logistic | done | `models/{texas,logit_small,logit}/` |
-| 9 fixed out-of-time evaluation | done | `reports/p1_baselines.md` |
+| 9 fixed out-of-time evaluation | done | `reports/p1_baselines.md`, `reports/figures/` (7 PNGs from `bankcanary evaluate`) |
 | 10 notebook | done | `notebooks/01_foundation.ipynb`, built by `scripts/make_notebook_01.py` |
 | 11 CLI | done | `bankcanary --help` lists ingest, build-panel, build-labels, build-features, dq-report, train, evaluate |
 
-Known gotcha: in this checkout every file under `.venv/` carries the macOS `hidden` file
-flag (`ls -lO`), and Python 3.12's `site` module skips hidden `.pth` files, so the editable
-install's `_editable_impl_bankcanary.pth` is never applied. `uv run bankcanary` and
-`uv run pytest` then fail with `ModuleNotFoundError` unless prefixed with `PYTHONPATH=src`;
-`chflags nohidden .venv/lib/python3.12/site-packages/*.pth` fixes it until the flag is
-re-applied. The notebook adds `src/` to `sys.path` itself.
+Known gotcha: in this checkout every file under `.venv/` keeps getting the macOS `hidden`
+file flag (`ls -lO`), and Python 3.12's `site` module skips hidden `.pth` files, so the
+editable install's `_editable_impl_bankcanary.pth` is sometimes not applied. `uv run pytest`
+no longer depends on it (`pythonpath = ["src"]` in `pyproject.toml`). For
+`uv run bankcanary`, run `make fix-venv` (`chflags -R nohidden .venv`) when the console
+script cannot import the package, or prefix the command with `PYTHONPATH=src`. The
+notebook adds `src/` to `sys.path` itself.

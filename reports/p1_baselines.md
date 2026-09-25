@@ -11,9 +11,39 @@ Fixed out-of-time split (spec 8.2, rule 6.2 applied through `fixed_split_masks`)
 |---|---|---|---|---|---|---|
 | texas | 0.3726 | 0.9739 | 0.7611 | 0.0720 | 118696 | 833 |
 | logit_small | 0.3720 | 0.9791 | 0.7383 | 0.0792 | 118696 | 833 |
-| logit | 0.1985 | 0.9635 | 0.5390 | 0.0396 | 118696 | 833 |
+| logit | 0.3867 | 0.9755 | 0.7143 | 0.0804 | 118696 | 833 |
 
-Acceptance check (spec 9): the regularised logit does not beat the Texas ratio on PR-AUC (0.1985 vs 0.3726).
+Acceptance check (spec 9): the regularised logit beats the Texas ratio on PR-AUC (0.3867 vs 0.3726).
+
+## Sensitivity: censored rows dropped (spec 5, rule 3)
+
+Test rows where the bank left the industry without failing inside the window (`censored_in_window_4q`: merged, closed voluntarily, ...) are removed before scoring; `n_dropped` counts them. They carry `y = 0` in the main run.
+
+| model | pr_auc | roc_auc | recall_at_2pct | recall_at_top100 | n | n_failures | n_dropped |
+|---|---|---|---|---|---|---|---|
+| texas | 0.3815 | 0.9741 | 0.7611 | 0.0732 | 114819 | 833 | 3877 |
+| logit_small | 0.3840 | 0.9794 | 0.7407 | 0.0804 | 114819 | 833 | 3877 |
+| logit | 0.3973 | 0.9758 | 0.7155 | 0.0804 | 114819 | 833 | 3877 |
+
+## Per failure event (spec 5, rule 6)
+
+Sister banks of one holding company (`rssdhcr`) that failed on the same day are collapsed into one event per report quarter, scored by the best-ranked sister; every other row stays one per bank. `n_events` is the number of positive units after collapsing, `n_multi_bank_events` how many of them bundle several banks.
+
+| model | pr_auc | roc_auc | recall_at_2pct | recall_at_top100 | n_events | n_multi_bank_events | n_banks_in_multi_events |
+|---|---|---|---|---|---|---|---|
+| texas | 0.3728 | 0.9739 | 0.7661 | 0.0731 | 821 | 12 | 24 |
+| logit_small | 0.3706 | 0.9790 | 0.7418 | 0.0804 | 821 | 12 | 24 |
+| logit | 0.3858 | 0.9753 | 0.7125 | 0.0816 | 821 | 12 | 24 |
+
+## Figures
+
+- pr curve texas: [`figures/pr_curve_texas.png`](figures/pr_curve_texas.png)
+- score distributions texas: [`figures/score_distributions_texas.png`](figures/score_distributions_texas.png)
+- pr curve logit small: [`figures/pr_curve_logit_small.png`](figures/pr_curve_logit_small.png)
+- score distributions logit small: [`figures/score_distributions_logit_small.png`](figures/score_distributions_logit_small.png)
+- pr curve logit: [`figures/pr_curve_logit.png`](figures/pr_curve_logit.png)
+- score distributions logit: [`figures/score_distributions_logit.png`](figures/score_distributions_logit.png)
+- recall at k: [`figures/recall_at_k.png`](figures/recall_at_k.png)
 
 ## Per-year metrics, logit_small
 
@@ -45,25 +75,25 @@ Acceptance check (spec 9): the regularised logit does not beat the Texas ratio o
 
 | year | n | n_failures | pr_auc | roc_auc | recall_at_1pct | recall_at_2pct | recall_at_5pct | recall_at_top50 | recall_at_top100 |
 |---|---|---|---|---|---|---|---|---|---|
-| 2010 | 31431 | 408 | 0.2630 | 0.9619 | 0.2500 | 0.4387 | 0.7426 | 0.0466 | 0.1078 |
-| 2011 | 30165 | 231 | 0.2190 | 0.9700 | 0.3290 | 0.5022 | 0.8095 | 0.0866 | 0.1645 |
-| 2012 | 29130 | 121 | 0.0902 | 0.9621 | 0.2893 | 0.4545 | 0.7851 | 0.0579 | 0.0909 |
-| 2013 | 27970 | 73 | 0.0578 | 0.9151 | 0.2877 | 0.4521 | 0.7671 | 0.0685 | 0.1370 |
-| pooled | 118696 | 833 | 0.1985 | 0.9635 | 0.3385 | 0.5390 | 0.8043 | 0.0204 | 0.0396 |
+| 2010 | 31431 | 408 | 0.4458 | 0.9727 | 0.3946 | 0.6127 | 0.8799 | 0.0784 | 0.1544 |
+| 2011 | 30165 | 231 | 0.3858 | 0.9771 | 0.4805 | 0.6710 | 0.9134 | 0.1385 | 0.2338 |
+| 2012 | 29130 | 121 | 0.3186 | 0.9880 | 0.5702 | 0.7438 | 0.9669 | 0.1901 | 0.3058 |
+| 2013 | 27970 | 73 | 0.2046 | 0.9454 | 0.5890 | 0.6712 | 0.8904 | 0.1918 | 0.3014 |
+| pooled | 118696 | 833 | 0.3867 | 0.9755 | 0.5222 | 0.7143 | 0.9148 | 0.0396 | 0.0804 |
 
 ## Top 10 |coefficient| features, logit
 
 | feature | coef | odds_ratio |
 |---|---|---|
-| tier1_leverage | -3.6657 | 0.0256 |
-| tangible_equity_to_assets | -3.4169 | 0.0328 |
-| total_rbc_ratio | 2.8723 | 17.6770 |
-| cre_to_capital | -1.6039 | 0.2011 |
-| construction_to_capital | 0.9593 | 2.6100 |
-| brokered_share | 0.7996 | 2.2247 |
-| equity_to_assets | 0.7844 | 2.1912 |
-| share_multifamily | 0.7471 | 2.1108 |
-| noncurrent_ratio | 0.7155 | 2.0453 |
-| share_consumer | -0.7043 | 0.4945 |
+| texas_ratio | 0.4085 | 1.5046 |
+| construction_to_capital | 0.2613 | 1.2986 |
+| roa_q | -0.2542 | 0.7755 |
+| share_multifamily | 0.1514 | 1.1635 |
+| equity_to_assets | -0.1365 | 0.8724 |
+| tangible_equity_to_assets | -0.1254 | 0.8821 |
+| noncurrent_ratio | 0.1215 | 1.1292 |
+| wholesale_funding_ratio | 0.1165 | 1.1236 |
+| early_delinquency | 0.1162 | 1.1233 |
+| tier1_leverage | -0.1161 | 0.8904 |
 
-Leakage sanity check: the largest coefficient (`tier1_leverage`) carries 12% of the total absolute coefficient mass across 71 inputs; no single feature dominates, consistent with no look-ahead leakage.
+Leakage sanity check: the largest coefficient (`texas_ratio`) carries 10% of the total absolute coefficient mass across 71 inputs; no single feature dominates, consistent with no look-ahead leakage.

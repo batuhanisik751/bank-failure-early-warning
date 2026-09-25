@@ -178,3 +178,43 @@ def test_train_writes_artifacts_and_report(tmp_path):
     assert "| texas |" in text and "Odds ratios, logit_small" in text
     assert "Top 10 |coefficient| features, logit" in text and "Leakage sanity check" in text
     assert "2002-03-31 to 2008-12-31" in text and "2010-03-31 to 2013-12-31" in text
+
+
+def test_sensitivity_per_event_and_figures(tmp_path):
+    frame = make_frame(n_certs=30)
+    # a few censored survivors and one two-bank holding-company failure in the test years
+    frame["censored_in_window_4q"] = (frame["cert"] <= 3) & (frame["repdte"].dt.year == 2011)
+    frame["rssdhcr"] = pd.Series(pd.NA, index=frame.index, dtype="Int64")
+    frame["fail_date"] = pd.NaT
+    pair = frame["cert"].isin([4, 5]) & (frame["repdte"] == "2011-06-30")
+    frame.loc[pair, ["y_4q", "rssdhcr"]] = [1, 99]
+    frame.loc[pair, "fail_date"] = pd.Timestamp("2011-11-04")
+    settings = make_settings(tmp_path)
+    results = {n: train.train_model(n, 4, settings, frame=frame) for n in baselines.MODEL_NAMES}
+    r = results["texas"]
+    n_censored = int(
+        frame.loc[frame["repdte"].dt.year.between(2010, 2013), "censored_in_window_4q"].sum()
+    )
+    assert r.sensitivity["n_dropped"] == n_censored == 12
+    assert r.sensitivity["n"] == r.metrics["n"] - n_censored
+    assert r.by_event["n_failures"] == r.metrics["n_failures"] - 1
+    assert r.by_event["n_multi_bank_events"] == 1 and r.by_event["n_banks_in_multi_events"] == 2
+    saved = json.loads((tmp_path / "models" / "texas" / "metrics.json").read_text())
+    assert saved["sensitivity_censored_dropped"]["n_dropped"] == 12
+    assert saved["per_event"]["n_events"] == r.by_event["n_events"]
+
+    figures = train.write_figures(results, settings, 4)
+    assert set(figures) == {"recall_at_k"} | {
+        f"{kind}_{n}" for kind in ("pr_curve", "score_distributions") for n in baselines.MODEL_NAMES
+    }
+    assert all(
+        p.exists() and p.parent == tmp_path / "reports" / "figures" for p in figures.values()
+    )
+    assert train.write_figures(results, settings, 8)["recall_at_k"].name == "recall_at_k_8q.png"
+    path = train.write_baselines_report(
+        results, settings, 4, train.report_path(settings, 4), figures=figures
+    )
+    text = path.read_text()
+    assert "## Sensitivity: censored rows dropped" in text and "| n_dropped |" in text
+    assert "## Per failure event" in text and "n_multi_bank_events" in text
+    assert "(figures/recall_at_k.png)" in text
