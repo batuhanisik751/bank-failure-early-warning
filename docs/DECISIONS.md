@@ -97,3 +97,12 @@ open for the owner to revisit.
   is only ever written for financial columns present in `financials_raw`; identity and
   attribute fields stay `null`. The report has no timestamp so a rebuild from the same
   tables is byte-identical.
+- 2026-09-25 — **YTD de-accumulation matches the previous quarter by exact date, and a NaN
+  prior YTD is not a "missing quarter":** `features.ytd` looks up the same cert's row at
+  `repdte - QuarterEnd(1)` via a merge, never by row position, so filing gaps and mergers
+  cannot difference against the wrong quarter. `ytd_prev_missing` is set only when the cert
+  has *no row* at the previous quarter-end (then quarterly = YTD / quarter number); if the
+  row exists but that item is NaN the quarterly value stays NaN, preserving structural
+  missingness for the missing-indicator columns downstream. Q1 rows are never flagged. On
+  the full `financials_raw` table 0.14% of rows carry the flag and the three helpers run in
+  well under a second.
