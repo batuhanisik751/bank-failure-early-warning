@@ -114,5 +114,27 @@ def build_panel_cmd() -> None:
         typer.echo(f"  {reason}: {n}")
 
 
+@app.command("build-labels")
+def build_labels_cmd() -> None:
+    """Label every panel row per horizon: failure inside (avail_date, window_end]."""
+    from bankcanary.config import load_settings
+    from bankcanary.labels.build import build_labels_table
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    settings = load_settings()
+    _, s = build_labels_table(settings)
+    typer.echo(
+        f"labels: {s['rows']} rows (duckdb {s['duckdb_rows']} rows), as_of {s['as_of_date']}, "
+        f"dropped_failed_before_avail: {s['dropped']}"
+    )
+    typer.echo("positives per report year among label-complete, non-dropped rows:")
+    typer.echo(s["per_year"].to_string())
+    for h in settings.horizons_quarters:
+        typer.echo(
+            f"y_{h}q: {s[f'pos_{h}q']} positives / {s[f'rows_{h}q']} usable rows "
+            f"= {s[f'rate_{h}q']:.4%}"
+        )
+
+
 if __name__ == "__main__":
     app()

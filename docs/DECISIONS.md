@@ -76,3 +76,14 @@ open for the owner to revisit.
   and the institution value would leak later affiliations); `fed_rssd`, `latitude` and
   `longitude` come from `institutions` only. 162 reporting banks (7,131 rows, none failed,
   56 still filing in 2026Q2) have no `institutions` record and therefore no exit facts.
+- 2026-09-25 — **Labels keep dropped rows and use the cached failures date:** `labels` has
+  one row per panel row; the 410 rows whose `fail_date <= avail_date` (a failed bank whose
+  last reports became usable only after it was closed) stay in the table with
+  `dropped_failed_before_avail = True` so the count can be audited, and every consumer
+  filters them out. `as_of_date` is the `fetched_at` of `data/raw/fdic/failures/all.json`
+  (2026-09-25), not the wall clock, so a rebuild from cache is byte-identical; windows
+  ending after it are `label_complete = False` (2025Q1 onward for 4q, 2024Q2 onward for
+  8q). `censored_in_window` needs a null `fail_date` and an `exit_date` inside
+  `(avail_date, window_end]`; assistance-only banks are plain negatives. `window_end` uses
+  `DateOffset(months=3*H)`, which clamps a leap-day `avail_date` (2008-02-29) to
+  2009-02-28; the tests pin that.
