@@ -1,0 +1,29 @@
+# Data, models and secrets never enter git
+data/
+models/
+.env
+*.duckdb
+*.duckdb.wal
+
+# Generated reports: keep markdown + small figures, drop scratch
+reports/**/*.csv
+reports/**/*.parquet
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+.mypy_cache/
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/

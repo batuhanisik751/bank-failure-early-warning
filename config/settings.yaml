@@ -1,0 +1,34 @@
+# BankCanary settings. Every tunable that the spec calls a config value lives here.
+data_dir: data
+models_dir: models
+reports_dir: reports
+
+# Report-date range for the bank-quarter panel (Decision Point 1: 1992-2000 not included by default).
+start_quarter: "2001-03-31"
+end_quarter: null          # null = latest quarter the FDIC API has published
+
+# Point-in-time availability: a report dated q is usable from q + availability_lag_days.
+availability_lag_days: 60
+
+# Prediction horizons in quarters. Primary = 4 (12 months), secondary = 8 (24 months).
+horizons_quarters: [4, 8]
+
+# Fixed out-of-time split for quick iteration (spec 8.2). The Rule 6.2 split utility still
+# trims training rows whose outcome window closes after the first test prediction date.
+fixed_split:
+  train_start: "2002-03-31"
+  train_end: "2008-12-31"
+  test_start: "2010-03-31"
+  test_end: "2013-12-31"
+
+# Peer buckets by total assets, in thousands of dollars (the FDIC unit):
+# <$100M, $100M-$1B, $1B-$10B, $10B-$100B, >$100B
+peer_asset_buckets_thousands: [100000, 1000000, 10000000, 100000000]
+
+fdic:
+  base_url: "https://api.fdic.gov/banks/"
+  docs_url: "https://api.fdic.gov/banks/docs/"
+  page_size: 10000
+  requests_per_second: 4      # the API advertises a 20-request window; stay well under it
+  timeout_seconds: 120
+  max_retries: 6
