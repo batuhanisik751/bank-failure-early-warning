@@ -3,9 +3,11 @@
 setup:
 	uv sync
 	uv run pre-commit install
+	$(MAKE) fix-venv
 
+# Python 3.12 skips .pth files flagged hidden on macOS; see scripts/fix_venv.py.
 fix-venv:
-	chflags -R nohidden .venv
+	uv run --no-sync python scripts/fix_venv.py
 
 test:
 	uv run pytest

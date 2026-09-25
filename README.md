@@ -45,6 +45,12 @@ uv run bankcanary --help     # pipeline commands
 
 Copy `.env.example` to `.env` if you need API keys. The FDIC API currently needs none.
 
+If `uv run bankcanary` ever reports `No module named 'bankcanary'`, run
+`uv run --no-sync python scripts/fix_venv.py` (or `make fix-venv`). Some macOS tools flag
+`.venv` as hidden, and Python 3.12+ then skips the editable-install `.pth` file; the script
+adds a `sitecustomize` module that keeps `src/` importable regardless. Tests are unaffected.
+The `Makefile` targets are shortcuts for the same `uv run` commands.
+
 ## Project layout
 
 See [`PROJECT_SPEC.md`](PROJECT_SPEC.md) for the full specification and

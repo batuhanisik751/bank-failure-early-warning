@@ -226,3 +226,13 @@ open for the owner to revisit.
   `uv run` leaves a cleared flag alone, but files `uv` writes into `.venv/` come back
   hidden within minutes). `make fix-venv` (`chflags -R nohidden .venv`) restores
   `uv run bankcanary` until it happens again; `PYTHONPATH=src` remains the fallback.
+- 2026-09-25 — **Hidden-flag import failure, root cause and fix:** every agent hit
+  `ModuleNotFoundError: No module named 'bankcanary'` under `uv run`. Cause: something on this
+  Mac recursively sets the `UF_HIDDEN` flag on dot-directories under the working tree (`.venv`
+  included, re-applied whenever the top-level `.venv` entry changes, e.g. on a `uv` re-sync), and
+  Python 3.12+ deliberately skips hidden `.pth` files (`python -v` prints
+  "Skipping hidden .pth file"). `uv` and `git` are not the cause (a plain `uv sync` does not
+  re-hide). Fix: `pytest` gets `pythonpath = ["src"]`, and `scripts/fix_venv.py` writes a
+  `sitecustomize.py` into the environment (normal imports ignore the flag) and clears the flags;
+  verified with the whole `.venv` flagged hidden. `make setup` runs it; note that `make` itself
+  needs the Xcode licence accepted on this machine.
