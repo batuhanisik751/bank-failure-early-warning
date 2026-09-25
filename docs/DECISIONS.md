@@ -302,3 +302,20 @@ open for the owner to revisit.
   `storage/parquet.py` untouched). SVB 2022Q4: `unrealized_loss_to_tier1` = -1.041,
   `uninsured_share` = 0.864; Signature and First Republic sit inside the >$10B peer band on
   unrealised losses but at the top of it on uninsured deposits (reports/figures/svb_unrealized_losses.png).
+- 2026-09-25 — **D3 trend, persistence and regional structure features.** `trends` reads the
+  eight ratios from the frame built so far (`deps["features"]`), never the panel, so a trend
+  is by construction the difference of the registered ratio. Both differences and the
+  persistence windows are measured in calendar quarter-ends via `features.ytd.lag` (exact
+  date match): a filing gap gives NaN for `d1q`/`d4q`, is skipped (not back-filled) by the
+  window counts and breaks `consecutive_loss_quarters`, which is computed by a sorted
+  run-length pass and is uncapped (max 102 in the panel). `neg_roa_quarters_last_8` is NaN
+  when fewer than four of the eight quarter-ends are reported; `noncurrent_rising_quarters_last_4`
+  is NaN only when none of the four one-quarter changes exists. A NaN ROA counts as "not a
+  loss". Trend signs inherit the level's sign (`unrealized_loss_to_tier1` is negative for a
+  loss, so its trends carry -1); all three persistence counts are +1. Regions are the four
+  Census Bureau regions (DC in the South, as Census does) plus `region_other` for AS, FM, GU,
+  PR, VI; a null `stalp` leaves every region column False. `is_community_bank` is the FDIC `cb`
+  flag (null -> False) with sign 0. The D2 test fixture gained `stalp`/`cb` and its two
+  "v2 == v1 + P2 names" assertions became prefix checks so later modules can append.
+  Rebuilt `features_v2`: 710,691 rows x 77 features (34 P2) in 11 s. SVB 2022Q4:
+  `d4q_unrealized_loss_to_tier1` = -0.964.

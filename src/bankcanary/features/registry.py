@@ -24,6 +24,8 @@ from bankcanary.features import (
     run_risk,
     sensitivity,
     structure,
+    structure_p2,
+    trends,
 )
 from bankcanary.features.spec import (  # noqa: F401  (re-exported for callers)
     BKCLASS_CODES,
@@ -44,9 +46,9 @@ MODULES_V1: tuple[ModuleType, ...] = (
     structure,
 )
 
-#: Prototype 2 modules appended after the P1 set (CONTRACT section 12). Later steps
-#: add trends, region/community-bank structure and macro here, in that order.
-MODULES_P2: tuple[ModuleType, ...] = (sensitivity, run_risk)
+#: Prototype 2 modules appended after the P1 set (CONTRACT section 12). The macro module
+#: goes last, after ``structure_p2``.
+MODULES_P2: tuple[ModuleType, ...] = (sensitivity, run_risk, trends, structure_p2)
 
 #: Module order per feature-table version.
 MODULES_BY_VERSION: dict[str, tuple[ModuleType, ...]] = {

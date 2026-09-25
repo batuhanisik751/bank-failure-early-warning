@@ -31,6 +31,8 @@ P2_ROWS = {
     "cd3t12": [200.0, 10.0, np.nan],
     "cd1t3": [100.0, 5.0, 0.0],
     "cdov3": [100.0, 2.0, 0.0],
+    "stalp": ["GA", "GA", "PR"],
+    "cb": [True, True, False],
 }
 
 
@@ -110,7 +112,7 @@ def test_registry_versions_and_monotone_signs() -> None:
     v1 = registry.feature_names(version="v1")
     v2 = registry.feature_names(version="v2")
     assert v1 == registry.feature_names("P1") and len(v1) == 43
-    assert v2 == v1 + P2_NAMES
+    assert v2[: len(v1) + len(P2_NAMES)] == v1 + P2_NAMES  # later modules append
     assert registry.feature_names(None) == v2
     assert [s.name for s in sensitivity.SPECS + run_risk.SPECS] == P2_NAMES
     assert all(s.prototype == "P2" for s in sensitivity.SPECS + run_risk.SPECS)
@@ -134,7 +136,7 @@ def test_build_features_v2_extends_v1_layout(panel: pd.DataFrame) -> None:
     v1 = build_features(panel)
     v2 = build_features(panel, version="v2")
     assert list(v1.columns) == ["cert", "repdte"] + registry.feature_names() + ["ytd_prev_missing"]
-    assert list(v2.columns) == list(v1.columns) + P2_NAMES
+    assert list(v2.columns)[: len(v1.columns) + len(P2_NAMES)] == list(v1.columns) + P2_NAMES
     assert list(v2.columns) == ["cert", "repdte"] + column_order("v2")
     pd.testing.assert_frame_equal(v2[v1.columns], v1)
     assert v2["unrealized_loss_to_tier1"].iloc[0] == pytest.approx(-0.8)
