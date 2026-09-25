@@ -145,3 +145,70 @@ idempotent and safe to re-run from cache.
   body if useful. **No co-author trailers and no tool attribution anywhere in the repo.**
 - Never commit `data/`, `models/`, `.env`. Never `source` a file holding a connection string.
 - Tests never touch the network. Long pulls run in chunks that finish in under two minutes.
+
+---
+
+## Prototype 2 additions
+
+### 11. New tables
+
+| table | key | columns |
+|---|---|---|
+| `crosswalk_rssd` | `cert` | `fed_rssd, name, source` (from `institutions.fed_rssd`) |
+| `macro_state` | `stalp, avail_date` | `unemp_rate, unemp_change_4q, hpi_change_4q, t10y3m, fedfunds_change_4q` evaluated point-in-time at each panel `avail_date` (latest observation whose period end + publication lag ≤ avail_date; lags: state unemployment 45 days, state HPI 75 days, daily/monthly national rates 1 day) |
+| `features_v2` | `cert, repdte` | every `features_v1` column + the P2 features (§12); `features_v1` is kept untouched for P1 reproducibility |
+| `walkforward_scores` | `cert, repdte, horizon, model, test_year` | `score, score_calibrated, y, label_complete, censored` for every test-year model, from 2008 to the latest label-complete year |
+| `drivers` | `cert, repdte, model, rank` | `feature, shap_value, feature_value, direction` — the five largest positive and five largest negative SHAP contributions per bank-quarter for the gradient-boosting walk-forward models and the latest production model |
+| `runs/` (JSON files, committed) | — | `runs/<name>/<run_id>/{config.json, metrics.json}` + `runs/index.jsonl`; written by `bankcanary.tracking` for every `train`, `walkforward`, `calibrate`, `sensitivity` call; run ids are deterministic (`<name>-<horizon>q-<config hash>`), never timestamps |
+
+### 12. P2 feature names (binding, `prototype = "P2"` in the registry)
+
+Sensitivity: `afs_unrealized_to_tier1, htm_unrealized_to_tier1, unrealized_loss_to_tier1,
+adjusted_tier1_leverage, securities_to_assets, htm_share_of_securities`.
+Run risk: `uninsured_share, uninsured_to_liquid_assets, large_time_deposit_share`.
+Trends: `d1q_<ratio>` and `d4q_<ratio>` for `noncurrent_ratio, texas_ratio, roa_q,
+equity_to_assets, tier1_leverage, brokered_share, uninsured_share, unrealized_loss_to_tier1`;
+persistence: `neg_roa_quarters_last_8, consecutive_loss_quarters, noncurrent_rising_quarters_last_4`.
+Structure: `region_<code>` one-hot (FDIC regions derived from `stalp`), `is_community_bank`.
+Macro (joined from `macro_state`): `macro_unemp_rate, macro_unemp_change_4q, macro_hpi_change_4q,
+macro_t10y3m, macro_fedfunds_change_4q`.
+Each module exposes `SPECS: list[FeatureSpec]` and `build(panel) -> DataFrame`; `registry.py`
+concatenates module lists in a fixed order and `build.py` calls the builders in that order.
+
+### 13. Models, backtest and explanations
+
+- `bankcanary.models.gbdt`: gradient-boosted trees behind one factory, `make_gbdt(backend, monotone)`:
+  backend `lightgbm` (`LGBMClassifier`) when `import lightgbm` succeeds, else `sklearn`
+  (`HistGradientBoostingClassifier`, same histogram algorithm, native NaN, `monotonic_cst`).
+  The chosen backend is written to `config/settings.yaml` (`models.gbdt.backend`) by step D6 and
+  every later step reads it, so one run never mixes backends. Same preprocessing pipeline as the
+  logits minus imputer/scaler (Winsorizer only; trees take NaN natively). Hyper-parameters
+  chosen on the inner validation slice (reports 2007Q1–2008Q4, inner train windows closed
+  before 2007-05-30), never on test years. Two configs are always trained and logged:
+  `gbdt` (unconstrained) and `gbdt_mono` (monotone constraints from the registry's
+  `monotone` field: +1 risk-increasing, −1 risk-decreasing, 0 none). **Decision Point 2 is
+  presented to the owner with both sets of results; until then the config in
+  `settings.models.gbdt.monotone` (default: the better inner-validation config) is used.**
+- `bankcanary.models.hazard`: discrete-time hazard (Shumway 2001) = logistic regression on
+  bank-quarter rows with event "fails within the next quarter" (`y_1q`, built by
+  `labels.build` for horizon 1); 4q/8q probabilities by `1 − (1 − h)^H` assuming persistence
+  of covariates (documented approximation); the optional Cox model is deferred (see DECISIONS: lifelines pins pandas < 3).
+- `bankcanary.evaluation.walkforward`: for each test year Y from 2008 to the latest
+  label-complete year, training rows = `training_mask(labels, H, first repdte of Y)`, test
+  rows = report quarters in Y (label-complete, not dropped). Saves
+  `models/walkforward/<Y>/<model>/` and appends to `walkforward_scores`. Runs one year per
+  CLI call (`bankcanary walkforward --year Y [--model …]`) so no command exceeds two minutes.
+- Calibration: per walk-forward year, isotonic regression fitted on the last complete year
+  inside the training window (an inner model trained on the earlier years scores that slice);
+  the map is then applied to the full-window model. Stored in `score_calibrated`.
+- Metrics suite (`evaluation.metrics`): P1 metrics + `brier`, `lead_time_quarters` summary
+  (median, share flagged ≥ 2 quarters ahead), cluster-bootstrap CIs by `cert` (200 draws;
+  years with < 10 failures flagged `low_confidence`), per-year and pooled tables.
+- SHAP: `bankcanary.explain.shap_drivers` with `TreeExplainer`; top-5 ± drivers per
+  bank-quarter into `drivers`.
+
+### 14. CLI additions
+
+`build-macro`, `build-features --version v2`, `train --model {gbdt,gbdt_mono,hazard}`,
+`walkforward --year Y --model M`, `calibrate`, `sensitivity`, `explain`, `runs list`.
+All idempotent; all log a run record.

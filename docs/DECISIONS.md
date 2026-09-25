@@ -236,3 +236,28 @@ open for the owner to revisit.
   `sitecustomize.py` into the environment (normal imports ignore the flag) and clears the flags;
   verified with the whole `.venv` flagged hidden. `make setup` runs it; note that `make` itself
   needs the Xcode licence accepted on this machine.
+- 2026-09-25 — **Owner decisions after Prototype 1 review:** the repository is PUBLIC from now on
+  (MIT licence added, data terms stated in the README); experiment tracking is a plain JSON
+  `runs/` directory (Decision Point 3, default); the project keeps the name BankCanary
+  (Decision Point 6). Decision Point 1 stays at the 2001Q1 default.
+- 2026-09-25 — **FFIEC raw Call Reports are not needed for the Prototype 2 features.** The FDIC
+  `/financials` endpoint already carries AFS and HTM securities at amortised cost and fair value
+  (`SCAA`, `SCAF`, `SCHA`, `SCHF`; 100% populated from 2015, ~90% for the two "cost" items
+  before) and the FDIC's estimated uninsured deposits (`DEPUNINS`, populated for ~98.5% of banks
+  of every size). Silicon Valley Bank's 2022Q4 values match its 10-K to the million (HTM
+  amortised cost $91.3B vs fair value $76.2B; AFS $28.5B vs $26.0B; uninsured deposits $151.6B
+  of $175.4B). Following spec §3.2 ("if the FDIC API has them, prefer it"), step D1 becomes a
+  cross-check plus the `IDRSSD ↔ CERT` crosswalk; the FFIEC bulk downloader is optional.
+- 2026-09-25 — **FRED without a key:** the FRED API requires a key (owner action), but
+  `https://fred.stlouisfed.org/graph/fredgraph.csv?id=<SERIES>` serves the same observations
+  without one. The FRED client uses the API when `FRED_API_KEY` is set and the CSV endpoint
+  otherwise, with the same on-disk cache. Data vintages are not modelled (noted limitation).
+- 2026-09-25 — **Gradient-boosting backend and dropped lifelines.** LightGBM and XGBoost wheels
+  both dynamically link `libomp.dylib`, which on this Mac only Homebrew provides, and Homebrew
+  is blocked until the Xcode licence is accepted (`sudo xcodebuild -license accept`, owner
+  action). scikit-learn ships its own OpenMP runtime, so `HistGradientBoostingClassifier`
+  (the same histogram-based algorithm, with monotone constraints, native missing values and
+  SHAP `TreeExplainer` support) is the fallback backend behind `models.gbdt.make_gbdt`;
+  LightGBM is used automatically once it imports. `lifelines` was removed because it pins
+  `pandas < 3` and had silently downgraded pandas to 2.3 (one dtype test failed); the optional
+  Cox model (spec §8.1 item 6) is deferred, the required discrete-time hazard model is not.
