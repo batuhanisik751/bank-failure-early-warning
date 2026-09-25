@@ -39,10 +39,32 @@ class FixedSplit(BaseModel):
     test_end: dt.date
 
 
+class GbdtSettings(BaseModel):
+    """Gradient-boosting choices made by ``scripts/tune_gbdt.py`` (CONTRACT section 13).
+
+    ``backend`` is the library the tuning run used (``lightgbm`` or ``sklearn``; ``None``
+    until tuned, then every later step reuses it so one run never mixes backends),
+    ``monotone`` whether the production config enforces the registry's monotone signs
+    (Decision Point 2; default = the variant that won on the inner validation slice),
+    ``params`` the tuned hyper-parameters and ``inner_pr_auc`` the inner-validation
+    PR-AUC of each variant at those parameters.
+    """
+
+    backend: str | None = None
+    monotone: bool = False
+    params: dict[str, float | int] = Field(default_factory=dict)
+    inner_pr_auc: dict[str, float] = Field(default_factory=dict)
+
+
+class ModelSettings(BaseModel):
+    gbdt: GbdtSettings = Field(default_factory=GbdtSettings)
+
+
 class Settings(BaseModel):
     data_dir: Path = Path("data")
     models_dir: Path = Path("models")
     reports_dir: Path = Path("reports")
+    runs_dir: Path = Path("runs")
     start_quarter: dt.date = dt.date(2001, 3, 31)
     end_quarter: dt.date | None = None
     availability_lag_days: int = 60
@@ -53,6 +75,7 @@ class Settings(BaseModel):
     )
     fdic: FdicSettings = Field(default_factory=FdicSettings)
     fred: FredSettings = Field(default_factory=FredSettings)
+    models: ModelSettings = Field(default_factory=ModelSettings)
 
     def resolve(self, root: Path = PROJECT_ROOT) -> Settings:
         """Return a copy whose relative directories are anchored at ``root``."""
@@ -61,6 +84,7 @@ class Settings(BaseModel):
                 "data_dir": _anchor(self.data_dir, root),
                 "models_dir": _anchor(self.models_dir, root),
                 "reports_dir": _anchor(self.reports_dir, root),
+                "runs_dir": _anchor(self.runs_dir, root),
             }
         )
 

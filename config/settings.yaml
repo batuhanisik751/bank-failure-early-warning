@@ -39,3 +39,19 @@ fred:
   requests_per_second: 2
   timeout_seconds: 60
   max_retries: 5
+
+# Gradient boosting (step D6): written by scripts/tune_gbdt.py from the inner validation
+# slice. backend = the library every gbdt step must use; monotone = Decision Point 2.
+models:
+  gbdt:
+    backend: lightgbm
+    monotone: false
+    params:
+      learning_rate: 0.03
+      min_samples_leaf: 200
+      n_estimators: 200
+      num_leaves: 63
+    inner_pr_auc:
+      gbdt: 0.229933
+      gbdt_mono: 0.196765
+      logit_v2: 0.258907

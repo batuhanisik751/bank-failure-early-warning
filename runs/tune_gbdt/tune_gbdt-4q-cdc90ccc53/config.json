@@ -1,0 +1,14 @@
+{
+  "backend": null,
+  "features_version": "v2",
+  "horizon": 4,
+  "model": "logit_v2",
+  "monotone": false,
+  "params": {
+    "C": 0.003
+  },
+  "split": {
+    "validation_end": "2008-12-31",
+    "validation_start": "2007-03-31"
+  }
+}

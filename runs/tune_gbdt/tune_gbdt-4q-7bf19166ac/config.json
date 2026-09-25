@@ -1,0 +1,17 @@
+{
+  "backend": "lightgbm",
+  "features_version": "v2",
+  "horizon": 4,
+  "model": "gbdt",
+  "monotone": false,
+  "params": {
+    "learning_rate": 0.03,
+    "min_samples_leaf": 50,
+    "n_estimators": 200,
+    "num_leaves": 15
+  },
+  "split": {
+    "validation_end": "2008-12-31",
+    "validation_start": "2007-03-31"
+  }
+}

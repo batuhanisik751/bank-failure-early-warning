@@ -353,3 +353,31 @@ open for the owner to revisit.
   note. `reports/features_v2_summary.md` (`--summary`) reads the Parquet tables directly
   and reuses the `failure_contrast` filter (label-complete, not dropped) for the P2
   medians; it renders in under two seconds.
+- 2026-09-25 — **D6 gradient boosting, inner-validation tuning and JSON run tracking.**
+  `lightgbm` 4.7 imports and fits on this Mac, so `settings.models.gbdt.backend = lightgbm`;
+  `make_gbdt` still carries the `sklearn` `HistGradientBoostingClassifier` fallback (with
+  `early_stopping=False`, since its automatic validation split would tune the iteration
+  count on rows the tuning script never sees). `scripts/tune_gbdt.py` reuses the
+  `tune_logit_c.py` inner split (validation 2007Q1-2008Q4, inner training windows closed
+  before 2007-05-30) and scores the full grid, learning rate {0.03, 0.1} x leaves
+  {15, 31, 63} x min leaf {50, 200} x trees {200, 400}, for both variants, 49 fits in three
+  calls of under two minutes; each configuration is a `runs/tune_gbdt/` record so a re-run
+  skips it. The inner slice holds only 37 training positives (2002-2005 had almost no
+  failures), which explains two things: learning rate 0.1 collapses to the base rate
+  (PR-AUC 0.006-0.03, the trees memorise the 37 rows), and `min_samples_leaf = 200` beats
+  50 everywhere. Winner: unconstrained, lr 0.03, 63 leaves, min leaf 200, 200 trees, inner
+  PR-AUC 0.2299 (monotone at the same parameters 0.1968; `logit_v2` at the P1 C 0.2589), so
+  `settings.models.gbdt.monotone = false` until the owner rules on Decision Point 2. On the
+  untouched test split the order flips: `gbdt_mono` 0.4755 PR-AUC / 0.8019 recall@2 %,
+  `gbdt` 0.4324 / 0.7791, `logit_v2` 0.4437 / 0.7815, Texas 0.3726 / 0.7611. The
+  constraints act as a regulariser that the 37-positive inner slice cannot reward, so the
+  inner ranking is weak evidence; the walk-forward backtest (D8) is the right place to
+  settle the point. The tuning grid keeps the requested size (nothing was shrunk).
+  Run tracking (`bankcanary.tracking`): `run_id = <name>-<horizon>q-<sha1(canonical
+  config)[:10]>`, files under `runs/<name>/<run_id>/{config,metrics}.json`, index rows
+  deduplicated by id and carrying only scalar metrics; `runs_dir` joined `Settings`.
+  `models/texas` is not rewritten by `train-gbdt` (the Texas ranking needs no fit and the
+  P1 artefact keeps its v1 config); the v2 logit is saved as `models/logit_v2`.
+  Top gain features of `gbdt`: `d4q_texas_ratio`, `d4q_equity_to_assets`,
+  `construction_to_capital`, `texas_ratio`, `equity_to_assets` (the four-quarter trend
+  features from D3 carry the most split gain, ahead of every level).
