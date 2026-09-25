@@ -48,11 +48,28 @@ def _require_columns(labels: pd.DataFrame, columns: list[str]) -> None:
         raise KeyError(f"labels frame is missing required column(s): {missing}")
 
 
+def _flag(series: pd.Series, *, missing: bool) -> pd.Series:
+    """Coerce a boolean-like flag column to plain ``bool``, filling missing values.
+
+    The canonical labels table stores flags as ``bool``, but a DuckDB round-trip yields
+    ``int`` 0/1 and a join can introduce ``NaN``/``pd.NA`` (``object`` or nullable
+    ``boolean`` dtype). ``astype(bool)`` alone would turn a float ``NaN`` into ``True``,
+    so the caller states which side is safe when the flag is unknown.
+    """
+    return series.fillna(missing).astype(bool)
+
+
 def _usable(labels: pd.DataFrame, horizon: int) -> pd.Series:
-    """Rows with a complete label that were not published after the bank had failed."""
+    """Rows with a complete label that were not published after the bank had failed.
+
+    Only a label *known* to be complete may train or be scored (spec 5.4), so an unknown
+    completeness flag counts as incomplete; an unknown drop flag counts as dropped.
+    """
     complete_col = horizon_columns(horizon)[3]
     _require_columns(labels, [complete_col, DROPPED_COL])
-    return labels[complete_col].astype(bool) & ~labels[DROPPED_COL].astype(bool)
+    complete = _flag(labels[complete_col], missing=False)
+    dropped = _flag(labels[DROPPED_COL], missing=True)
+    return complete & ~dropped
 
 
 def training_mask(

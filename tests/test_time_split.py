@@ -156,3 +156,20 @@ def test_walk_forward_folds_skip_years_without_complete_test_labels():
     assert years == [2008, 2009]
     with pytest.raises(ValueError):
         list(walk_forward_folds(labels, 4, 2010, 2009, LAG))
+
+
+def test_missing_flags_are_treated_conservatively():
+    # A NaN completeness flag is not a known-complete label; a NaN drop flag is not a
+    # known-clean report. Both keep the row out of training and test (spec 5.4).
+    labels = make_labels(certs=(1,), end="2008-12-31")
+    nan_complete = labels["repdte"] == "2005-03-31"
+    nan_dropped = labels["repdte"] == "2006-06-30"
+    complete = labels["label_complete_4q"].astype(object).mask(nan_complete, float("nan"))
+    dropped = labels["dropped_failed_before_avail"].astype(object).mask(nan_dropped, float("nan"))
+    labels = labels.assign(label_complete_4q=complete, dropped_failed_before_avail=dropped)
+    train = training_mask(labels, 4, TEST_START, LAG)
+    assert not train[nan_complete | nan_dropped].any()
+    assert train[~(nan_complete | nan_dropped)].all()
+    test = test_mask(labels, 4, "2005-03-31", "2006-06-30")
+    assert not test[nan_complete | nan_dropped].any()
+    assert test.sum() == 4  # 2005-06-30 .. 2006-03-31

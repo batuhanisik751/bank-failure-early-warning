@@ -124,3 +124,9 @@ open for the owner to revisit.
   `reset_index`/`set_index("index")`, so a named index, a non-unique index or a column called
   `index` no longer break the helpers. Duplicated `(cert, repdte)` keys raise an explicit
   `ValueError` instead of relying on `reindex` refusing duplicate labels.
+- 2026-09-25 (splits): `time_split._usable` no longer casts flag columns straight to
+  `bool`. `bool(float("nan"))` is `True`, so after a join that introduced `NaN` an unknown
+  `label_complete_Hq` was treated as complete and the row entered training/test. A missing
+  completeness flag now counts as incomplete and a missing `dropped_failed_before_avail`
+  as dropped (both excluded), matching how a missing `window_end` is already handled.
+  Nullable `boolean` columns with `pd.NA` are accepted instead of raising.

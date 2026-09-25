@@ -172,10 +172,6 @@ def test_missing_window_end_never_trains_even_when_flagged_complete():
         assert_no_leakage(labels, 4, TEST_START, LAG)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="_usable coerces a missing (NaN) label_complete flag to True via astype(bool)",
-)
 def test_unknown_completeness_is_not_complete():
     # Only a label known to be complete may train; a missing flag is not a True flag.
     labels = rows({"window_end": T - DAY}, {"window_end": T - DAY})
