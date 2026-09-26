@@ -1,0 +1,22 @@
+# Local Postgres for developing and testing the publish job and the web app.
+# Production uses Neon (DATABASE_URL); nothing here is used in deployment.
+services:
+  postgres:
+    image: postgres:16
+    container_name: bankcanary-postgres
+    environment:
+      POSTGRES_USER: bankcanary
+      POSTGRES_PASSWORD: bankcanary
+      POSTGRES_DB: bankcanary
+    ports:
+      - "5433:5432"
+    volumes:
+      - bankcanary_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bankcanary -d bankcanary"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  bankcanary_pgdata:

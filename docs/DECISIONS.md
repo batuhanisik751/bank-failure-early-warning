@@ -726,3 +726,22 @@ open for the owner to revisit.
   year's training period, naming the 2020 4q and 2008 8q boosters as the degenerate picks.
   The v1-logit comparison runs (checklist criterion 2) were not refitted; their per-year `C`
   came from the v2 selection at the time, so the 0.2194 / 0.5625 figure predates the fix.
+- 2026-09-26 — **Owner decisions for Prototype 3 (all three taken with the recommended option):**
+  Decision Point 2: monotone constraints ON — `gbdt_mono` is the production booster (walk-forward
+  PR-AUC 0.314 vs 0.265 unconstrained, recall@2% intervals disjoint). Decision Point 4: Python
+  pipeline → Neon Postgres → Next.js (App Router) on Vercel, the web app reads only precomputed
+  tables. Decision Point 5: bank head-office coordinates come from the FDIC `institutions` table
+  (`latitude`, `longitude`), no geocoding.
+- 2026-09-26 — **Production score = the monotone booster's calibrated 12-month probability**, with
+  its SHAP drivers; the hazard model (best pooled PR-AUC, overlapping interval) is published as a
+  secondary "statistical model" score on profile pages and in the methodology. One model gives the
+  leaderboard, the time machine and the drivers a single consistent story.
+- 2026-09-26 — **Risk bands are percentile-based within each quarter:** `high` = top 2% of scored
+  banks that quarter (the recall@2% framing used throughout the backtest), `elevated` = next 8%
+  (top 2–10%), `low` = the rest. The probability itself is always shown next to the band.
+- 2026-09-26 — **Local Postgres on port 5433** (`docker compose up -d`, container
+  `bankcanary-postgres`) because the F1 project's container already holds 5432. Python owns the
+  schema (`src/bankcanary/publish/schema.sql`); the web app mirrors it read-only in Drizzle.
+- 2026-09-26 — **Production model artefacts are committed** under `models/production/` (a few MB:
+  the latest walk-forward `gbdt_mono` and `hazard` pipelines, their calibrators and feature lists)
+  so the scheduled refresh job can score a new quarter without retraining.
