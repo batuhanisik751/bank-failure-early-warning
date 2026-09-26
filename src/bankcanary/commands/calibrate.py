@@ -17,22 +17,30 @@ def register(app: typer.Typer) -> None:
         ),
         horizon: int = typer.Option(4, "--horizon", help="Scoring horizon in quarters."),
         scorer: str | None = typer.Option(
-            None, "--scorer", help="Who scores the slice: full | inner (default: per model)."
+            None, "--scorer", help="Calibration rows: trailing (default) | full | inner."
+        ),
+        min_bin: int = typer.Option(
+            50, "--min-bin", help="Smallest score bin of the binned isotonic map."
         ),
         no_rebuild: bool = typer.Option(
             False, "--no-rebuild", help="Skip rebuilding the walkforward_scores table."
         ),
     ) -> None:
-        """Fit the isotonic map for one walk-forward year and fill ``score_calibrated``.
+        """Fit the binned isotonic map for one walk-forward year and fill ``score_calibrated``.
 
-        For each probability model the calibration slice is the last complete label
-        year inside the year's training window; the year's own full-window model scores
-        it (``--scorer full``, the logits' default) or an inner model refitted with the
-        year's tuned configuration before the slice does (``--scorer inner``, the
-        boosters' default; ``calibration.SLICE_SCORER_BY_MODEL``), and
-        ``IsotonicRegression(out_of_bounds="clip")`` is fitted there, then applied to the
-        year's test scores. One year per call keeps each run short; ``--all-years`` loops
-        over the years for an idle machine. Writes ``calibration.joblib`` next to the model,
+        For each probability model the calibration rows are, by default, the same
+        model's walk-forward scores from the two most recent earlier test years whose
+        outcomes were all known before this year (``--scorer trailing``; at 4q the years
+        Y-2 and Y-3, at 8q Y-3 and Y-4), which are out of sample and on the score scale
+        the map is applied to. Where fewer than two such years exist (2008-2010 at 4q,
+        2008-2011 at 8q) the fit falls back to the last complete label year inside the
+        training window scored by the year's own model (``full``, the logits) or by an
+        inner model refitted before it (``inner``, the boosters); ``--scorer`` forces
+        either. The map is isotonic regression on contiguous score bins of at least
+        ``--min-bin`` rows, so every step is a rate observed on that many banks, then
+        applied to the year's test scores. One year per call keeps each run short;
+        ``--all-years`` loops over the years for an idle machine. Writes
+        ``calibration.joblib`` next to the model,
         fills ``score_calibrated`` in ``data/walkforward/<Y>_<model>_<H>q.parquet``, rebuilds
         the ``walkforward_scores`` table and logs a ``runs/calibrate/`` record per fit.
         """
@@ -56,17 +64,23 @@ def register(app: typer.Typer) -> None:
         if year is not None and year not in years:
             raise typer.BadParameter(f"{year} is outside the {horizon}q test years {years}")
         for y in years if all_years else [year]:
-            for r in c.calibrate_year(frame, settings, y, names, horizon, False, scorer):
+            for r in c.calibrate_year(frame, settings, y, names, horizon, False, scorer, min_bin):
                 m = r.metrics
                 typer.echo(
-                    f"{y} {r.model} {horizon}q ({r.config['slice_scorer']}): brier raw "
+                    f"{y} {r.model} {horizon}q ({r.config['effective_scorer']}"
+                    + (" fallback" if r.config["fallback"] else "")
+                    + f", {r.config['n_rows']} rows in {r.metrics['n_bins']} bins): brier raw "
                     f"{m['brier_raw']:.5f} -> "
                     f"calibrated {m['brier_calibrated']:.5f} (failure rate "
                     f"{m['failure_rate']:.5f}, mean "
                     f"calibrated {m['mean_calibrated']:.5f}); slice "
                     f"{r.config['calibration_start']}..{r.config['calibration_end']} with "
-                    f"{r.config['positives_calibration']} failures, inner fit through "
-                    f"{r.config['inner_train_repdte_max']}"
+                    f"{r.config['positives_calibration']} failures"
+                    + (
+                        f", inner fit through {r.config['inner_train_repdte_max']}"
+                        if r.config["effective_scorer"] == "inner"
+                        else ""
+                    )
                     + ("" if r.config["sufficient"] else " [thin slice]")
                 )
         if not no_rebuild:

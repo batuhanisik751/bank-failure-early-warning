@@ -1227,3 +1227,38 @@ open for the owner to revisit.
   discarded rather than committed (the repository does not carry tool-specific entries);
   the directory is excluded locally through `.git/info/exclude`, so the working tree is
   clean and HEAD matches `origin/main`.
+- 2026-09-26, step C1a (calibration recipe: binned isotonic maps on trailing out-of-sample
+  years). Two defects in the isotonic calibration were traced to its inputs rather than to
+  the models. A plain `IsotonicRegression` lets its top step rest on a handful of banks: the
+  2026Q2 leaderboard's rank 1 (cert 33802) showed a calibrated probability of exactly 1.0
+  and 170 banks in 2009Q2 showed exactly 0.5. And the boosters' maps were learned on an
+  inner model's scores, whose scale differs from the full model's by an order of magnitude
+  in crisis years: the 8q `gbdt` map for 2011 predicted a mean of 0.353 against a failure
+  rate of 0.0117 (Brier 0.1375). The recipe now has two parts. `calibration.binned_isotonic`
+  sorts the rows by score, cuts them into contiguous bins of at least `min_bin` = 50 rows
+  (a short last bin merges into its predecessor) and fits the isotonic regression on bin
+  mean score against bin failure rate weighted by bin size, so every step of the map is a
+  rate observed on at least 50 banks and a top bin of three failures cannot map to 1.0. The
+  new default slice scorer `trailing` (every model, every horizon) takes the same model's
+  walk-forward scores from the two most recent earlier test years whose every row's
+  `window_end_Hq` lies before the year's first prediction date, computed from the labels
+  (`trailing_years`: at 4q the years Y−2 and Y−3, at 8q Y−3 and Y−4) and re-checked row by
+  row with `assert_no_leakage` after joining `window_end` by `(cert, repdte)`; a row missing
+  from the labels counts as a violation. Those scores are out of sample and on the score
+  scale the map is applied to. Where fewer than two such years exist (2008–2010 at 4q,
+  2008–2011 at 8q) the fit falls back to the earlier per-model scorer (`full` for the
+  logits, `inner` for the boosters; `FALLBACK_SCORER_BY_MODEL`, the old
+  `SLICE_SCORER_BY_MODEL` kept as an alias) through the binned fit and records
+  `fallback = true`; `--scorer full|inner|trailing` and `--min-bin` force either choice.
+  `calibration.json` and the run record carry `slice_scorer`, `effective_scorer`,
+  `fallback`, `min_bin`, `calibration_years`, `n_rows`, `n_bins` and `min_bin_size`, so the
+  run id changes with the recipe. `calibration.production_calibrator(settings, model)`
+  builds the production map from the two most recent test years whose score-file rows are
+  all label-complete (currently 2023 and 2024; the promoted 2024 model's own test year is
+  out of sample for it) and returns the map with its config for the promotion step to save.
+  Nothing was recalibrated or published in this step: the walk-forward maps on disk, the
+  production `calibration.joblib` and the database still carry the plain isotonic maps
+  until step C1b runs the recalibration. Tests: `tests/test_calibration_trailing.py` (eight
+  synthetic cases: bin floor, three-failure top bin, monotone output, trailing years at 4q
+  and 8q with the leakage assertion, early-year fallback, production year choice, CLI
+  options) and the updated defaults test in `tests/test_calibration.py`.

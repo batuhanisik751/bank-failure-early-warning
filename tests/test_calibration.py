@@ -145,13 +145,23 @@ def test_calibrate_commands_are_registered():
 
 
 def test_slice_scorer_defaults_per_model_and_is_recorded(tmp_path, frame):
-    assert [c.default_slice_scorer(m) for m in ("logit", "hazard")] == ["full", "full"]
-    assert [c.default_slice_scorer(m) for m in ("gbdt", "gbdt_mono")] == ["inner", "inner"]
+    assert [c.default_slice_scorer(m) for m in c.MODELS] == ["trailing"] * len(c.MODELS)
+    assert [c.fallback_scorer(m) for m in ("logit", "hazard")] == ["full", "full"]
+    assert [c.fallback_scorer(m) for m in ("gbdt", "gbdt_mono")] == ["inner", "inner"]
+    with pytest.raises(ValueError, match="not a probability model"):
+        c.default_slice_scorer("texas")
     settings = make_settings(tmp_path)
     w.fit_year(frame, settings, YEAR, "logit", 4)
+    # no earlier score files: the trailing default falls back to the logit's full scorer
     full = c.fit_calibrator(frame, settings, YEAR, "logit", 4, save=False)
     inner = c.fit_calibrator(frame, settings, YEAR, "logit", 4, save=False, slice_scorer="inner")
-    assert full.config["slice_scorer"] == "full" and inner.config["slice_scorer"] == "inner"
+    assert full.config["slice_scorer"] == "trailing" and full.config["fallback"] is True
+    assert full.config["effective_scorer"] == "full" and full.config["min_bin"] == c.MIN_BIN
+    assert inner.config["slice_scorer"] == "inner" and inner.config["fallback"] is False
+    assert inner.config["effective_scorer"] == "inner"
+    assert full.config["n_rows"] == full.config["n_calibration"] == 4 * frame["cert"].nunique()
+    assert full.metrics["n_bins"] == full.config["n_rows"] // c.MIN_BIN
+    assert full.metrics["min_bin_size"] >= c.MIN_BIN
     assert tracking.run_id("calibrate", full.config) != tracking.run_id("calibrate", inner.config)
     # the full scorer uses the saved full-window model: its slice scores are that model's
     pipeline, features, _ = w.load_year(settings, YEAR, "logit", 4)

@@ -210,12 +210,30 @@ concatenates module lists in a fixed order and `build.py` calls the builders in 
   rows = report quarters in Y (label-complete, not dropped). Saves
   `models/walkforward/<Y>/<model>/` and appends to `walkforward_scores`. Runs one year per
   CLI call (`bankcanary walkforward --year Y [--model …]`) so no command exceeds two minutes.
-- Calibration: per walk-forward year, isotonic regression fitted on the last complete year
-  inside the training window; the map is then applied to the full-window model and stored in
-  `score_calibrated`. Who scores the slice is per model (`calibration.SLICE_SCORER_BY_MODEL`,
-  see DECISIONS 2026-09-25): the full-window model itself for `logit` and `hazard`, an inner
-  model trained on the earlier years for `gbdt` and `gbdt_mono`, whose in-sample scores
-  separate the slice perfectly.
+- Calibration: per walk-forward year, a **binned isotonic** map
+  (`calibration.binned_isotonic`, `min_bin` 50): the calibration rows are sorted by score
+  and cut into contiguous bins of at least 50 rows (a short last bin merges into its
+  predecessor), and `IsotonicRegression(out_of_bounds="clip")` is fitted on bin mean score
+  against bin failure rate weighted by bin size, so every step of the map, the top one
+  included, is a rate observed on at least 50 banks (a plain isotonic fit let three failed
+  banks map to 1.0 and 170 banks to 0.5). The rows come from the `slice_scorer`, default
+  **`trailing`** for every model and horizon: the same model's walk-forward scores from the
+  two most recent earlier test years whose every row has `window_end_Hq` before Y's first
+  prediction date (4q: Y−2 and Y−3; 8q: Y−3 and Y−4; `calibration.trailing_years` computes
+  it from the labels and `assert_no_leakage` re-checks each row), out of sample and on the
+  score scale the map is applied to. Where fewer than two such years exist (2008–2010 at
+  4q, 2008–2011 at 8q) the fit falls back to the last complete year inside the training
+  window (`calibration_masks`) scored by the year's own model for `logit` and `hazard`
+  (`full`) or by an inner model trained on the earlier years for `gbdt` and `gbdt_mono`
+  (`inner`, whose in-sample scores separate the slice perfectly; `FALLBACK_SCORER_BY_MODEL`),
+  recorded as `fallback = true`. `--scorer full|inner|trailing` forces one; `calibration.json`
+  and the run record carry `slice_scorer`, `effective_scorer`, `fallback`, `min_bin`,
+  `calibration_years` and `n_rows`. The map is applied to the full-window model's test
+  scores and stored in `score_calibrated`. The production map
+  (`calibration.production_calibrator`, `models/production/<model>/calibration.joblib`) is
+  the same recipe on the two most recent test years whose rows are all label-complete as of
+  the failures list date (currently 2023 and 2024; the promoted 2024 model's own test year
+  is out of sample for it).
 - Metrics suite (`evaluation.metrics`): P1 metrics + `brier`, `lead_time_quarters` summary
   (median, share flagged ≥ 2 quarters ahead), cluster-bootstrap CIs by `cert` (200 draws;
   years with < 10 failures flagged `low_confidence`), per-year and pooled tables.
