@@ -1,0 +1,23 @@
+{
+  "availability_lag_days": 60,
+  "features_version": "v1",
+  "first_test_prediction_date": "2009-05-30",
+  "fit": "none (ranking by texas_ratio)",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "model": "texas",
+  "n_features": 1,
+  "n_test": 32811,
+  "n_train": 257705,
+  "positives_test": 679,
+  "positives_train": 159,
+  "test_year": 2009,
+  "train_repdte_max": "2007-12-31",
+  "train_repdte_min": "2001-03-31",
+  "tuning": {
+    "fallback": "nothing to tune",
+    "metric": null,
+    "selected": {}
+  }
+}

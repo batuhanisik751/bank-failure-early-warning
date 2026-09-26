@@ -1,0 +1,22 @@
+{
+  "C": 0.0003,
+  "availability_lag_days": 60,
+  "class_weight": null,
+  "features_version": "v1",
+  "first_test_prediction_date": "2010-05-30",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "model": "logit",
+  "n_features": 43,
+  "n_test": 31431,
+  "n_train": 291677,
+  "positives_test": 408,
+  "positives_train": 588,
+  "test_year": 2010,
+  "train_repdte_max": "2008-12-31",
+  "train_repdte_min": "2001-03-31",
+  "tuning": {
+    "C_source": "same year's v2 logit selection (training period only)"
+  }
+}

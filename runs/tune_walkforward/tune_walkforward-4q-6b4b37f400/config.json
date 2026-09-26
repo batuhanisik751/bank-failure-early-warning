@@ -1,0 +1,17 @@
+{
+  "availability_lag_days": 60,
+  "features_version": "v2",
+  "fit_horizon": 4,
+  "horizon": 4,
+  "model": "gbdt",
+  "n_inner_train": 291677,
+  "params": {
+    "learning_rate": 0.03,
+    "min_samples_leaf": 200,
+    "n_estimators": 200,
+    "num_leaves": 15
+  },
+  "test_year": 2013,
+  "validation_end": "2011-12-31",
+  "validation_start": "2010-03-31"
+}

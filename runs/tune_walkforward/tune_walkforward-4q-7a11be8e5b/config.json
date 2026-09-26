@@ -1,0 +1,14 @@
+{
+  "availability_lag_days": 60,
+  "features_version": "v2",
+  "fit_horizon": 4,
+  "horizon": 4,
+  "model": "logit",
+  "n_inner_train": 187545,
+  "params": {
+    "C": 0.01
+  },
+  "test_year": 2010,
+  "validation_end": "2008-12-31",
+  "validation_start": "2007-03-31"
+}

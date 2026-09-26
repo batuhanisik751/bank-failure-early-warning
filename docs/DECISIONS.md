@@ -596,3 +596,15 @@ open for the owner to revisit.
   walk-forward table, keeps the P1 numbers behind links, and states the 2023 finding in two
   sentences without a verdict. The `runs list` CLI named in the contract was never built;
   the checklist says so and points at `tracking.read_index`.
+- 2026-09-25 — **Prototype 2 acceptance pass.** The "beats P1's logit" criterion is now measured
+  against the comparison the spec means: the P1 learner walked forward on `features_v1`, the
+  same rows and years as the P2 models, with each year's `C` reused from that year's v2 logit
+  selection (chosen on the training period only, so no tuning was repeated and nothing from
+  the test years enters). The scores stayed in a scratch directory (the `walkforward_scores`
+  table keys on `model` and would have overwritten the v2 logit rows); the 17 run records are
+  logged under `runs/walkforward/` with `features_version = "v1"`. Result: PR-AUC 0.2194 and
+  recall@2% 0.5625 with bootstrap intervals disjoint from the hazard's, which settles the
+  criterion that the v2-logit comparison in the model card left open. The 328 run directories
+  that `runs/index.jsonl` already named but that were never added to git are committed with
+  this pass, so the index and the directories agree. `build-labels` and `build-features-v2`
+  reproduce `labels.parquet` and `features_v2.parquet` byte for byte (sha256 unchanged).

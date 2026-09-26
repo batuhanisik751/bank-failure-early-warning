@@ -2,11 +2,13 @@
 
 Spec: `PROJECT_SPEC.md`, "Prototype 2 — Depth". Every criterion below was re-measured on
 2026-09-25 against the cached FDIC pull of the same date (`failures` `fetched_at =
-2026-09-25`), the committed run records under `runs/` (618 rows in `runs/index.jsonl`:
-150 `walkforward`, 278 `tune_walkforward`, 83 `calibrate`, 49 `tune_gbdt`, 7 `tune_hazard`,
-9 `train`, 14 `sensitivity`, 18 `explain`, 6 `metrics`, 4 `case_study_2023`) and the
-warehouse tables named next to each item. `uv run pytest`: 396 passed, no network, no
-`data/` reads. The written summary of everything below is [`docs/model_card.md`](model_card.md).
+2026-09-25`), the committed run records under `runs/` (635 rows in `runs/index.jsonl`:
+167 `walkforward`, 278 `tune_walkforward`, 83 `calibrate`, 49 `tune_gbdt`, 7 `tune_hazard`,
+9 `train`, 14 `sensitivity`, 18 `explain`, 6 `metrics`, 4 `case_study_2023`; every run
+directory the index names is committed) and the warehouse tables named next to each item.
+`uv run pytest`: 396 passed in 19 s, no network, no `data/` reads. The written summary of
+everything below is [`docs/model_card.md`](model_card.md). The acceptance pass at the end of
+this file records the commands and numbers behind each tick.
 
 - [x] **Walk-forward results exist for every year from 2008 to the latest complete year, with
   failure counts and CIs.** `walkforward_scores` holds 2,519,318 rows: 4q for `texas, logit,
@@ -21,14 +23,19 @@ warehouse tables named next to each item. `uv run pytest`: 396 passed, no networ
   2024 at 4q; 2020 at 8q; 2021 has no 4q failure and undefined ranking metrics).
 
 - [x] **The best model beats P1's regularised logistic on pooled walk-forward PR-AUC and
-  recall@top-2%.** Met on point estimates, not statistically separated. On the same 426,019
-  4q rows the hazard pools to PR-AUC 0.3261 [0.293, 0.357] and recall@2% 0.7042 [0.679,
-  0.729] against the walk-forward logit's 0.3066 [0.276, 0.335] and 0.6843 [0.657, 0.713]
-  (the P1 learner, per-year `C`, on the v2 features). The intervals overlap, so the backtest
-  does not distinguish the two; the booster (0.2813 / 0.6434) is behind both, and the Texas
-  ratio keeps the best recall@2% (0.7437) with the worst PR-AUC (0.2606). The P1 fixed-split
-  figure (0.3867 / 0.7143, test 2010-2013) is a different test period and is not the
-  comparison. At 8q the logit is best (0.2835 / 0.5488; gbdt 0.1169 / 0.2710).
+  recall@top-2%.** Met, and statistically separated, against the fair comparison: the P1
+  learner (L2 logit, no class weighting) walked forward on the 43 `features_v1` columns over
+  the same 426,019 4q rows, one fit per test year 2008-2024 with each year's `C` taken from
+  the same year's v2 logit selection (chosen inside that year's training period; run records
+  `runs/walkforward/` with `features_version = "v1"`, 17 records). It pools to PR-AUC 0.2194
+  [0.191, 0.246] and recall@2% 0.5625 [0.531, 0.589] (ROC-AUC 0.9441, Brier 0.0043). The
+  hazard pools to 0.3261 [0.293, 0.357] and 0.7042 [0.679, 0.729]; the intervals do not
+  overlap on either metric, and the v2 logit (0.3066 / 0.6843) and booster (0.2813 / 0.6434)
+  also clear the v1 logit. Among the P2 learners the hazard and the v2 logit are not
+  separated from each other (overlapping intervals); the Texas ratio keeps the best
+  recall@2% (0.7437) with the worst PR-AUC (0.2606). The P1 fixed-split figure (0.3867 /
+  0.7143, test 2010-2013) is a different test period and is not the comparison. At 8q the
+  logit is best (0.2835 / 0.5488; gbdt 0.1169 / 0.2710).
 
 - [x] **Median lead time for 2009-2012 failures is reported.** `reports/walkforward.md`,
   "Lead time" (`metrics.lead_time_summary`): of the 440 banks that failed in 2009-2012,
@@ -40,7 +47,7 @@ warehouse tables named next to each item. `uv run pytest`: 396 passed, no networ
 
 - [x] **The 2023 notebook clearly shows how SVB/Signature/First Republic ranked under both
   models and explains why.** `notebooks/03_svb_2023_case_study.ipynb` (7 code cells, 0 error
-  outputs, executed in place; `reports/svb_2023_case_study.md`; `runs/case_study_2023/`, four
+  outputs, executed in place and re-executed on 2026-09-25 to a scratch copy in 33 s; `reports/svb_2023_case_study.md`; `runs/case_study_2023/`, four
   records) fits credit-only and rate-aware views of the logit and the booster on the 2022Q4
   cut (622,341 rows, 2,226 failures, reports through 2021Q3) and ranks all ~4,800 banks at
   2022Q3, 2022Q4 and 2023Q1. SVB at 2022Q4: credit-only logit rank 1677 / gbdt 1412,
@@ -75,7 +82,9 @@ warehouse tables named next to each item. `uv run pytest`: 396 passed, no networ
 - [x] **Hygiene.** A case-insensitive grep of every commit message for co-author trailers and
   tool or vendor names prints nothing; the same grep over `*.py, *.md, *.toml, *.yaml, *.ipynb`
   (excluding `.venv`, `data`, `PROJECT_SPEC.md`) prints nothing. `data/`, `models/` and `.env`
-  are git-ignored; `runs/` (JSON only) is committed.
+  are git-ignored; `runs/` (JSON only) is committed, including the 328 `walkforward` and
+  `tune_walkforward` run directories that the index already named but that had been left
+  untracked before the acceptance pass.
 
 ## Feature list check (spec items 1-15)
 
@@ -102,3 +111,17 @@ Notebooks 02-05 are built by `scripts/make_notebook_0{2,3,4,5}.py` and executed 
 exist and none retrains a walk-forward model. Open items for Prototype 3: refit the isotonic
 maps on a slice scored by the calibrated model itself; treat post-2021 scores as out of
 regime (model card, section 12).
+
+## Acceptance pass (2026-09-25)
+
+| check | command | result |
+|---|---|---|
+| walk-forward coverage | DuckDB: `walkforward_scores` grouped by `model` where `horizon = 4` | `texas, logit, gbdt, hazard`: 17 test years each, 2008-2024, 426,019 rows, 2,103 positives, `label_complete` on every row; `score_calibrated` filled except for `texas`; per-year positives 429, 679, 408, 231, 121, 73, 37, 24, 28, 5, 10, 18, 4, 0, 17, 10, 9; latest failure in `failures` 2026-07-17, so 2024 is the last 4q-complete year |
+| best model vs P1 logit | `features_v1` walk-forward logit, 17 fits (4-8 s each), pooled with `metrics.evaluate` and `cluster_bootstrap_ci` | see criterion 2: hazard 0.3261 / 0.7042 against 0.2194 / 0.5625, intervals disjoint |
+| lead time 2009-2012 | `reports/walkforward.md`, "Lead time" | hazard median 5 quarters, 88.4% flagged >= 2 quarters ahead (logit 5, 87.7%) |
+| notebook 03 | `jupyter nbconvert --execute` to a scratch copy, 110 s cell timeout | 7 code cells, 0 error outputs; SVB 2022Q4 ranks 1677 / 1412 (credit-only logit / gbdt) and 1854 / 245 (rate-aware); section 5 gives the explanation |
+| calibration | `reports/walkforward.md`, pooled table and "Calibration" | Brier raw / calibrated: hazard 0.0041 / 0.0545, logit 0.0041 / 0.0189, gbdt 0.0043 / 0.0043; `reports/figures/reliability_{logit,gbdt,hazard}.png` committed; criterion left unticked (see above) |
+| model card | `grep '^#' docs/model_card.md` | 14 sections: intended use, data, label and censoring, leakage, models, walk-forward metrics (pooled and per year at 4q and 8q), calibration, lead time, 2023 case study, sensitivity, false positives, limitations, ethics, references |
+| tests | `uv run pytest` | 396 passed in 19 s |
+| determinism | `bankcanary build-labels` then `bankcanary build-features-v2`, `shasum -a 256` before and after | `labels.parquet` `fe0c3237...86286fdec` and `features_v2.parquet` `8871e61c...af93cd0685a` unchanged |
+| hygiene | case-insensitive grep of every commit message for `co-authored`, tool and vendor names; the same grep over `*.py *.md *.toml *.yaml *.ipynb` excluding `.venv`, `data`, `PROJECT_SPEC.md` | both print nothing |

@@ -1,0 +1,35 @@
+{
+  "C": 1.0,
+  "availability_lag_days": 60,
+  "class_weight": null,
+  "features_version": "v2",
+  "first_test_prediction_date": "2017-05-30",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "model": "logit",
+  "n_features": 83,
+  "n_test": 23321,
+  "n_train": 495493,
+  "positives_test": 5,
+  "positives_train": 2161,
+  "test_year": 2017,
+  "train_repdte_max": "2015-12-31",
+  "train_repdte_min": "2001-03-31",
+  "tuning": {
+    "fallback": null,
+    "inner_train_repdte_max": "2012-12-31",
+    "metric": "pr_auc",
+    "n_inner_train": 415214,
+    "n_validation": 52309,
+    "positives_inner_train": 2027,
+    "positives_validation": 61,
+    "selected": {
+      "C": 1.0
+    },
+    "sufficient": true,
+    "validation_end": "2015-12-31",
+    "validation_quarters": 8,
+    "validation_start": "2014-03-31"
+  }
+}

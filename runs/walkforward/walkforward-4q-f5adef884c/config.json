@@ -1,0 +1,36 @@
+{
+  "C": 0.1,
+  "availability_lag_days": 60,
+  "class_weight": null,
+  "conversion": "1 - (1 - h)^H",
+  "features_version": "v2",
+  "first_test_prediction_date": "2015-05-30",
+  "fit_horizon": 1,
+  "fit_label": "y_1q",
+  "horizon": 4,
+  "model": "hazard",
+  "n_features": 83,
+  "n_test": 25517,
+  "n_train": 463393,
+  "positives_test": 24,
+  "positives_train": 533,
+  "test_year": 2015,
+  "train_repdte_max": "2014-09-30",
+  "train_repdte_min": "2001-03-31",
+  "tuning": {
+    "fallback": null,
+    "inner_train_repdte_max": "2011-12-31",
+    "metric": "pr_auc",
+    "n_inner_train": 386084,
+    "n_validation": 57100,
+    "positives_inner_train": 459,
+    "positives_validation": 194,
+    "selected": {
+      "C": 0.1
+    },
+    "sufficient": true,
+    "validation_end": "2013-12-31",
+    "validation_quarters": 8,
+    "validation_start": "2012-03-31"
+  }
+}
