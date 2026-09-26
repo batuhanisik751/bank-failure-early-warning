@@ -23,6 +23,10 @@ log = logging.getLogger(__name__)
 
 HORIZON = 4
 MODELS: tuple[str, ...] = ("gbdt_mono", "hazard")
+#: ``walkforward_metrics`` also carries the Prototype 1 comparison model (``logit_v1``,
+#: P2 checklist criterion 2) so its pooled numbers are readable from the database; the
+#: ``scores`` and ``model_versions`` tables keep :data:`MODELS` only.
+METRICS_MODELS: tuple[str, ...] = MODELS + ("logit_v1",)
 PRODUCTION_LABEL = "gbdt_mono_production"
 FIRST_SCORED_YEAR = 2008
 POOLED_YEAR = 0
@@ -402,8 +406,13 @@ def build_peer_stats(ratios: pd.DataFrame) -> pd.DataFrame:
     return out.reset_index()
 
 
-def build_walkforward_metrics(walkforward: pd.DataFrame, models=MODELS) -> pd.DataFrame:
-    """Per test year and pooled (``test_year = 0``) metrics with bootstrap intervals."""
+def build_walkforward_metrics(walkforward: pd.DataFrame, models=METRICS_MODELS) -> pd.DataFrame:
+    """Per test year and pooled (``test_year = 0``) metrics with bootstrap intervals.
+
+    One row per ``(model, test_year)`` for every model of ``models`` present in
+    ``walkforward`` at :data:`HORIZON`, plus the pooled row; a model with no rows
+    (synthetic frames, a warehouse without ``logit_v1``) is simply absent.
+    """
     from bankcanary.evaluation.metrics import cluster_bootstrap_ci, evaluate
     from bankcanary.models.hazard import brier
 

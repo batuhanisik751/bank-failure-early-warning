@@ -111,3 +111,31 @@ def test_every_table_is_published_and_page_tables_reference_scores():
         ).fetchone()[0]
         assert scenarios == 20
         assert db.database_size_bytes(conn) < 400_000_000
+
+
+def test_walkforward_metrics_has_the_logit_v1_pooled_row_and_scores_does_not():
+    """P2 checklist criterion 2 quotes the Prototype 1 comparison from this table."""
+    from bankcanary.publish.core import METRICS_MODELS, MODELS
+
+    with db.connect(URL, autocommit=True) as conn:
+        if not {"scores", "walkforward_metrics"} <= _tables(conn):
+            pytest.skip("core tables not published")
+        rows = conn.execute(
+            "SELECT model, test_year, n, n_failures, pr_auc, recall_at_2pct "
+            "FROM walkforward_metrics WHERE horizon = 4"
+        ).fetchall()
+        score_models = {r[0] for r in conn.execute("SELECT DISTINCT model FROM scores").fetchall()}
+    if not rows:
+        pytest.skip("walkforward_metrics not published")
+    metrics = pd.DataFrame(
+        rows, columns=["model", "test_year", "n", "n_failures", "pr_auc", "recall_at_2pct"]
+    )
+    assert set(metrics["model"]) == set(METRICS_MODELS) >= {"logit_v1"}
+    assert score_models == set(MODELS)
+    pooled = metrics[metrics["test_year"] == 0].set_index("model")
+    years = metrics[metrics["test_year"] != 0].groupby("model")
+    assert pooled["n"].eq(years["n"].sum()).all()
+    assert pooled["n_failures"].eq(years["n_failures"].sum()).all()
+    assert years.size().eq(years.size().iloc[0]).all(), "every model covers the same years"
+    row = pooled.loc["logit_v1"]
+    assert 0 < row["pr_auc"] < 1 and 0 < row["recall_at_2pct"] <= 1

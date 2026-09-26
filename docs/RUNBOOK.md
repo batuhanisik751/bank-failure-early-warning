@@ -73,8 +73,8 @@ Expected after a full publish: `scores` about 905 k rows (two models x every qua
 2008Q1 onward), `drivers` about 288 k, `map_quarters` about 448 k, `ratios` about 453 k
 (2008Q1 onward), `rate_shock_scores` 86,260 (20 scenarios x the latest quarter's banks),
 `peer_stats` about 29 k, `banks` about 28 k, `failures` about 4 k, `quarters` 74 (one per
-scored quarter, 2008Q1 onward), `walkforward_metrics` 40 (two models x 19 test years plus
-the pooled rows), `model_versions` 38, `case_study_2023` 28, `case_study_series` 37. The
+scored quarter, 2008Q1 onward), `walkforward_metrics` 60 (`gbdt_mono`, `hazard` and `logit_v1`, 19 test years each
+plus the pooled rows), `model_versions` 38, `case_study_2023` 28, `case_study_series` 37. The
 database must stay under 400 MB (Neon free tier): the C4 publish of 2026-09-26 printed
 399.3 MB (399,432,727 bytes) after its own `VACUUM ANALYZE` because the replace-in-place
 loads leave dead space behind (scores 168, ratios 81, drivers 58, map_quarters 43,

@@ -35,7 +35,8 @@ this file records the commands and numbers behind each tick.
   validation slice, the recipe every other model gets (`models/walkforward/<Y>/logit_v1/`,
   run records with `features_version = "v1"`). Over the 19 test years 2006-2024 (496,179
   4q rows, 2,191 failures) it pools to PR-AUC 0.2801 [0.247, 0.315] and recall@2% 0.7047
-  [0.671, 0.736] (ROC-AUC 0.9475, Brier 0.0037 raw / 0.0047 calibrated). The hazard pools
+  [0.671, 0.736] (ROC-AUC 0.9475, Brier 0.0037 raw / 0.0047 calibrated; the same row is
+  published in `walkforward_metrics`, `model = 'logit_v1'`, `test_year = 0`). The hazard pools
   to 0.3194 [0.286, 0.352] and 0.7033 [0.674, 0.733], the monotone booster to 0.3022
   [0.275, 0.335] and 0.6992 [0.671, 0.724], the v2 logit to 0.2953 [0.264, 0.330] and
   0.6787 [0.648, 0.710]: every P2 probability model except the unconstrained booster
@@ -140,7 +141,7 @@ treat post-2021 scores as out of regime (model card, section 12).
 | check | command | result |
 |---|---|---|
 | walk-forward coverage | DuckDB: `walkforward_scores` grouped by `model` where `horizon = 4` | `texas, logit, logit_v1, gbdt, gbdt_mono, hazard`: 19 test years each, 2006-2024, 496,179 rows, 2,191 positives, `label_complete` on every row; `score_calibrated` filled except for `texas`; per-year positives 8, 80, 429, 679, 408, 231, 121, 73, 37, 24, 28, 5, 10, 18, 4, 0, 17, 10, 9; latest failure in `failures` 2026-07-17, so 2024 is the last 4q-complete year |
-| best model vs P1 logit | `logit_v1`: `features_v1` walk-forward logit tuned per year, 19 fits (about 9 s each), pooled by `metrics-report` with `cluster_bootstrap_ci` | see criterion 2: hazard 0.3194 / 0.7033 against 0.2801 / 0.7047; PR-AUC intervals overlap, recall level |
+| best model vs P1 logit | Postgres: `SELECT model, pr_auc, pr_auc_lo, pr_auc_hi, recall_at_2pct, recall_lo, recall_hi FROM walkforward_metrics WHERE horizon = 4 AND test_year = 0` (`logit_v1` is published there by `publish.core.METRICS_MODELS`, 20 rows per model, 60 in all; the same rows `metrics-report` pools with `cluster_bootstrap_ci`) | `logit_v1` 0.2801 [0.247, 0.315] / 0.7047 [0.671, 0.736], `hazard` 0.3194 [0.286, 0.352] / 0.7033 [0.674, 0.733], `gbdt_mono` 0.3022 [0.275, 0.335] / 0.6992 [0.671, 0.724], all on 496,179 rows and 2,191 failures; PR-AUC intervals overlap, recall level (criterion 2) |
 | lead time 2009-2012 | `reports/walkforward.md`, "Lead time" | hazard median 5 quarters, 88.4% flagged >= 2 quarters ahead (logit 5, 87.7%) |
 | notebook 03 | `jupyter nbconvert --execute` to a scratch copy, 110 s cell timeout | 7 code cells, 0 error outputs; SVB 2022Q4 ranks 1677 / 2089 (credit-only logit / gbdt_mono) and 1854 / 2711 (rate-aware); section 5 gives the explanation |
 | calibration | `reports/walkforward.md`, pooled table and "Calibration" (2026-09-26, trailing binned maps) | Brier raw / calibrated: hazard 0.0037 / 0.0038, gbdt_mono 0.0041 / 0.0044, logit_v1 0.0037 / 0.0047, gbdt 0.0042 / 0.0049, logit 0.0037 / 0.0050; max `score_calibrated` 0.5968; `reports/figures/reliability_{logit,logit_v1,gbdt,gbdt_mono,hazard}.png` committed |

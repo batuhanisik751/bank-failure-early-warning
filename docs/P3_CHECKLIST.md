@@ -35,7 +35,8 @@ the UI evidence rows below were rendered before the fix and are kept as measured
 **Re-measured on 2026-09-26 after the calibration and model-version fixes** (steps C1-C4:
 binned isotonic maps on trailing out-of-sample years, content-addressed model versions, the
 `logit_v1` refit and the 2006-2007 test years, run pruning; `uv run bankcanary publish`
-refilled every table, run `publish-4q-43f4bc5620`, `walkforward_metrics` 40, `model_versions`
+refilled every table, run `publish-4q-43f4bc5620`, `walkforward_metrics` 40 (60 since run
+`publish-4q-4ad42e44b5` of 2026-09-26 added the `logit_v1` rows), `model_versions`
 38, `quarters` 74 rows from 2008-03-31 to 2026-06-30, no pre-2008 row). Both caveats above
 are closed: `scores.model_version` is content-addressed everywhere (2009Q2 rows
 `gbdt_mono-2007-12-31-bacf2e0`, 2022Q4 rows `gbdt_mono-2020-12-31-43c9385`, the 2025-2026

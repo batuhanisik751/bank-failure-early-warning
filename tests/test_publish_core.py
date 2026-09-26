@@ -228,3 +228,22 @@ def test_scored_quarters_and_build_quarters_keep_only_quarters_with_scores():
     assert table["model_year"].isna().tolist()[3:] == [True] * 4
     assert set(table["model_version"][3:]) == {"gbdt_mono-2008-12-31-def5678"}
     assert len(core.build_quarters(panel, labels, versions)) == len(quarters)
+
+
+def test_walkforward_metrics_carries_logit_v1_but_scores_does_not():
+    """P2 checklist criterion 2 is read from the database: ``walkforward_metrics`` has the
+    ``logit_v1`` rows (per year and pooled) while ``scores`` keeps :data:`core.MODELS`."""
+    wf = _walkforward(models=("gbdt_mono", "hazard", "logit_v1", "logit"), horizons=(4,))
+    metrics = core.build_walkforward_metrics(wf)
+    assert core.METRICS_MODELS == ("gbdt_mono", "hazard", "logit_v1")
+    assert set(metrics["model"]) == set(core.METRICS_MODELS)
+    pooled = metrics[metrics["test_year"] == core.POOLED_YEAR].set_index("model")
+    per_year = metrics[metrics["test_year"] != core.POOLED_YEAR].groupby("model")
+    assert pooled["n"].eq(per_year["n"].sum()).all()
+    assert pooled["n_failures"].eq(per_year["n_failures"].sum()).all()
+    assert sorted(per_year.get_group("logit_v1")["test_year"]) == [2007, 2008]
+    versions = {(m, y): f"{m}-{y}" for m in core.MODELS for y in (2007, 2008)}
+    scores = core.build_scores(wf, None, versions)
+    assert set(scores["model"]) == set(core.MODELS)
+    absent = core.build_walkforward_metrics(wf[wf["model"] != "logit_v1"])
+    assert set(absent["model"]) == set(core.MODELS)

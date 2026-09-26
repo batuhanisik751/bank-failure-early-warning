@@ -1436,3 +1436,22 @@ open for the owner to revisit.
   `evaluation/metrics_report.py`, outside this step's files; the P3 checklist's UI evidence
   rows still show the pre-fix probabilities (1.0 and 0.4) because the built app was not
   re-rendered here.
+- 2026-09-26, calibration-pass verification fix. The check "walkforward_metrics contains
+  the logit_v1 pooled numbers and the P2 checklist quotes them" failed against Postgres:
+  `publish.core.MODELS` is `("gbdt_mono", "hazard")` and `build_walkforward_metrics`
+  filtered to it, so the table held 40 rows and criterion 2 was quoted from
+  `reports/walkforward.md`. `publish.core.METRICS_MODELS = MODELS + ("logit_v1",)` is now
+  the metrics builder's default (`scores`, `drivers` and `model_versions` keep `MODELS`, so
+  no row count or version changes elsewhere and the time machine still filters on
+  `gbdt_mono`); `uv run bankcanary publish --tables walkforward_metrics` (run
+  `publish-4q-4ad42e44b5`, 20 s) wrote 60 rows, 382.7 MB after `VACUUM ANALYZE`. The
+  pooled `logit_v1` row in Postgres is PR-AUC 0.2801 [0.247, 0.315], recall@2% 0.7047
+  [0.671, 0.736], ROC-AUC 0.9475, Brier 0.0037 / 0.0047 on 496,179 rows and 2,191 failures,
+  identical to the report; the P2 checklist's "best model vs P1 logit" row now names the
+  `SELECT ... FROM walkforward_metrics WHERE test_year = 0` query as its source and quotes
+  those numbers, CONTRACT section 16 lists the table's three models, the runbook expects
+  60 rows. Tests: `test_publish_core` checks the builder emits `logit_v1` while
+  `build_scores` does not, `test_publish` (skip-if-unreachable) checks the pooled row
+  exists, sums the per-year rows and that `scores` carries only `MODELS`. `uv run pytest`
+  469 passed, 0 skipped; `web` 119 passed. Found, not fixed: `tests/publish_adversarial.py` (not
+  collected, no `test_` prefix) still passes `repo=` to `build_all`, which dropped it.
