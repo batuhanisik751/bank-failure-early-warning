@@ -865,3 +865,74 @@ open for the owner to revisit.
   until their steps land; `/bank/[cert]` is not routed yet so the top-10 names are not
   links. `echarts` is pinned to 5.x (npm resolves 6 by default) and `@types/node` to 22
   for vitest 5. Playwright runs `npm run start` itself against a prior `npm run build`.
+- 2026-09-26 — **2023 case study, rate-shock tool and methodology pages (steps E8-E10).**
+  The case study reads `case_study_2023` and `case_study_series` as published and draws one
+  chart per bank (small multiples) rather than one chart with three peer bands, because each
+  bank's peer group (size bucket × Census region) is different; the band runs from the peer
+  median to the 5th percentile for unrealised losses and to the 95th for the uninsured share.
+  The rate-shock page does no arithmetic in the browser: `rateShockScenarios()` joins every
+  `rate_shock_scores` cell with the quarter's published `scores` and `ratios` rows in SQL,
+  returns a per-scenario summary (banks crossing into `high`, high counts before and after)
+  plus the 30 largest climbers, and the client only picks the cell for the chosen shock and
+  duration. Because bands are rank percentiles the high count is fixed per scenario; the
+  summary therefore reports who crosses in, not how many are high. The methodology page
+  renders `docs/model_card.md` with `marked` (headings shifted one level, every markdown table
+  wrapped as `.data-table` with the disclaimer caption, relative links resolved to GitHub);
+  `npm run sync-docs` copies the card into `web/content/` and the referenced
+  `reports/figures` PNGs into `web/public/figures/`, and the copies are committed so the
+  build never reads outside `web/`. The Playwright spec lives in `web/e2e/pages3.spec.ts`
+  because `playwright.config.ts` scans `./e2e` (not `tests/e2e`). Absolutely positioned
+  `.sr-only` spans (RiskBand) escape an `overflow-x-auto` table container unless that
+  container is `position: relative`, which showed up as horizontal page scroll at 375 px.
+- 2026-09-26 — **Leaderboard and bank profile pages (steps E4 and E5).** `/` is a server
+  component driven by URL search params (`q`, `state`, `size`, `charter`, `band`, `sort`,
+  `dir`, `page`; parsed by `components/leaderboard/params.ts`), so every view is a shareable
+  link and the filter form is a plain GET form that works without JavaScript; the CSV route
+  `/api/download/leaderboard.csv` takes the same query string. Search matches name or city
+  (ILIKE) or the exact certificate when the text is all digits; the charter filter is the
+  FDIC `bkclass` code. Top-3 driver chips come from one `drivers` query per page over the
+  page's certificates. `/bank/[cert]` uses `notFound()` for unknown or malformed
+  certificates; because the route streams behind `loading.tsx` the HTTP status is 200 with
+  the not-found page rendered, so the smoke asserts the page, not the status. The
+  probability timeline and the SHAP waterfall are client components that build their
+  ECharts options themselves (a server component cannot hand a formatter function to the
+  client `EChart`); the 12 CAMELS panels are server-rendered inline SVG sparklines (bank
+  line, peer p50 dashed, p10-p90 shaded) so no chart library loads for them. The peer band
+  uses the bank's current size bucket and its Census region (`stateToRegion` mirrors
+  `structure_p2.py`); the percentile under each value is the bank's own peer group in that
+  quarter. The waterfall shows the five drivers the database keeps per bank-quarter (the
+  E1b size deviation), not ten. Driver sentences are built from the registry label and the
+  published direction; `featureUnit()` in `components/bank/explain.ts` mirrors
+  `FeatureSpec.unit` so raw values print in their unit. The bank CSV route is
+  `app/api/download/bank/[cert]/route.ts` and strips a `.csv` suffix from the segment
+  because a route segment cannot mix a parameter with a literal suffix. Playwright specs
+  live in `web/e2e/` (the config's `testDir`); the leaderboard spec waits for the h1 before
+  axe runs because the loading skeleton has none. Concurrent agents share `.next`,
+  `test-results` and port 3100, so an e2e run can collide with another agent's; re-run when
+  the port frees.
+- 2026-09-26 — **Time machine and failure replay map (steps E6 and E7).**
+  `/time-machine?quarter=YYYYQn` replays the `gbdt_mono` ranking of any scored quarter
+  (2008Q1 to the latest) from `scores`, with hindsight from `banks.fail_date`: "failed N
+  months later" counts whole months from the report date, while recall@top-2% uses the label
+  window the model was scored against (a failure after the quarter's `avail_date` and within
+  twelve months of it, as in `labels/build.py`), ordered by raw score descending with `cert`
+  as the tie-breaker and a head of ceil(2% of n), exactly as `evaluation/metrics.py`. Pooled
+  over a walk-forward year the query reproduces `walkforward_metrics.recall_at_2pct` to the
+  last digit (the page says "identical" and the e2e spec checks 2009). Two gotchas: the join
+  to `banks` must be a left join because 111 scored certs have no `banks` row and an inner
+  join shifts the cutoff (0.3697 instead of 0.3741 for 2009); and bound date parameters are
+  cast (`$1::date`) because `unknown + interval` is ambiguous in Postgres. The map is an
+  inline SVG: `us-atlas` states-10m (version 3 ships raw lon/lat, not pre-projected) and every
+  head office go through `d3-geo`'s `geoAlbersUsa` on a 975 by 610 frame, which drops Puerto
+  Rico and the territories (about 30 offices, noted under the map); each band is one `<path>`
+  of repeated symbols (circle, diamond, triangle) so a quarter of 8,000 banks is four
+  elements, failures are crosses in the foreground colour, and the legend and the failures
+  table carry the same information as the shapes. `/api/map/[quarter]` serves one quarter
+  (lat/lon rounded to three decimals; about 0.9 MB raw for a 2009 quarter, so a columnar
+  payload is the next lever if playback feels slow on Neon); the client keeps every quarter
+  it has seen and prefetches the next during playback, and playback waits for a quarter
+  rather than skipping it. `mapTimeline()` (bank and failure counts per quarter) and
+  `scoredQuarters()` give the quarter ranges. Playwright's `testDir` is `web/e2e`, so the
+  spec is `web/e2e/time_machine_map.spec.ts`. The pages import from
+  `@/lib/queries/timeMachine` and `@/lib/queries/map` directly rather than the shared index,
+  which another step was editing in the same checkout at the same time.
