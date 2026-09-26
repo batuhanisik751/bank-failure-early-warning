@@ -265,7 +265,16 @@ readers keep the latest line per id).
   their test year. Probability shown = `score_calibrated` (12-month); `score` (raw) is kept.
   Secondary score = `hazard` (same rule). Both live in `models/production/` with
   `pipeline.joblib`, `calibration.joblib`, `features.json`, `config.json`, `model_version.json`.
-- `model_version` string = `<model>-<train_end_repdte>-<git short sha of the training commit>`.
+- `model_version` string = `<model>-<train_end_repdte>-<first 7 hex of the model hash>`, where
+  the model hash is the sha1 of a deterministic serialisation of the *fitted* estimator
+  (`walkforward.model_fingerprint`: the LightGBM booster's model string; the pickled tree
+  predictors of a scikit-learn `HistGradientBoostingClassifier`; the coefficient and intercept
+  arrays of the logistic `logit`/`hazard` models; the pickled estimator otherwise). It is
+  stamped into `config.json` (`model_version`, `model_hash`) by `walkforward.save_year` and
+  into the run record, so a refit that changes any leaf or coefficient changes the version and a
+  re-save of the same model does not; git history plays no part (the earlier git-sha suffix
+  kept one version across a refit). `scripts/stamp_model_versions.py` back-fills the stamp
+  into older artefacts without refitting; the promotion script and `publish` only read it.
 - Risk bands per quarter by rank percentile of the production score: `high` (top 2%),
   `elevated` (top 2–10%), `low`. Never shown without the probability.
 - Every published number carries `model_version` and the `quarter` it belongs to.
@@ -285,7 +294,7 @@ readers keep the latest line per id).
 | `case_study_2023` | `cert, quarter, view, model` | `probability, rank, percentile, n_scored` for SVB / Signature / First Republic; plus `case_study_series` (`cert, repdte, unrealized_loss_to_tier1, uninsured_share, peer_p50_unrealized, peer_p05_unrealized, peer_p50_uninsured, peer_p95_uninsured`) |
 | `rate_shock_scores` | `cert, shock_bp, duration_years` | `extra_loss, adjusted_tier1_leverage, unrealized_loss_to_tier1, probability, rank, band` for the latest quarter; grid shock ∈ {100, 200, 300, 400} bp × duration ∈ {2, 3, 4, 5, 6} years; `extra_loss = −duration × shock/10000 × (afs + htm at amortised cost)` |
 | `map_quarters` | `repdte, cert` | `latitude, longitude, band, probability, failed_this_quarter (bool)` for every scored quarter |
-| `model_versions` | `model_version` | `model, train_end_repdte, git_sha, trained_at, features_version, notes` |
+| `model_versions` | `model_version` | `model, train_end_repdte, git_sha (null since the versions became content-addressed), trained_at, features_version, notes` |
 | `pipeline_runs` | `run_id` | `started_at, finished_at, status, latest_repdte, new_quarter (bool), rows_written (json), log` |
 
 Rules: every table is rebuilt idempotently by `bankcanary publish` (truncate + insert inside one

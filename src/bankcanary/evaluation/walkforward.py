@@ -17,8 +17,10 @@ logs one run through :mod:`bankcanary.tracking`, and each tuning candidate anoth
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -504,6 +506,7 @@ def fit_year(
             "tuning": {k: v for k, v in tuning.items() if k != "grid"},
         }
     )
+    stamp_model_version(config, pipeline)
     result = YearResult(
         year, model, horizon, pipeline, list(features), config, metrics, scores, tuning=tuning
     )
@@ -527,8 +530,63 @@ def _round(value) -> str:
     return "nan" if value is None or pd.isna(value) else f"{float(value):.4f}"
 
 
+def _final_estimator(pipeline):
+    return pipeline.steps[-1][1] if isinstance(pipeline, Pipeline) else pipeline
+
+
+def model_fingerprint(pipeline) -> bytes:
+    """Deterministic bytes of what the final estimator *learned*, for :func:`model_hash`.
+
+    LightGBM: the booster's model string (every tree, leaf value and split); scikit-learn
+    ``HistGradientBoostingClassifier``: the pickled tree predictors with the baseline
+    prediction; the logistic models (``logit``, ``hazard``): the coefficient and intercept
+    arrays; anything else (the Texas ranking learns nothing): the pickled estimator. The
+    same fitted model therefore always hashes the same, and a refit that changes a single
+    leaf or coefficient hashes differently, whatever the surrounding git history says.
+    """
+    est = _final_estimator(pipeline)
+    booster = getattr(est, "booster_", None)
+    if booster is not None:
+        return booster.model_to_string().encode("utf-8")
+    predictors = getattr(est, "_predictors", None)
+    if predictors is not None:
+        return pickle.dumps((est._baseline_prediction, predictors), protocol=4)
+    coef = getattr(est, "coef_", None)
+    if coef is not None:
+        arrays = (coef, est.intercept_)
+        return b"".join(np.ascontiguousarray(a, dtype=float).tobytes() for a in arrays)
+    return pickle.dumps(est, protocol=4)
+
+
+def model_hash(pipeline) -> str:
+    """Full sha1 hex digest of :func:`model_fingerprint`."""
+    return hashlib.sha1(model_fingerprint(pipeline)).hexdigest()
+
+
+def model_version(model: str, train_repdte_max: str, digest: str) -> str:
+    """CONTRACT section 15: ``<model>-<train_repdte_max>-<first 7 hex of the model hash>``."""
+    return f"{model}-{train_repdte_max}-{digest[:7]}"
+
+
+def stamp_model_version(config: dict, pipeline) -> dict:
+    """Write ``model_hash`` and ``model_version`` into ``config`` from the fitted pipeline.
+
+    Idempotent: re-stamping an unchanged model rewrites the same two values, so a config
+    saved twice (or hashed into a run id twice) stays identical.
+    """
+    digest = model_hash(pipeline)
+    config["model_hash"] = digest
+    config["model_version"] = model_version(config["model"], config["train_repdte_max"], digest)
+    return config
+
+
 def save_year(result: YearResult, settings: Settings) -> dict[str, Path]:
-    """Write ``pipeline.joblib``, the config/features/metrics/tuning JSON files and the scores."""
+    """Write ``pipeline.joblib``, the config/features/metrics/tuning JSON files and the scores.
+
+    The config is stamped with the content-addressed ``model_version`` first
+    (:func:`stamp_model_version`), so ``config.json`` always names the model it sits beside.
+    """
+    stamp_model_version(result.config, result.pipeline)
     out = model_dir(settings, result.year, result.model, result.horizon)
     out.mkdir(parents=True, exist_ok=True)
     paths = {"dir": out, "pipeline": out / "pipeline.joblib"}

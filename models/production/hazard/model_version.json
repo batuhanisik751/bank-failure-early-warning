@@ -1,13 +1,14 @@
 {
-  "model_version": "hazard-2023-12-31-6740dae",
+  "model_version": "hazard-2023-12-31-0cc72ac",
   "model": "hazard",
+  "model_hash": "0cc72aca9bc0817f39e8262d500dbe238bf0abb5",
   "train_end_repdte": "2023-12-31",
-  "git_sha": "6740dae",
-  "trained_at": "2026-09-25T22:32:42-04:00",
+  "trained_at": "2026-09-26T02:29:35.462578+00:00",
   "features_version": "v2",
   "horizon": 4,
   "walkforward_year": 2024,
   "source": "models/walkforward/2024/hazard",
-  "provenance": "run-record",
-  "notes": "Walk-forward hazard for test year 2024, trained on reports 2001-03-31..2023-12-31 (665,326 rows, 565 failures); calibration.joblib is that year's isotonic map."
+  "provenance": "artefact",
+  "calibration": "production",
+  "notes": "Walk-forward hazard for test year 2024, trained on reports 2001-03-31..2023-12-31 (665,326 rows, 565 failures); version hash from the fitted estimator; calibration.joblib is the production map fitted on test years [2023, 2024] (kept, not the walk-forward year's map)."
 }

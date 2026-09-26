@@ -41,5 +41,7 @@
     },
     "metric": "pr_auc",
     "fallback": null
-  }
+  },
+  "model_hash": "9e7bab65fe64f12feb147240bc249d6cc645d013",
+  "model_version": "gbdt_mono-2022-12-31-9e7bab6"
 }

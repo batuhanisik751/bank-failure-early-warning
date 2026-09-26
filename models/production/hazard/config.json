@@ -32,5 +32,7 @@
     },
     "metric": "pr_auc",
     "fallback": null
-  }
+  },
+  "model_hash": "0cc72aca9bc0817f39e8262d500dbe238bf0abb5",
+  "model_version": "hazard-2023-12-31-0cc72ac"
 }

@@ -130,18 +130,33 @@ def _run_record(runs: Path, run_id: str, **config) -> None:
     (runs / "walkforward" / run_id / "metrics.json").write_text("{}")
 
 
-def test_walkforward_version_falls_back_to_the_committed_run_record(tmp_path):
-    """No ``models/walkforward`` artefact: the run record of (model, year, horizon 4)
-    names the version; other models, years and horizons are ignored."""
-    runs = tmp_path / "runs"
-    _run_record(runs, "walkforward-4q-aaa", train_repdte_max="2006-12-31")
+def test_walkforward_version_reads_the_stamped_config_and_never_touches_git(tmp_path):
+    """No ``models/walkforward`` artefact: the run record of (model, year, horizon 4) names
+    the version, a stamped record before an unstamped one; other models, years and
+    horizons are ignored; an artefact beats every record."""
+    runs, models = tmp_path / "runs", tmp_path / "models"
+    _run_record(runs, "walkforward-4q-zzz", train_repdte_max="2006-12-31")
+    _run_record(runs, "walkforward-4q-aaa", train_repdte_max="2006-12-31",
+                model_version="gbdt_mono-2006-12-31-1234567", model_hash="1234567" * 4)  # fmt: skip
     _run_record(runs, "walkforward-8q-bbb", horizon=8, train_repdte_max="2005-12-31")
     _run_record(runs, "walkforward-4q-ccc", model="hazard", train_repdte_max="2007-12-31")
     _run_record(runs, "walkforward-4q-ddd", test_year=2009, train_repdte_max="2007-12-31")
-    row = core.walkforward_version(2008, "gbdt_mono", tmp_path / "models", runs, tmp_path)
-    assert row["model_version"] == "gbdt_mono-2006-12-31-unknown", row
+    row = core.walkforward_version(2008, "gbdt_mono", models, runs)
+    assert row["model_version"] == "gbdt_mono-2006-12-31-1234567", row
     assert row["train_end_repdte"] == "2006-12-31" and "run record" in row["notes"]
-    assert core.walkforward_version(2010, "gbdt_mono", tmp_path / "models", runs, tmp_path) is None
+    assert row["git_sha"] is None and row["trained_at"] is None
+    unstamped = core.walkforward_version(2008, "hazard", models, runs)
+    assert unstamped["model_version"] == "hazard-2007-12-31-unknown"
+    assert core.walkforward_version(2010, "gbdt_mono", models, runs) is None
+    art = models / "walkforward" / "2008" / "gbdt_mono"
+    art.mkdir(parents=True)
+    config = {"model": "gbdt_mono", "train_repdte_max": "2006-12-31", "features_version": "v2"}
+    config.update(model_version="gbdt_mono-2006-12-31-fedcba9", model_hash="fedcba9" * 4)
+    (art / "config.json").write_text(json.dumps(config))
+    (art / "pipeline.joblib").write_bytes(b"pipe")
+    row = core.walkforward_version(2008, "gbdt_mono", models, runs)
+    assert row["model_version"] == "gbdt_mono-2006-12-31-fedcba9" and "artefact" in row["notes"]
+    assert row["trained_at"] is not None and "fedcba9" in row["notes"]
 
 
 def test_build_model_versions_never_maps_a_backtest_year_to_production(tmp_path, caplog):
@@ -149,18 +164,19 @@ def test_build_model_versions_never_maps_a_backtest_year_to_production(tmp_path,
     for model in core.MODELS:
         (production / model).mkdir(parents=True)
         meta = {"model_version": f"{model}-2022-12-31-prod", "model": model,
-                "train_end_repdte": "2022-12-31", "git_sha": "prod"}  # fmt: skip
+                "train_end_repdte": "2022-12-31", "model_hash": "prod" * 10}  # fmt: skip
         (production / model / "model_version.json").write_text(json.dumps(meta))
     _run_record(tmp_path / "runs", "walkforward-4q-aaa", train_repdte_max="2006-12-31")
     with caplog.at_level("WARNING", logger="bankcanary.publish.core"):
         frame, lookup = core.build_model_versions(
-            production, tmp_path / "models", tmp_path / "runs", tmp_path, years=[2008]
+            production, tmp_path / "models", tmp_path / "runs", years=[2008]
         )
     assert lookup[("gbdt_mono", 2008)] == "gbdt_mono-2006-12-31-unknown"
     assert lookup[("hazard", 2008)] == "hazard-wf2008-unknown", "derived, not production"
     assert "hazard 2008" in caplog.text
     derived = frame.set_index("model_version").loc["hazard-wf2008-unknown"]
-    assert derived["train_end_repdte"] is None and derived["git_sha"] == "unknown"
+    assert derived["train_end_repdte"] is None and derived["git_sha"] is None
+    assert lookup[("gbdt_mono", "production")] == "gbdt_mono-2022-12-31-prod"
     assert set(frame["model_version"]) == set(lookup.values()) and len(frame) == 4
 
 

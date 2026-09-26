@@ -226,3 +226,51 @@ def test_gbdt_mono_walks_forward_under_the_registry_constraints(tmp_path, frame)
     assert tracking.run_id("walkforward", mono.config) != tracking.run_id(
         "walkforward", plain.config
     )
+
+
+@pytest.mark.parametrize("model", ("logit", "gbdt_mono", "hazard", "texas"))
+def test_model_version_is_content_addressed(tmp_path, frame, model):
+    """``config['model_version']`` hashes the fitted estimator: stable across re-saves and
+    re-stamps, different when the estimator changes, never a git sha."""
+    settings = make_settings(tmp_path)
+    result = w.fit_year(frame, settings, YEAR, model, 4)
+    digest = result.config["model_hash"]
+    assert len(digest) == 40 and digest == w.model_hash(result.pipeline)
+    expected = f"{model}-{result.config['train_repdte_max']}-{digest[:7]}"
+    assert result.config["model_version"] == expected
+    saved = json.loads((result.paths["config"]).read_text())
+    assert saved["model_version"] == expected and saved["model_hash"] == digest
+    run_config = json.loads((tmp_path / "runs" / "walkforward" / tracking.run_id(
+        "walkforward", result.config) / "config.json").read_text())  # fmt: skip
+    assert run_config["model_version"] == expected
+    # re-saving the same fitted model (and a reload of it) keeps the version
+    w.save_year(result, settings)
+    assert json.loads(result.paths["config"].read_text())["model_version"] == expected
+    pipeline, _, config = w.load_year(settings, YEAR, model)
+    assert w.stamp_model_version(dict(config), pipeline)["model_version"] == expected
+    if model == "texas":
+        return
+    # a model fitted on a different training window is a different version
+    other = w.fit_year(frame, settings, YEAR + 1, model, 4, save=False)
+    assert other.config["model_hash"] != digest
+    assert other.config["model_version"] != expected
+    if model == "gbdt_mono":
+        capped = w.fit_year(frame, settings, YEAR, model, 4, n_estimators=3, save=False)
+        assert capped.config["train_repdte_max"] == result.config["train_repdte_max"]
+        assert capped.config["model_version"] != expected, "same window, other trees"
+
+
+def test_model_fingerprint_covers_every_estimator_family():
+    from sklearn.ensemble import HistGradientBoostingClassifier
+    from sklearn.linear_model import LogisticRegression
+
+    X = np.array([[0.0, 1.0], [1.0, 0.0], [2.0, 1.0], [3.0, 0.0]] * 5)
+    y = np.array([0, 1, 0, 1] * 5)
+    logit = LogisticRegression().fit(X, y)
+    assert w.model_fingerprint(logit) == logit.coef_.tobytes() + logit.intercept_.tobytes()
+    hgb = HistGradientBoostingClassifier(max_iter=3, min_samples_leaf=2).fit(X, y)
+    again = HistGradientBoostingClassifier(max_iter=3, min_samples_leaf=2).fit(X, y)
+    assert w.model_hash(hgb) == w.model_hash(again)
+    deeper = HistGradientBoostingClassifier(max_iter=4, min_samples_leaf=2).fit(X, y)
+    assert w.model_hash(hgb) != w.model_hash(deeper)
+    assert w.model_version("gbdt", "2020-12-31", "abcdef0123") == "gbdt-2020-12-31-abcdef0"

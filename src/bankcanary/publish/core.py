@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -413,39 +413,26 @@ def build_walkforward_metrics(walkforward: pd.DataFrame, models=MODELS) -> pd.Da
     return pd.DataFrame(rows)
 
 
-def _git_first_commit(path: Path, repo: Path) -> tuple[str, str] | None:
-    """``(short sha, committer date)`` of the commit that added ``path``, or ``None``."""
+def _read_config(path: Path) -> dict | None:
     try:
-        out = subprocess.run(
-            ["git", "log", "--diff-filter=A", "--format=%h %cI", "--", str(path)],
-            cwd=repo,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=30,
-        )
-    except (OSError, subprocess.SubprocessError):
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
         return None
-    lines = out.stdout.strip().splitlines()
-    if not lines:
-        return None
-    sha, when = lines[-1].split(" ", 1)
-    return sha, when
 
 
-def _run_record(year: int, model: str, runs_dir: Path, repo: Path) -> tuple[dict, Path] | None:
-    """The committed walk-forward run record of ``(model, year)`` at :data:`HORIZON`.
+def _run_record(year: int, model: str, runs_dir: Path) -> tuple[dict, Path] | None:
+    """The walk-forward run record of ``(model, year)`` at :data:`HORIZON`.
 
-    ``runs/walkforward/<run id>/config.json`` is tracked in git, so a fresh clone can
-    name the walk-forward version without the (untracked) ``models/walkforward``
-    artefacts. When a year was run more than once the record added to git last wins
-    (an untracked record ranks first, as the freshest); the choice is deterministic.
+    ``runs/walkforward/<run id>/config.json`` is tracked in git, so a fresh clone can name
+    the walk-forward version without the (untracked) ``models/walkforward`` artefacts. A
+    record that carries ``model_version`` (every fit since the versions became
+    content-addressed) ranks above one that does not; ties break on the run id, so the
+    choice is deterministic and needs no git history.
     """
     best: tuple[tuple, dict, Path] | None = None
     for path in sorted((runs_dir / "walkforward").glob("*/config.json")):
-        try:
-            config = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        config = _read_config(path)
+        if config is None:
             continue
         if (config.get("model"), config.get("test_year"), config.get("horizon")) != (
             model,
@@ -453,48 +440,50 @@ def _run_record(year: int, model: str, runs_dir: Path, repo: Path) -> tuple[dict
             HORIZON,
         ):
             continue
-        found = _git_first_commit(path.parent / "metrics.json", repo)
-        key = (found is None, found[1] if found else "", path.parent.name)
+        key = ("model_version" in config, path.parent.name)
         if best is None or key > best[0]:
             best = (key, config, path)
     return (best[1], best[2]) if best else None
 
 
-def walkforward_version(
-    year: int, model: str, models_dir: Path, runs_dir: Path, repo: Path
-) -> dict | None:
+def walkforward_version(year: int, model: str, models_dir: Path, runs_dir: Path) -> dict | None:
     """A ``model_versions`` row for one walk-forward fit, or ``None`` when nothing is saved.
 
-    The saved artefact ``models/walkforward/<year>/<model>/config.json`` names its run
-    record exactly (its run id is the config hash); without the artefact the committed run
-    record of that model and year is used (:func:`_run_record`), so provenance does not
-    depend on files that are not in git.
+    The version is the config's own content-addressed ``model_version`` (CONTRACT 15,
+    stamped from the fitted estimator by ``walkforward.stamp_model_version``), read from
+    the saved artefact ``models/walkforward/<year>/<model>/config.json`` or, without it,
+    from the run record of that model and year (:func:`_run_record`). A config from before
+    the stamping carries no version and yields ``<model>-<train end>-unknown``. Nothing is
+    read from git.
     """
-    from bankcanary.tracking import run_id
-
     config_path = models_dir / "walkforward" / str(year) / model / "config.json"
-    if config_path.exists():
-        config = json.loads(config_path.read_text(encoding="utf-8"))
-        record = runs_dir / "walkforward" / run_id("walkforward", config) / "metrics.json"
+    config = _read_config(config_path) if config_path.exists() else None
+    if config is not None:
         source = "artefact"
+        trained_at = _mtime(config_path.parent / "pipeline.joblib")
     else:
-        hit = _run_record(year, model, runs_dir, repo)
+        hit = _run_record(year, model, runs_dir)
         if hit is None:
             return None
-        config, record = hit[0], hit[1].parent / "metrics.json"
-        source = "run record"
-    found = _git_first_commit(record, repo) or ("unknown", None)
+        config, source, trained_at = hit[0], "run record", None
     train_end = str(config.get("train_repdte_max"))
+    version = config.get("model_version") or f"{model}-{train_end}-unknown"
     return {
-        "model_version": f"{model}-{train_end}-{found[0]}",
+        "model_version": version,
         "model": model,
         "train_end_repdte": train_end,
-        "git_sha": found[0],
-        "trained_at": found[1],
+        "git_sha": None,
+        "trained_at": trained_at,
         "features_version": config.get("features_version"),
         "notes": f"Walk-forward {model} for test year {year}, trained through {train_end}"
-        f" ({source}).",
+        f" ({source}; version hash {config.get('model_hash', 'unknown')[:7]}).",
     }
+
+
+def _mtime(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).isoformat()
 
 
 def derived_walkforward_version(year: int, model: str) -> dict:
@@ -507,16 +496,16 @@ def derived_walkforward_version(year: int, model: str) -> dict:
         "model_version": f"{model}-wf{year}-unknown",
         "model": model,
         "train_end_repdte": None,
-        "git_sha": "unknown",
+        "git_sha": None,
         "trained_at": None,
         "features_version": None,
         "notes": f"Walk-forward {model} for test year {year}: no saved artefact and no run"
-        " record at publish time, so the training window and commit are unknown.",
+        " record at publish time, so the training window and model hash are unknown.",
     }
 
 
 def build_model_versions(
-    production_dir: Path, models_dir: Path, runs_dir: Path, repo: Path, years=()
+    production_dir: Path, models_dir: Path, runs_dir: Path, years=()
 ) -> tuple[pd.DataFrame, dict]:
     """``model_versions`` (production artefacts + every walk-forward ``years`` entry) and the
     ``{(model, year|'production'): model_version}`` lookup the other builders use.
@@ -533,7 +522,7 @@ def build_model_versions(
             rows.append({k: meta.get(k) for k in MODEL_VERSION_COLUMNS})
             lookup[(model, "production")] = meta["model_version"]
         for year in years:
-            row = walkforward_version(int(year), model, models_dir, runs_dir, repo)
+            row = walkforward_version(int(year), model, models_dir, runs_dir)
             if row is None:
                 row = derived_walkforward_version(int(year), model)
                 log.warning(
@@ -602,9 +591,7 @@ def load_warehouse(settings, tables: set[str] | None = None) -> Warehouse:
     )
 
 
-def build_all(
-    wh: Warehouse, settings, tables=None, repo: Path | None = None
-) -> dict[str, pd.DataFrame]:
+def build_all(wh: Warehouse, settings, tables=None) -> dict[str, pd.DataFrame]:
     """Every requested table (publish order) as a ``{name: frame}`` dict.
 
     Production scores are computed here from ``features_v2`` and ``models/production/``
@@ -617,7 +604,6 @@ def build_all(
 
     want = [t for t in CORE_TABLES if tables is None or t in set(tables)]
     production_dir = Path(settings.models_dir) / "production"
-    repo = repo or Path(settings.data_dir).resolve().parent
     years = set(test_years(wh.labels, HORIZON)) if len(wh.labels) else set()
     if len(wh.walkforward):
         wf = wh.walkforward
@@ -625,7 +611,7 @@ def build_all(
         years |= {int(y) for y in scored.dropna().unique()}
     years = sorted(years)
     versions, lookup = build_model_versions(
-        production_dir, Path(settings.models_dir), Path(settings.runs_dir), repo, years
+        production_dir, Path(settings.models_dir), Path(settings.runs_dir), years
     )
     out: dict[str, pd.DataFrame] = {}
     if "model_versions" in want:

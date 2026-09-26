@@ -1,13 +1,14 @@
 {
-  "model_version": "gbdt_mono-2022-12-31-8b3078e",
+  "model_version": "gbdt_mono-2022-12-31-9e7bab6",
   "model": "gbdt_mono",
+  "model_hash": "9e7bab65fe64f12feb147240bc249d6cc645d013",
   "train_end_repdte": "2022-12-31",
-  "git_sha": "8b3078e",
-  "trained_at": "2026-09-26T16:54:17-04:00",
+  "trained_at": "2026-09-26T20:48:54.900569+00:00",
   "features_version": "v2",
   "horizon": 4,
   "walkforward_year": 2024,
   "source": "models/walkforward/2024/gbdt_mono",
-  "provenance": "override",
-  "notes": "Walk-forward gbdt_mono for test year 2024, trained on reports 2001-03-31..2022-12-31 (646,530 rows, 2,243 failures); calibration.joblib is that year's isotonic map."
+  "provenance": "artefact",
+  "calibration": "production",
+  "notes": "Walk-forward gbdt_mono for test year 2024, trained on reports 2001-03-31..2022-12-31 (646,530 rows, 2,243 failures); version hash from the fitted estimator; calibration.joblib is the production map fitted on test years [2023, 2024] (kept, not the walk-forward year's map)."
 }
