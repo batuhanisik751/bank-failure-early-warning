@@ -227,3 +227,85 @@ and `runs rebuild-index`. All idempotent. The fitting, scoring and explaining co
 calibrated Brier, else the raw Brier) from `runs/index.jsonl`; `runs rebuild-index` rewrites
 that index from the run directories, sorted by run id (each `finish` only appends a line,
 readers keep the latest line per id).
+
+---
+
+## Prototype 3 additions
+
+### 15. Production model and vocabulary
+
+- `production` score = the latest walk-forward `gbdt_mono` model (`models/production/gbdt_mono/`)
+  applied to every label-incomplete quarter; historical quarters use the walk-forward model of
+  their test year. Probability shown = `score_calibrated` (12-month); `score` (raw) is kept.
+  Secondary score = `hazard` (same rule). Both live in `models/production/` with
+  `pipeline.joblib`, `calibration.joblib`, `features.json`, `config.json`, `model_version.json`.
+- `model_version` string = `<model>-<train_end_repdte>-<git short sha of the training commit>`.
+- Risk bands per quarter by rank percentile of the production score: `high` (top 2%),
+  `elevated` (top 2–10%), `low`. Never shown without the probability.
+- Every published number carries `model_version` and the `quarter` it belongs to.
+
+### 16. Postgres schema (`src/bankcanary/publish/schema.sql`, Python owns DDL)
+
+| table | key | columns |
+|---|---|---|
+| `banks` | `cert` | `name, city, state, bkclass, charter_class_label, estymd, endefymd, active, fed_rssd, rssdhcr, holding_company_name, latitude, longitude, latest_assets, size_bucket, exit_reason, fail_date` |
+| `quarters` | `repdte` | `label (e.g. 2023Q1), avail_date, n_banks, n_failures_next_4q, label_complete_4q, model_year (walk-forward year that scored it, null = production), model_version` |
+| `scores` | `cert, repdte, model` | `horizon, score, probability (calibrated), rank, percentile, band, delta_prob_prior_q, model_version` — models `gbdt_mono` and `hazard`, every scored quarter 2008Q1 → latest |
+| `drivers` | `cert, repdte, model, rank` | `feature, feature_label, shap_value, feature_value, direction` — 10 rows per bank-quarter for: the latest 4 quarters of every bank, every quarter of every failed bank, and every bank-quarter in the top 5% of its quarter; `gbdt_mono` only |
+| `ratios` | `cert, repdte` | `total_assets` + the 12 key ratios (`equity_to_assets, tier1_leverage, noncurrent_ratio, npa_to_assets, texas_ratio, roa_q, nim_q, efficiency_ratio, brokered_share, uninsured_share, unrealized_loss_to_tier1, construction_to_capital`) each with a `<ratio>_pct` peer percentile (peer = size bucket × Census region, same quarter); every bank-quarter |
+| `peer_stats` | `repdte, size_bucket, region, ratio` | `p10, p50, p90, n` |
+| `failures` | `cert, fail_date` | `name, city, state, restype1, cost, qbfasset, qbfdep` |
+| `walkforward_metrics` | `model, horizon, test_year` | `n, n_failures, pr_auc, pr_auc_lo, pr_auc_hi, recall_at_2pct, recall_lo, recall_hi, roc_auc, brier_raw, brier_calibrated, low_confidence` + a `pooled` row (`test_year = 0`) |
+| `case_study_2023` | `cert, quarter, view, model` | `probability, rank, percentile, n_scored` for SVB / Signature / First Republic; plus `case_study_series` (`cert, repdte, unrealized_loss_to_tier1, uninsured_share, peer_p50_unrealized, peer_p05_unrealized, peer_p50_uninsured, peer_p95_uninsured`) |
+| `rate_shock_scores` | `cert, shock_bp, duration_years` | `extra_loss, adjusted_tier1_leverage, unrealized_loss_to_tier1, probability, rank, band` for the latest quarter; grid shock ∈ {100, 200, 300, 400} bp × duration ∈ {2, 3, 4, 5, 6} years; `extra_loss = −duration × shock/10000 × (afs + htm at amortised cost)` |
+| `map_quarters` | `repdte, cert` | `latitude, longitude, band, probability, failed_this_quarter (bool)` for every scored quarter |
+| `model_versions` | `model_version` | `model, train_end_repdte, git_sha, trained_at, features_version, notes` |
+| `pipeline_runs` | `run_id` | `started_at, finished_at, status, latest_repdte, new_quarter (bool), rows_written (json), log` |
+
+Rules: every table is rebuilt idempotently by `bankcanary publish` (truncate + insert inside one
+transaction per table, or `INSERT … ON CONFLICT DO UPDATE`); numeric columns `double precision`,
+money in thousands of dollars as in the warehouse; indexes on every foreign-key-like column and on
+`(repdte, rank)`; the web app's role is read-only. Neon free tier budget: total < 400 MB.
+
+### 17. Publish and refresh (`src/bankcanary/publish/`)
+
+- `bankcanary publish [--tables …] [--dry-run]` reads the warehouse + `models/production/` and
+  writes every table above; logs a `pipeline_runs` row and a tracking run.
+- `bankcanary refresh` = probe the latest `REPDTE`; if newer than `quarters.max(repdte)`: ingest
+  that quarter → rebuild panel, labels, features_v2 → score with `models/production/` → SHAP →
+  publish. Idempotent; a re-run with no new quarter writes only a `pipeline_runs` row.
+- GitHub Actions: `.github/workflows/refresh.yml` (cron weekly + manual; caches
+  `data/raw/fdic` and `data/raw/fred` with actions/cache; secrets `DATABASE_URL`,
+  `REVALIDATE_URL`, `REVALIDATE_SECRET`), `retrain.yml` (manual only; re-runs walk-forward for the
+  latest year and opens a PR updating `models/production/`), `ci.yml` (ruff + pytest for Python,
+  lint + typecheck + unit tests for `web/`, on every push and PR).
+
+### 18. Web app (`web/`, Next.js 16 App Router, TypeScript strict)
+
+- Stack: `next@16`, `react@19`, `tailwindcss@4`, `drizzle-orm` + `pg` (read-only schema mirror in
+  `web/lib/db/schema.ts`, generated once from `schema.sql` and kept in sync by a test that
+  compares column lists), `echarts@5` behind one client wrapper (`web/components/charts/EChart.tsx`,
+  dynamic import, no SSR), `vitest` for unit tests, `@playwright/test` + `@axe-core/playwright`
+  for an accessibility smoke over every route. Package manager: npm.
+- Data access only in `web/lib/queries/*.ts` (server-only, typed functions, parameterised SQL);
+  pages are server components; interactive parts are small client components. Every query is
+  wrapped in `cached()` (`unstable_cache`, tag `data`, 3600 s) and `POST /api/revalidate`
+  (bearer `REVALIDATE_SECRET`) expires the tag. No `DATABASE_URL` in client code.
+- Theme: light/dark via `prefers-color-scheme` + a toggle; semantic colour tokens; risk bands use
+  colour + text label, never colour alone. Layout: header nav (Leaderboard, Time machine, Map,
+  2023 case study, Rate shock, Methodology), footer disclaimer on every page.
+- Every page has loading, empty and error states (`loading.tsx`, `error.tsx`, `not-found.tsx`),
+  metadata (`generateMetadata`), and works at 375 px width.
+- Routes: `/` leaderboard, `/bank/[cert]` profile, `/time-machine?quarter=YYYYQn`,
+  `/map`, `/case-study-2023`, `/rate-shock`, `/methodology`, `/api/map/[quarter]` (JSON for the
+  map), `/api/download/leaderboard.csv`, `/api/download/bank/[cert].csv`, `/api/revalidate`.
+- Env: `DATABASE_URL` (Neon pooled, `sslmode=verify-full` only), `REVALIDATE_SECRET`,
+  `NEXT_PUBLIC_SITE_URL`.
+
+### 19. Acceptance hooks
+
+- Time machine for a quarter = rows of `scores` where `model = 'gbdt_mono'` and that quarter's
+  `model_year`; its recall@2% must equal the `walkforward_metrics` value for that model and year
+  when pooled over the year's four quarters (a test in `tests/test_publish.py` checks 2009).
+- Every number rendered comes from a query in `web/lib/queries`; no arithmetic on the client
+  except the rate-shock scenario selection (which only picks precomputed rows).
