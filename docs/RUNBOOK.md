@@ -83,6 +83,44 @@ levers in `docs/DECISIONS.md` before the next quarter lands.
 - Neon: the owner sets `DATABASE_URL` (pooled, `sslmode=verify-full`) as a GitHub
   secret and runs the same command from the refresh workflow; nothing here deploys.
 
+## 5. Scheduled refresh (GitHub Actions)
+
+`bankcanary refresh [--force-quarter YYYY-MM-DD] [--dry-run]` probes the FDIC API for the
+newest `REPDTE`, compares it with `quarters.max(repdte)` in Postgres (the warehouse when
+the database is unreachable; the run log says so) and, when a newer quarter exists,
+ingests it, rebuilds `panel`, `labels`, `macro_state` and `features_v2` from the raw
+cache, scores it with `models/production/`, explains it with SHAP and upserts the rows
+that quarter adds (`quarters`, `scores`, `drivers`, `ratios`, `peer_stats`, the last four
+quarters of `map_quarters`; `banks`, `failures` and `rate_shock_scores` are rebuilt whole).
+Historical walk-forward rows are never touched, so the job needs no walk-forward
+artefacts. Every run, new quarter or not, writes one `pipeline_runs` row and a
+`runs/refresh/` record; `--dry-run` only prints the decision.
+
+`.github/workflows/refresh.yml` runs it every Monday 09:00 UTC and on demand (the
+`force_quarter` input republishes one quarter). `data/raw/fdic` and `data/raw/fred` are
+restored with `actions/cache` keyed `raw-<latest REPDTE>`; a run with no cache at all
+first pulls every quarter once (`bankcanary ingest --what all --no-build`, then
+`build-macro --pull-only`). When a quarter was published the job POSTs the web app's
+revalidate route. `retrain.yml` is manual only: it rebuilds the warehouse, runs the
+walk-forward and calibration for the latest complete year (or the `year` input),
+promotes with `scripts/promote_production_models.py` and opens a pull request touching
+`models/production/` and the run records; nothing is merged automatically.
+
+### Secrets the owner adds (repository → Settings → Secrets and variables → Actions)
+
+| secret | used by | value |
+|---|---|---|
+| `DATABASE_URL` | refresh | the Neon **pooled** connection string with `sslmode=verify-full`; a role that may write every table (the web app's role stays read-only and lives in Vercel, not here) |
+| `REVALIDATE_URL` | refresh | `https://<site>/api/revalidate` of the deployed web app; leave unset until the app is live and the step is skipped |
+| `REVALIDATE_SECRET` | refresh | the same 32+ character random string the web app holds as `REVALIDATE_SECRET` (`openssl rand -hex 32`) |
+| `FRED_API_KEY` | refresh, retrain | optional; without it the FRED client falls back to the public CSV endpoint |
+
+`gh secret set DATABASE_URL --repo <owner>/<repo>` reads the value from a prompt without
+putting it in shell history. Never paste a connection string into an issue, a workflow
+file or a commit. The first scheduled run after adding `DATABASE_URL` takes about 20
+minutes (cache warm-up); later no-op runs finish in about a minute and a new quarter in
+about five. Locally the same command runs against the docker database from `.env`.
+
 ## 6. Web app (`web/`)
 
 ```bash

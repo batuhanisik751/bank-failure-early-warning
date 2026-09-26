@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (ruff + pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Ruff (lint + format)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Pytest
+        # Tests that need Postgres skip when DATABASE_URL is unset; everything else is synthetic.
+        run: uv run pytest
+
+  web:
+    name: Web (lint + typecheck + unit tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect the web app
+        id: web
+        run: |
+          if [ -f web/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Set up Node
+        if: steps.web.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        if: steps.web.outputs.present == 'true'
+        working-directory: web
+        run: npm ci
+
+      - name: Lint
+        if: steps.web.outputs.present == 'true'
+        working-directory: web
+        run: npm run lint
+
+      - name: Typecheck
+        if: steps.web.outputs.present == 'true'
+        working-directory: web
+        run: npx tsc --noEmit
+
+      - name: Unit tests (vitest, no database)
+        if: steps.web.outputs.present == 'true'
+        working-directory: web
+        run: npx vitest run
+
+      - name: No web app yet
+        if: steps.web.outputs.present != 'true'
+        run: echo "web/ is not in this checkout; nothing to check"

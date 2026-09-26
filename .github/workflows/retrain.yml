@@ -1,0 +1,116 @@
+name: Retrain
+
+# Manual only (CONTRACT 17): rebuild the warehouse from the raw cache, run the walk-forward
+# for the latest complete year, promote the resulting gbdt_mono and hazard models into
+# models/production/ and open a pull request for review. Nothing is merged or published
+# by this workflow; the refresh job keeps scoring with whatever models/production/ holds
+# on main until the owner merges the PR.
+
+on:
+  workflow_dispatch:
+    inputs:
+      year:
+        description: "Walk-forward test year to fit (blank = latest complete year)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: retrain
+  cancel-in-progress: false
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Probe the latest quarter (cache key)
+        id: probe
+        run: |
+          latest=$(uv run python -c "from bankcanary.config import load_settings; from bankcanary.refresh import probe_latest; print(probe_latest(load_settings()))")
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the raw FDIC and FRED caches
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/raw/fdic
+            data/raw/fred
+          key: raw-${{ steps.probe.outputs.latest }}
+          restore-keys: |
+            raw-
+
+      - name: Ingest (served from cache when warm)
+        run: |
+          uv run bankcanary ingest --what all
+          uv run bankcanary build-macro --chunk 200
+
+      - name: Build the warehouse
+        run: |
+          uv run bankcanary build-panel
+          uv run bankcanary build-labels
+          uv run bankcanary build-features-v2
+
+      - name: Choose the year
+        id: year
+        run: |
+          if [ -n "${{ github.event.inputs.year }}" ]; then
+            year="${{ github.event.inputs.year }}"
+          else
+            year=$(uv run python -c "from bankcanary.config import load_settings; from bankcanary.storage.parquet import read_table; from bankcanary.evaluation.walkforward import latest_complete_year; print(latest_complete_year(read_table('labels', load_settings()), 4))")
+          fi
+          echo "year=$year" >> "$GITHUB_OUTPUT"
+          echo "walk-forward year: $year"
+
+      - name: Walk-forward + calibration for the year
+        run: |
+          uv run bankcanary walkforward --year "${{ steps.year.outputs.year }}" --model gbdt_mono,hazard
+          uv run bankcanary calibrate --year "${{ steps.year.outputs.year }}" --model gbdt_mono
+          uv run bankcanary calibrate --year "${{ steps.year.outputs.year }}" --model hazard
+
+      - name: Promote to models/production/
+        run: uv run python scripts/promote_production_models.py --year "${{ steps.year.outputs.year }}"
+
+      - name: Tests
+        run: uv run pytest tests/test_promote_production_models.py tests/test_publish_core.py
+
+      - name: Open a pull request (no auto-merge)
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: retrain/${{ steps.year.outputs.year }}-${{ github.run_id }}
+          base: main
+          title: "Promote the ${{ steps.year.outputs.year }} walk-forward models to production"
+          commit-message: "Promote the ${{ steps.year.outputs.year }} walk-forward models to production"
+          add-paths: |
+            models/production/**
+            runs/walkforward/**
+            runs/calibrate/**
+            runs/index.jsonl
+          body: |
+            Walk-forward year ${{ steps.year.outputs.year }} refitted by the retrain workflow
+            (run ${{ github.run_id }}); `models/production/` and the run records updated.
+            Review `runs/walkforward/` metrics and the `model_version.json` files before
+            merging; the refresh job publishes with the promoted models once this is on main.
+
+            Educational project, not a credit rating, not investment advice, not a
+            supervisory assessment. FDIC insurance covers $250,000 per depositor, per bank,
+            per ownership category.
+          labels: models
+          delete-branch: true

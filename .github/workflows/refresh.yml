@@ -1,0 +1,101 @@
+name: Refresh
+
+# Weekly probe of the FDIC API for a new quarter; publishes it when found (CONTRACT 17).
+# The raw caches (data/raw/fdic, data/raw/fred) are restored with actions/cache and keyed
+# on the latest quarter the API publishes, so a new quarter rolls the key and the run that
+# ingests it saves a fresh cache. Secrets: DATABASE_URL, REVALIDATE_URL, REVALIDATE_SECRET
+# (docs/RUNBOOK.md lists how to add them). Nothing here deploys anything.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+  workflow_dispatch:
+    inputs:
+      force_quarter:
+        description: "Republish this quarter end (YYYY-MM-DD) even when it is not new"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Probe the latest quarter (cache key)
+        id: probe
+        run: |
+          latest=$(uv run python -c "from bankcanary.config import load_settings; from bankcanary.refresh import probe_latest; print(probe_latest(load_settings()))")
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "latest REPDTE: $latest"
+
+      - name: Restore the raw FDIC and FRED caches
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/raw/fdic
+            data/raw/fred
+          key: raw-${{ steps.probe.outputs.latest }}
+          restore-keys: |
+            raw-
+
+      - name: Warm the raw cache (first run only)
+        # With no cache at all every quarter since settings.start_quarter is pulled once
+        # (about 100 requests at the client's rate limit) so later runs are incremental.
+        if: steps.cache.outputs.cache-hit != 'true' && steps.cache.outputs.cache-matched-key == ''
+        run: |
+          uv run bankcanary ingest --what all --no-build
+          uv run bankcanary build-macro --pull-only --chunk 200
+
+      - name: Refresh
+        id: refresh
+        run: |
+          if [ -n "${{ github.event.inputs.force_quarter }}" ]; then
+            uv run bankcanary refresh --force-quarter "${{ github.event.inputs.force_quarter }}"
+          else
+            uv run bankcanary refresh
+          fi
+
+      - name: Revalidate the web app
+        if: steps.refresh.outputs.new_quarter == 'true' && secrets.REVALIDATE_URL != ''
+        env:
+          REVALIDATE_URL: ${{ secrets.REVALIDATE_URL }}
+          REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
+        run: |
+          code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer $REVALIDATE_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "{\"quarter\": \"${{ steps.refresh.outputs.quarter }}\"}" \
+            "$REVALIDATE_URL")
+          echo "revalidate -> HTTP $code"
+          test "$code" -ge 200 -a "$code" -lt 300
+
+      - name: Keep the run record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-run-${{ github.run_id }}
+          path: runs/refresh/
+          if-no-files-found: ignore
+          retention-days: 30

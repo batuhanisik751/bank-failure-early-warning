@@ -828,6 +828,24 @@ open for the owner to revisit.
   are `elevated`/`high` or failed (the map draws `low` dots from `banks`), and hazard rows
   after 2015 only. Schema type changes are not applied to an existing table by
   `CREATE TABLE IF NOT EXISTS`: drop the table locally and re-run `publish --tables <t>`.
+- 2026-09-26 — **The refresh is incremental; `publish` stays the full rebuild (step E2).**
+  The walk-forward scores and boosters are not committed, so a GitHub Actions runner
+  cannot rebuild `scores` history. `bankcanary refresh` therefore upserts only what a new
+  quarter adds: its `quarters` row (every other row keeps its published `model_year` and
+  `model_version`, label counts refreshed), its `scores` (production `gbdt_mono` and
+  `hazard`, ranked within the quarter, `delta_prob_prior_q` from a re-score of the prior
+  quarter), its SHAP `drivers`, `ratios` and `peer_stats`, and `map_quarters` for the last
+  four quarters (so `failed_this_quarter` follows new failures); `banks`, `failures` and
+  `rate_shock_scores` are replaced whole. Older `drivers` rows that a full publish would
+  drop (the latest-four-quarters rule) linger until the next `publish`. The comparison
+  quarter comes from Postgres, or from the warehouse `labels` table when the database is
+  unreachable, and the run log names the source. Local timings for a simulated new
+  quarter (2026Q2 deleted from `scores` and `quarters`, then refreshed): structure tables
+  5 s, financials 28 s, panel 7 s, labels 1 s, FRED re-pull + macro 55 s, features_v2
+  11 s, warehouse load + frames + publish 11 s (about 2 min in all); a no-op run takes 1 s and writes only
+  a `pipeline_runs` row. The workflows cache `data/raw/fdic` and `data/raw/fred` under
+  `raw-<latest REPDTE>`; the first run warms the cache with a full `ingest --no-build`.
+  `retrain.yml` opens a pull request and never merges it.
 - 2026-09-26 — **Web skeleton (step E3).** `web/` is a Next.js 16 App Router app on port
   3100 with the read-only data layer of CONTRACT 18: `lib/db/schema.ts` mirrors the 14
   published tables with Drizzle (dates as ISO strings, bigints as numbers) and
