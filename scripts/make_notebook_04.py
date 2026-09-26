@@ -64,7 +64,7 @@ pd.set_option("display.width", 130)
 pd.set_option("display.max_columns", 30)
 pd.set_option("display.max_colwidth", 60)
 plt.rcParams["figure.dpi"] = 100
-MODEL, HORIZON, TOP_FRAC, FOLLOW_QUARTERS = "gbdt", 4, 0.02, 8
+MODEL, HORIZON, TOP_FRAC, FOLLOW_QUARTERS = "gbdt_mono", 4, 0.02, 8
 CRISIS_YEARS = [2009, 2010, 2011, 2012]
 
 wf = read_table("walkforward_scores", settings)
@@ -231,36 +231,38 @@ show
 """)
 
 INTERPRETATION = """
-Of the 875 bank-years that the booster put in the top 2 percent of 2009-2012 without a
+Of the 890 bank-years that the booster put in the top 2 percent of 2009-2012 without a
 failure inside the four-quarter window, about a quarter did fail: 17 percent in quarters
-five to eight and another 9 percent later still, against a 2 percent two-year failure
+five to eight and another 10 percent later still, against a 2 percent two-year failure
 rate for every bank-year of those years. A further 10 percent were acquired within two
-years (9 percent through a recorded merger, against a 5 percent base rate), and 2
+years (8.5 percent through a recorded merger, against a 5 percent base rate), and 1.5
 percent closed voluntarily, which for a bank with a Texas ratio near one usually means
 its charter was surrendered after the loans were sold. So close to 40 percent of the
 "false positives" of the crisis years are banks that left the industry or failed on a
 longer clock, and the acquired group looks like the "rescued" troubled bank the spec
-asks about: Brooklyn Federal Savings Bank was flagged at the end of 2010 on a collapsing
-leverage ratio and a Texas ratio of 0.78 and was absorbed by Investors Bank a year later;
-Sunrise Bank of Atlanta was folded into its sister Sunrise Bank the quarter after its
-flag. The model was reading the same balance sheet the acquirer and the supervisor
-read; the label says no because the resolution was a sale rather than a receivership.
+asks about: Bank Midwest of Kansas City, a $4 billion bank, was flagged in mid-2010 on a
+Texas ratio that had risen by 0.86 in a year and a falling equity ratio, and was
+absorbed by Armed Forces Bank six months later; Professional Business Bank was flagged
+in mid-2009 on the same one-year rise in its Texas ratio and a collapsing return on
+assets, and was merged into a successor of the same name at the end of 2010. The model
+was reading the same balance sheet the acquirer and the supervisor read; the label says
+no because the resolution was a sale rather than a receivership.
 
 The remaining 62 percent were still open two years on, and that is the genuine false
-alarm rate, with three qualifications. First, the 2010 model saturates: 68 bank-quarters
-score above 0.999 and 44 of them failed, so ties at the top of the 2010 ranking are
-decided by `cert`, and the two "still open" examples (Friends Bank, First Citizens Bank
-of Georgia) sit there on the same drivers as the failures, a one-year drop of two to
-four points in Tier 1 leverage and a Texas ratio that rose by half. Second, survival is
-not recovery: a bank that raised capital, sold its construction book or shrank its way
-back to a passing leverage ratio was troubled when it was flagged, and a supervisor
-would have wanted the flag. Third, outside the crisis the picture inverts (77 percent of
-all-year flags still open after eight quarters, 11 percent acquired) because there were
-few failures to find at all, and a fixed 2 percent head has to be filled with somebody.
-The right reading is that the top 2 percent is a watch list rather than a verdict:
-roughly one flagged bank in seven fails within the year, one in four within a few
-years, one in ten is bought, and the rest are the banks that had the same symptoms and
-got better.
+alarm rate, with three qualifications. First, the crisis-year models saturate: 91
+bank-quarters of 2010 and 97 of 2011 score above 0.999, and 54 and 59 of them failed, so
+the top of those rankings is a block of near-certain scores, and the two "still open"
+examples (PNA Bank, CommunityOne Bank) sit there on the same drivers as the failures, a
+Texas ratio that rose by one to seven points in a year and total risk-based capital at or
+below the minimum (negative at CommunityOne). Second, survival is not recovery: a bank that raised capital, sold its
+construction book or shrank its way back to a passing capital ratio was troubled when it
+was flagged, and a supervisor would have wanted the flag. Third, outside the crisis the
+picture inverts (74 percent of all-year flags still open after eight quarters, 12 percent
+acquired) because there were few failures to find at all, and a fixed 2 percent head has
+to be filled with somebody. The right reading is that the top 2 percent is a watch list
+rather than a verdict: roughly one flagged bank in seven fails within the year, one in
+four within a few years, one in ten is bought, and the rest are the banks that had the
+same symptoms and got better.
 """.strip()
 
 md("## 5. Interpretation\n\n" + INTERPRETATION)

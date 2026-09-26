@@ -211,7 +211,7 @@ Read the chart with the failure counts underneath it. Through 2016 every model h
 failures for the intervals to mean something, and in 2011-2014 all three fitted models
 rank the failures well (PR-AUC around 0.4-0.55, recall@2% above 0.8). In 2008, the first
 test year, the training data hold only the pre-crisis failures and the booster in
-particular has almost nothing to learn from (PR-AUC 0.11 against 0.30-0.35 for the
+particular has almost nothing to learn from (PR-AUC 0.12 against 0.30-0.35 for the
 logit, the hazard and the Texas ratio). From 2017 on the bars shrink to single digits
 and the intervals span most of the unit interval; section 7 comes back to that.
 
@@ -307,8 +307,10 @@ every partial dependence explainable to a supervisor at the cost of some flexibi
 Both variants were trained on the fixed split with the same hyper-parameters; the
 inner-validation PR-AUC (reports 2007Q1-2008Q4, inside the training period) is the
 number rule 6.7 allows for selection, and the test columns are what the choice would
-have delivered. The current setting is `settings.models.gbdt.monotone = False`, the
-config with the higher inner-validation score; the owner decides with both rows in view.
+have delivered. Both boosters take the raw registry features (no winsoriser: the 0.5
+percent clip erased the tail that carries the interest-rate signal). The current setting
+is `settings.models.gbdt.monotone = True`, the config with the higher inner-validation
+score on the raw inputs; the owner decides with both rows in view.
 """)
 
 code("""
@@ -329,18 +331,18 @@ mono.round(4)
 """)
 
 md("""
-Stated neutrally: on the fixed split the constrained booster scores lower on the
-inner-validation slice and higher on the 2010-2013 test rows, in three of the four test
-years. The inner slice is the only evidence a rule-6.7 selection may use; the test
-columns are what a reviewer would see afterwards. Neither ordering is a large gap
-against the year-to-year variation shown in section 3, so on the fixed split the choice
-is a policy call (explainability and guaranteed direction of effect against a free fit)
-rather than a statistical one. The walk-forward, which fits both configurations with
-their own per-year tuning, is less neutral: `gbdt_mono` pools to PR-AUC 0.31 [0.28, 0.35]
-and recall@2% 0.71 [0.69, 0.74] against 0.26 [0.24, 0.30] and 0.64 [0.60, 0.66] for
-`gbdt` (section 3 above, the recall intervals disjoint), because the constraints hold
-the booster's score scale together across years. The setting is unchanged until the
-owner decides; the production booster and the SHAP drivers are the unconstrained one.
+Stated neutrally: on the raw features the constrained booster scores higher on the
+inner-validation slice (0.214 against 0.158) and higher on the 2010-2013 test rows
+(PR-AUC 0.425 against 0.391), in all four test years. The inner slice is the only
+evidence a rule-6.7 selection may use; the test columns are what a reviewer would see
+afterwards. With winsorised inputs the two orderings had disagreed (the inner slice
+preferred the free fit), so the choice was a policy call; on the raw inputs both point
+the same way. The walk-forward, which fits both configurations with their own per-year
+tuning, agrees: `gbdt_mono` pools to PR-AUC 0.31 [0.28, 0.34] and recall@2% 0.71
+[0.68, 0.73] against 0.22 [0.19, 0.25] and 0.58 [0.55, 0.61] for `gbdt` (section 3
+above, both intervals disjoint), because the constraints hold the booster's score scale
+together across years. The production booster, the SHAP drivers and the case study
+(notebook 03) are the monotone one.
 
 ## 7. An honest paragraph on the years after 2014
 
@@ -377,7 +379,7 @@ md("""
 The same walk-forward was run at 8 quarters for the logit, the booster and the hazard
 (test years 2008-2023, since the 2024 windows are not yet complete). Longer horizons are
 harder for a model trained on the 8q label, and the booster suffers most: its 8q pooled
-PR-AUC is 0.09 against 0.26 for the logit, largely because its 2008 fit, trained on
+PR-AUC is 0.11 against 0.26 for the logit, largely because its 2008 fit, trained on
 almost no two-year failure windows, scores every 2008 row identically (ROC-AUC 0.50)
 and its raw scale drifts between the later years. The hazard, which
 learns the one-quarter event and is converted with `1 - (1 - h)^8`, pools to 0.41 with
@@ -396,8 +398,9 @@ md("""
 ## 9. Where this leaves Prototype 2
 
 - The walk-forward is the number to quote: pooled 4q PR-AUC of 0.33 (hazard), 0.31
-  (monotone booster), 0.31 (logit) and 0.26 (unconstrained booster) with overlapping
-  intervals, against 0.26 for the Texas ratio; recall@2% between 0.64 and 0.74. At 8q the
+  (monotone booster), 0.31 (logit) and 0.22 (unconstrained booster), against 0.26 for
+  the Texas ratio, the first three with overlapping intervals; recall@2% between 0.58
+  and 0.74. At 8q the
   hazard leads clearly (0.41). The fixed-split figures are higher because 2010-2013 is the
   easiest period to rank.
 - The flagged failures are flagged early: median lead of 4.5-5 quarters, 82-88 percent of

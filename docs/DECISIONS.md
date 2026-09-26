@@ -1187,3 +1187,38 @@ open for the owner to revisit.
   two unconstrained `gbdt` case-study records) were removed and `runs/index.jsonl` rebuilt,
   so the tables no longer show two rows per cell. `reports/p2_gbdt.md` was left as written by
   the raw-feature `train-gbdt` run; nothing was published or deployed.
+- 2026-09-26, step F5 (notebooks, model card, README, checklists, published tables). The
+  four notebooks were rebuilt from `scripts/make_notebook_0{2,3,4,5}.py` and re-executed in
+  place (02 in 39 s, 03 in 29 s, 04 and 05 in 4 s each, no error outputs); every hard-coded
+  number in their prose was moved to the raw-feature results (walk-forward `gbdt` 0.2248 /
+  0.5787, 8q 0.1059 / 0.2585; fixed-split `gbdt_mono` 0.425 against `gbdt` 0.391 with the
+  inner slice now agreeing, 0.214 against 0.158; sensitivity 4q 0.3913 / 8q 0.2385, lag 45d
+  0.2005 / 90d 0.1467; case study SVB 2,711 / 43.2nd percentile, Signature 301 / 93.7th,
+  First Republic 1,813 / 62.0th). Notebook 04 now studies `gbdt_mono`, not `gbdt`: the
+  `drivers` table holds monotone-booster rows only since the promotion, so the unconstrained
+  study could no longer print its named examples' drivers; the false-positive numbers moved
+  from 875 to 890 crisis bank-years (17.1 percent failed in 5-8q, 9.7 later, 10.0 acquired,
+  61.8 still open; 13.9 percent of all 8,553 flags failed inside the window) and the named
+  examples changed (Bank Midwest, Professional Business Bank, Hometown Community Bank, PNA
+  Bank, CommunityOne Bank). The 2010 and 2011 monotone boosters saturate (91 and 97
+  bank-quarters above 0.999) but tie only at one row each, so the `cert` tie-break note now
+  describes a block of near-certain scores rather than a tie. `docs/model_card.md` states
+  that the boosters take raw features (section 5), carries the regenerated pooled, per-year,
+  calibration (gbdt top decile 0.063 / 0.034, gbdt_mono 0.084 / 0.042), lead-time, case-study,
+  sensitivity and false-positive numbers, and its case-study paragraph says what the monotone
+  booster does and does not see about SVB: the right driver at the top (+0.47) with no
+  precedent for it. Re-running notebook 03 re-logged the four case-study records under the
+  same run ids and appended duplicates to `runs/index.jsonl`; the index was restored.
+  `uv run bankcanary publish` refilled all 13 tables in 76 s (run `publish-4q-acd1808a57`):
+  `scores.model_version` for the 2025-2026 quarters is `gbdt_mono-2022-12-31-8b3078e`,
+  `drivers.feature_value` for Silicon Valley Bank at 2022-12-31 is the raw -0.3301 (SHAP
+  +0.5168, rank 1), and the 2026Q2 leaderboard's rank 1 is now Tioga-Franklin Savings Bank
+  (cert 33802) at a calibrated probability of 1.0 on `d4q_texas_ratio = 14.08`, a raw tail
+  value the old clip hid and the thin 2024 isotonic map sends to its top bin. Two things
+  are recorded rather than fixed: the walk-forward `model_version` rows keep the sha
+  `bbc0230` because `publish.core._git_first_commit` names the commit that first added a
+  run record and the raw refit reproduced the same run ids (only the production row says
+  `8b3078e`); and a full publish leaves the database at 401.2 MB (400,382,999 bytes after
+  autovacuum, over the 400 MB test limit) until `VACUUM FULL`, after which it is 381.2 MB,
+  so the size check was run after the vacuum. `web/components/case-study/Narrative.tsx` still
+  tells the rank-245 story of the unconstrained booster and belongs to a web step.

@@ -9,6 +9,29 @@ deployment criterion is the owner's action and is marked pending with the exact 
 steps. Educational project, not a credit rating, not investment advice, not a supervisory
 assessment; FDIC insurance covers $250,000 per depositor, per bank, per ownership category.
 
+**Re-measured on 2026-09-26 after the raw-feature booster fix** (`8b3078e`..`d266664`: the
+boosters take the raw registry features, the walk-forward, calibration, SHAP and case study
+were regenerated, and `uv run bankcanary publish` refilled every table in 76 s, run
+`publish-4q-acd1808a57`). What changed in the database: `scores.model_version` for the 2025-2026
+quarters is `gbdt_mono-2022-12-31-8b3078e` (`quarters.model_version` of 2026-06-30 agrees);
+`drivers.feature_value` is the bank's own ratio (Silicon Valley Bank, cert 24735, 2022-12-31:
+`adjusted_tier1_leverage = -0.3301`, `shap_value = +0.5168`, rank 1, where the winsorised
+table had shown 3.94); the 2026Q2 rank 1 is now Tioga-Franklin Savings Bank (cert 33802,
+Philadelphia, PA) at a calibrated probability of 1.0 (`delta_prob_prior_q = 0.992`, its
+2026-03-31 row was 0.0081 at rank 3) on `d4q_texas_ratio = 14.08` (+1.82 log-odds), a value
+the old clip would have hidden and one the 2024 isotonic map, fitted on a handful of failures,
+sends to its top bin; the high band still holds 87 of 4,313 banks and `drivers` 21,565 rows for
+the quarter. The 2009 time machine is unchanged in substance (32,811 rows, 679 failures,
+recall@2% `0.374079528718704` in both `scores` and `walkforward_metrics`, 8,247 rows and 165
+`high` at 2009Q2) but its rank 1 is now California International Bank, N.A. (cert 57974, CA,
+probability 0.5), with Republic Federal Bank second. Two caveats stand: the walk-forward
+versions still carry the sha `bbc0230` (`gbdt_mono-2007-12-31-bbc0230` for 2009) because
+`publish.core._git_first_commit` names the commit that first added a run record and the raw
+refit reproduced the same run ids, so only the production row says `8b3078e`; and
+`pg_database_size` is 401,177,623 bytes (383 MiB, printed as 401.2 MB by the CLI), 1.2 MB
+above the 400 MB target after the raw-feature `drivers` rows. Neither was changed in this pass;
+the UI evidence rows below were rendered before the fix and are kept as measured.
+
 ## 1. A new quarter is picked up and published end-to-end without manual steps
 
 - [x] **Dry run against the latest quarter (2026Q2, `repdte = 2026-06-30`).** In one
@@ -20,7 +43,7 @@ assessment; FDIC insurance covers $250,000 per depositor, per bank, per ownershi
   | `scores` | 8,626 (4,313 `gbdt_mono` + 4,313 `hazard`) | 8,626 (4,313 + 4,313) |
   | `drivers` | 21,565 | 21,565 |
   | `map_quarters` | 4,257 | 4,257 |
-  | `quarters` | 1 | 1 (`label 2026Q2, n_banks 4313, model_year null, model_version gbdt_mono-2022-12-31-bbc0230`) |
+  | `quarters` | 1 | 1 (`label 2026Q2, n_banks 4313, model_year null, model_version gbdt_mono-2022-12-31-8b3078e`) |
 
   `quarters.max(repdte)` fell to 2026-03-31. `uv run bankcanary refresh` (no options) then
   printed `latest REPDTE (API): 2026-06-30; published (database): 2026-03-31`,
@@ -89,10 +112,10 @@ production version at that publish, because its refit rows have no version colum
 
 | rendered | page | database row(s) | model_version |
 |---|---|---|---|
-| "Banks scored 4,313" | `/` | `quarters` `repdte = 2026-06-30`: `n_banks = 4313`; equals `SELECT count(*) FROM scores WHERE model = 'gbdt_mono' AND repdte = '2026-06-30'` = 4,313 | `quarters.model_version = gbdt_mono-2022-12-31-bbc0230` |
-| "High band 87" | `/` | `SELECT count(*) FROM scores WHERE model = 'gbdt_mono' AND repdte = '2026-06-30' AND band = 'high'` = 87 (top 2% of 4,313 by rank, `percentile` rule of CONTRACT 15) | `scores.model_version = gbdt_mono-2022-12-31-bbc0230` on each of the 87 rows |
-| Rank 1 "Lamont Bank of St. John, Saint John, WA · cert 8681 · $51.12M · High · 40.0% · Change 0.00%" | `/` | `scores` `(cert 8681, repdte 2026-06-30, model gbdt_mono)`: `probability = 0.4, rank = 1, band = high, delta_prob_prior_q = 0.0` (the 2026-03-31 row has `probability = 0.4, rank = 2`, so the change is 0); `banks` `cert 8681`: `name, city, state, latest_assets = 51124.0` (thousands → $51.12M), `size_bucket = under_100m` | `scores.model_version = gbdt_mono-2022-12-31-bbc0230` |
-| Driver "Change in texas_ratio over the last 4 quarters is +78.87 pp … contribution +11.09" and "hazard model 4.3%" | `/bank/8681` | `drivers` `(cert 8681, repdte 2026-06-30, model gbdt_mono, rank 1)`: `feature = d4q_texas_ratio, shap_value = 11.088307, feature_value = 0.78868645, direction = raises`; `scores` `(8681, 2026-06-30, hazard)`: `probability = 0.04347826, rank = 2, band = high` | `drivers` rows belong to `gbdt_mono-2022-12-31-bbc0230`; the hazard row carries `hazard-2023-12-31-6740dae` |
+| "Banks scored 4,313" | `/` | `quarters` `repdte = 2026-06-30`: `n_banks = 4313`; equals `SELECT count(*) FROM scores WHERE model = 'gbdt_mono' AND repdte = '2026-06-30'` = 4,313 | `quarters.model_version = gbdt_mono-2022-12-31-8b3078e` |
+| "High band 87" | `/` | `SELECT count(*) FROM scores WHERE model = 'gbdt_mono' AND repdte = '2026-06-30' AND band = 'high'` = 87 (top 2% of 4,313 by rank, `percentile` rule of CONTRACT 15) | `scores.model_version = gbdt_mono-2022-12-31-8b3078e` on each of the 87 rows |
+| Rank 1 "Lamont Bank of St. John, Saint John, WA · cert 8681 · $51.12M · High · 40.0% · Change 0.00%" | `/` | `scores` `(cert 8681, repdte 2026-06-30, model gbdt_mono)`: `probability = 0.4, rank = 1, band = high, delta_prob_prior_q = 0.0` (the 2026-03-31 row has `probability = 0.4, rank = 2`, so the change is 0); `banks` `cert 8681`: `name, city, state, latest_assets = 51124.0` (thousands → $51.12M), `size_bucket = under_100m` | `scores.model_version = gbdt_mono-2022-12-31-8b3078e` |
+| Driver "Change in texas_ratio over the last 4 quarters is +78.87 pp … contribution +11.09" and "hazard model 4.3%" | `/bank/8681` | `drivers` `(cert 8681, repdte 2026-06-30, model gbdt_mono, rank 1)`: `feature = d4q_texas_ratio, shap_value = 11.088307, feature_value = 0.78868645, direction = raises`; `scores` `(8681, 2026-06-30, hazard)`: `probability = 0.04347826, rank = 2, band = high` | `drivers` rows belong to `gbdt_mono-2022-12-31-8b3078e`; the hazard row carries `hazard-2023-12-31-6740dae` |
 
 The profile page also shows ranks 2 and 3 of the same `drivers` query (`total_rbc_ratio`
 7.34%, +5.34; `wholesale_funding_ratio` 0.20%, +2.17), and the leaderboard's driver

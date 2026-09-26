@@ -106,7 +106,7 @@ horizon[COLS].round(4)
 md("""
 Both learners lose precision at 8 quarters, but very unequally. The logit falls from a
 PR-AUC of 0.444 to 0.376 and still catches 58 percent of the 24-month failures in its
-top 2 percent; the booster collapses from 0.432 to 0.133 and from 78 to 29 percent
+top 2 percent; the booster falls from 0.391 to 0.239 and from 79 to 50 percent
 recall. Two things explain the gap. A 24-month window makes the positives far more
 heterogeneous (1,295 test failures instead of 833, many of them banks that still looked
 ordinary two years out), and the 8q training set ends at 2007Q4, before the crisis had
@@ -132,12 +132,12 @@ censored[COLS].round(4)
 """)
 
 md("""
-Dropping the censored rows nudges every metric up by a little (logit PR-AUC 0.444 to
-0.456, booster 0.432 to 0.447, booster recall at 2 percent 0.779 to 0.806) and changes
-no ranking between the models. The direction is expected: merged-away banks are a mix
+Dropping the censored rows lifts both PR-AUCs a little (logit 0.444 to 0.456, booster
+0.391 to 0.427) while the booster's recall at 2 percent slips from 0.789 to 0.777, and it
+changes no ranking between the models. The direction is expected: merged-away banks are a mix
 of healthy targets and weak banks that found a buyer, so treating them all as survivors
 adds label noise, and removing them cleans up both the fit and the scoring. The size of
-the shift, about one hundredth of PR-AUC, says the headline results do not hinge on the
+the shift, one to four hundredths of PR-AUC, says the headline results do not hinge on the
 choice; keeping the rows remains the default because dropping them would make the model
 blind to exactly the weak banks that are rescued by acquisition.
 """)
@@ -160,13 +160,18 @@ lag[COLS].round(4)
 """)
 
 md("""
-Precision falls as the lag grows, for both learners and for a mechanical reason: a
+Precision falls for the logit as the lag grows, for a mechanical reason: a
 longer lag pushes the prediction date closer to the failure, so the reports that most
 obviously precede a failure are the ones dropped from the test set (`dropped_failed_before_avail`),
 and the failures that remain are the harder, more distant ones. The logit moves from
-0.469 to 0.444 to 0.427 in PR-AUC and the booster from 0.449 to 0.432 to 0.361; the 90-day
-cell costs the booster seven hundredths, the largest shift in this notebook after the
-horizon change. The 60-day default sits between a realistic publication delay and the
+0.469 to 0.444 to 0.427 in PR-AUC. The booster, which takes the raw features, does not
+move smoothly: 0.201 at 45 days, 0.391 at 60 and 0.147 at 90, with recall at 2 percent
+falling from 0.79 to 0.56 and 0.46, the largest shifts in this notebook. Both lag changes
+move a few hundred failures between the training and test windows, and a raw-feature
+booster fitted on 554 positives is sensitive to which ones it sees; the winsorised
+booster of the earlier version moved only from 0.449 to 0.432 to 0.361. This fragility
+is recorded rather than tuned away. The 60-day default sits between a realistic
+publication delay and the
 optimistic 45-day case, and the ordering of the models is the same at every lag, which is
 what the sensitivity was meant to establish. A dashboard user who scores banks the day
 the FDIC publishes should expect the 45-day numbers rather than the 60-day ones.
@@ -174,10 +179,12 @@ the FDIC publishes should expect the 45-day numbers rather than the 60-day ones.
 ## 4. What the three analyses say together
 
 Across horizon, censoring and lag the PR-AUC ranking of the two learners never changes,
-the logit is the less sensitive model in every table (largest shift 0.197 against the
-booster's 0.488, both from the horizon change), and the two cells that move the numbers
-by more than a few hundredths are the ones that change what is being predicted (a
-24-month window) or when (a 90-day lag). The default configuration is therefore neither
+the logit is the less sensitive model in every table (largest shift 0.197, from the
+horizon change, against the booster's 0.328, from the 90-day lag), and the cells that
+move the numbers by more than a few hundredths are the ones that change what is being
+predicted (a 24-month window) or when (the availability lag, to which the raw-feature
+booster is the more fragile model in both directions). The default configuration is
+therefore neither
 the most flattering nor the most conservative cell in any analysis.
 """)
 

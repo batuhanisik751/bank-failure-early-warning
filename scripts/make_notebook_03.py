@@ -157,7 +157,8 @@ md("""
 ## 3. What drove SVB's 2022Q4 score under each model
 
 For the boosters the contributions are SHAP values from the tree explainer on the
-winsorised inputs; for the logits they are coefficient times standardised value on the
+raw registry inputs (the booster pipeline has no winsoriser); for the logits they are
+coefficient times standardised value on the
 pipeline's own winsorise-impute-scale output. Both sum to the bank's log-odds minus the
 model's baseline (the expected log-odds for the booster, the intercept for the logit),
 so positive bars push SVB towards failure and negative bars away from it.
@@ -231,14 +232,15 @@ md("""
 **The credit ratios looked fine.** At 2022Q4 SVB's Texas ratio was 0.009 and its
 noncurrent ratio a few tenths of a percent, both well inside the healthy range, its
 equity-to-assets 7.4 percent and its liquid-assets ratio 0.62. Every large credit-only
-driver pushes it *towards* safety (`texas_ratio`, `liquid_assets_ratio`, `log_assets`);
-the small positive contributions come from nonfarm-nonresidential and multifamily loan
-shares. The credit-only models place it at the 55th-65th percentile: an ordinary bank.
-First Republic reads the same way (67th-75th). Signature is the one exception, and for
+driver but one pushes it *towards* safety (`texas_ratio`, `liquid_assets_ratio`,
+`log_assets`); the positive contributions come from its consumer and
+nonfarm-nonresidential loan shares. The credit-only models place it at the 56th-65th
+percentile: an ordinary bank.
+First Republic reads the same way (67th-80th). Signature is the one exception, and for
 a reason that has nothing to do with 2023: the credit-only logit ranks it 113th of
 4,773 (97.6th percentile) on its C&I loan share, CRE at three times capital and its
 multifamily book, which is the 2008-style concentration profile the model was trained
-to fear. The monotone booster does not share that view (73rd percentile).
+to fear. The monotone booster does not share that view (79th percentile).
 
 **What the rate-aware view adds, and where it falls short.** The `features_v2` columns
 show what the credit ratios cannot: SVB's unrealised securities losses reached 104
@@ -246,33 +248,36 @@ percent of Tier 1 capital by 2022Q4 (`unrealized_loss_to_tier1` = -1.04, against
 median of -0.24 and a 5th percentile of -0.61 among banks above $10 billion), its
 capital net of those losses was negative (`adjusted_tier1_leverage` = -0.33, where the
 same peers sat between 2.9 and 11.1) and 86 percent of its deposits were uninsured. The
-production booster sees the first of these: `adjusted_tier1_leverage` is SVB's largest
-driver at +0.51 log-odds. But that is all it sees, and the rest of the balance sheet
-pulls the other way (`total_rbc_ratio` 16.1, `securities_to_assets` 0.56, the Texas
-ratio, a tiny large-time-deposit share, the liquid-assets ratio and eight quarters
-without a loss together contribute -1.06), so SVB stays at rank 2,368 of 4,773 (50th
-percentile, 23rd of the 39
-banks above $100 billion). In the training years, negative capital net of securities
-losses was rare (116 bank-quarters) and 55 of those banks failed. The unconstrained
-booster of the earlier version of this notebook carved that pocket into a single leaf
-worth +2.1 and lifted SVB to rank 245 (94.9th percentile); the monotone fit spreads the
-effect of `adjusted_tier1_leverage` over its whole range instead, and the extreme value
-at SVB earns a fifth of that. The logit cannot use it either: its coefficients are
+booster now sees these values as they are: it takes the raw registry features, where
+the earlier winsorised fit had clipped the leverage to 3.94 and the loss ratio to -0.19
+before the trees saw them. `adjusted_tier1_leverage` is SVB's largest driver at +0.47
+log-odds and `uninsured_share` adds +0.16. But that is all it sees, and the rest of the
+balance sheet pulls the other way (`total_rbc_ratio` 16.1, `securities_to_assets` 0.56,
+the Texas ratio, a tiny large-time-deposit share, the liquid-assets ratio and eight
+quarters without a loss together contribute -1.06, and a falling unemployment rate and
+rising house prices another -0.27), so SVB sits at rank 2,711 of 4,773 (43rd
+percentile), below its credit-only rank. In the training years, negative capital net of
+securities losses was rare (116 bank-quarters) and 55 of those banks failed; the monotone
+fit spreads the effect of `adjusted_tier1_leverage` over its whole range, so the extreme
+value at SVB earns under half a log-odds rather than the single +2.1 leaf that the
+unconstrained, winsorised booster of an earlier version of this notebook had carved out
+(rank 245, 94.9th percentile). The logit cannot use it either: its coefficients are
 averages over 2001-2021, when a high uninsured share marked large, well-run banks
 (failed banks averaged 13 percent uninsured deposits, survivors 20 percent) and rising
 policy rates marked calm years, so `uninsured_share` and `macro_fedfunds_change_4q`
 enter with *safer* signs and offset the loss terms; the rate-aware logit leaves SVB at
 the 61st percentile. The rate-aware booster does more for the other two banks:
-Signature moves to rank 564 (88th percentile, second of the 39 banks above $100
-billion, on its C&I share and the four-quarter change in unrealised losses) and First
-Republic to rank 901 (81st; 258th, the 94.6th percentile, on its 2023Q1 report), and
-over every scored report with a complete label it pools better than the other three
-fits (PR-AUC 0.068 against 0.015-0.023, 13 failures). The honest summary is that the
-rate-aware features move the production booster in the right direction for all three
-banks but put none of them in the top 2 percent before they failed, that the one model
-which did flag SVB on the mechanism that failed it was the unconstrained booster the
-backtest rejected, and that the deposit-run side of the story is something no model
-trained on 2001-2021 outcomes could have learned.
+Signature moves to rank 301 (94th percentile, on its C&I share and the four-quarter
+change in unrealised losses) and First Republic to rank 1,813 (62nd; 911th, the 81st
+percentile, on its 2023Q1 report), and over every scored report with a complete label it
+pools far better than the other three fits (PR-AUC 0.159 against 0.015-0.027, 13
+failures), mostly on Signature's rank. The honest summary is that the rate-aware features
+put the right drivers at the top of the booster's explanation for all three banks and
+lift Signature to the top 7 percent, but put none of them in the top 2 percent before
+they failed; that SVB in particular is not flagged, because a monotone booster trained on
+2001-2021 has never seen negative adjusted leverage coincide with a spotless credit
+book and pristine capital ratios; and that the deposit-run side of the story is
+something no model trained on those outcomes could have learned.
 
 ## 6. Caveats
 
@@ -287,8 +292,8 @@ trained on 2001-2021 outcomes could have learned.
   were tuned on the P1 fixed split (rule 6.7) and reused unchanged. The booster shown is
   the production configuration (`settings.models.gbdt.monotone = true`, Decision Point
   2); the unconstrained `gbdt` stays available through `cs.build_model` for comparison,
-  and its rank 245 for SVB against the monotone fit's 2,368 is the clearest example of
-  what the constraints give up in exchange for a stable score scale across years.
+  and its winsorised-era rank 245 for SVB against the monotone fit's 2,711 is the clearest
+  example of what the constraints give up in exchange for a stable score scale across years.
 - **Probabilities stay small.** Even SVB's rate-aware booster score is 0.0001: the
   models rank, they do not sound an alarm, and the value of the case study is the rank.
 - **The labels' 2023Q1 gap.** SVB and Signature never filed a 2023Q1 report; First

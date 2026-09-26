@@ -144,14 +144,14 @@ bank-quarters, 2,103 failures; 95% intervals from 200 cluster-bootstrap draws by
 | model | PR-AUC | 95% CI | recall @ top 2% | 95% CI | ROC-AUC |
 |---|---|---|---|---|---|
 | hazard (discrete-time, Shumway 2001) | 0.3268 | [0.294, 0.357] | 0.7038 | [0.679, 0.730] | 0.9575 |
-| gbdt_mono (LightGBM, registry monotone signs) | 0.3138 | [0.282, 0.345] | 0.7147 | [0.692, 0.739] | 0.8993 |
+| gbdt_mono (LightGBM, registry monotone signs, raw features) | 0.3131 | [0.284, 0.342] | 0.7066 | [0.678, 0.733] | 0.9119 |
 | logit (all 83 features, L2, per-year C) | 0.3056 | [0.275, 0.334] | 0.6833 | [0.657, 0.713] | 0.9601 |
-| gbdt (LightGBM, unconstrained, per-year tuning) | 0.2647 | [0.236, 0.297] | 0.6367 | [0.603, 0.663] | 0.8204 |
+| gbdt (LightGBM, unconstrained, raw features, per-year tuning) | 0.2248 | [0.191, 0.249] | 0.5787 | [0.547, 0.605] | 0.7805 |
 | texas (rank by Texas ratio) | 0.2606 | [0.226, 0.298] | 0.7437 | [0.716, 0.771] | 0.9599 |
 
 **8-quarter horizon** (2008-2023 pooled, 407,621 bank-quarters, 3,768 failures): hazard
 PR-AUC 0.4113 [0.382, 0.442], recall@2% 0.6598; logit 0.2566 [0.225, 0.288], 0.5207; gbdt
-0.0887 [0.070, 0.108], 0.2200.
+0.1059 [0.086, 0.127], 0.2585.
 
 The honest reading: the hazard model pools best at both horizons; at 4q its interval
 overlaps the logit's, so the backtest does not separate them, while at 8q it is clearly
@@ -160,12 +160,14 @@ the most failures in its top 2%. The unconstrained gradient booster is competiti
 year from 2010 on and weakest pooled, because its early years are starved of failures and
 its score scale drifts between years; the same booster under the feature registry's
 monotone signs keeps its scale, pools second and is the production model (Decision Point 2,
-taken 2026-09-26: the inner validation slice preferred the unconstrained booster, the backtest
-prefers the constrained one with disjoint recall intervals, so `settings.models.gbdt.monotone
-= true`). `models/production/` holds the promoted 2024 walk-forward `gbdt_mono` and `hazard`
-fits with a `model_version.json` each (`scripts/promote_production_models.py`); the SHAP
-drivers and the 2023 case study use the monotone booster, which puts Silicon Valley Bank at
-the median in 2022Q4 where the unconstrained fit had reached the 95th percentile.
+taken 2026-09-26: the backtest prefers the constrained booster with both intervals disjoint,
+and on the raw features so does the inner validation slice, so `settings.models.gbdt.monotone
+= true`). Both boosters take the raw registry features: the 0.5 percent winsorisation the
+linear models keep had clipped away the tail that carries the interest-rate signal (SVB's
+adjusted leverage of -0.33 reached the trees as 3.94). `models/production/` holds the promoted
+2024 walk-forward `gbdt_mono` and `hazard` fits with a `model_version.json` each
+(`scripts/promote_production_models.py`); the SHAP drivers and the 2023 case study use the
+monotone booster.
 Calibrated probabilities track the observed failure rate for the logit and hazard (pooled
 Brier 0.0041 raw, 0.0038 calibrated; top decile 0.042 predicted against 0.045 observed for
 the logit). Per-year tables with failure counts, Brier scores and reliability curves are in
@@ -175,11 +177,14 @@ failed in 2009-2012, the logit had put 89.8% in some quarter's top 2% before the
 median 5 quarters ahead, 87.7% at least two quarters ahead (hazard 90.5% / 5 / 88.4%).
 
 **The 2023 question.** A credit-only model trained through 2021 put Silicon Valley Bank at
-the 65th percentile of all banks on its last report before failure, and adding the
-interest-rate and uninsured-deposit features lifts it to the 95th percentile (rank 245 of
-4,773) in the gradient booster but not in the logit, which had learned over twenty years
-that uninsured deposits marked size rather than risk. None of the four models put SVB in
-its top 2%, Signature was flagged only by the credit-only logit on its concentration
+the 56th-65th percentile of all banks on its last report before failure. Adding the
+interest-rate and uninsured-deposit features makes its negative capital net of unrealised
+securities losses (`adjusted_tier1_leverage` -0.33) the booster's top driver, +0.47
+log-odds, yet the rest of a spotless credit book pulls harder and SVB ends at the 43rd
+percentile (rank 2,711 of 4,773); the logit had learned over twenty years that uninsured
+deposits marked size rather than risk and cancels the loss terms. The same features lift
+Signature to the 94th percentile (rank 301). None of the four models put any of the three
+in its top 2%, Signature was flagged only by the credit-only logit on its concentration
 profile, and First Republic by nothing.
 
 **Prototype 3** promotes the 2024 walk-forward `gbdt_mono` fit to the production model
@@ -191,10 +196,10 @@ probability), and publishes 13 tables that stay under Neon's 400 MB free tier
 that got there). The time machine reproduces the backtest exactly: a quarter's rows come
 from the walk-forward model of its test year, and a database test checks that their
 recall@2% equals the `walkforward_metrics` value. The 2023 pages show the finding above
-rather than hide it: the production model did not flag Silicon Valley Bank (median in
-2022Q4), the interest-rate and uninsured-deposit features lift it to the 95th percentile only
-in the unconstrained booster, and the case study explains why twenty years of training
-history argued against reading those features as risk.
+rather than hide it: the production model did not flag Silicon Valley Bank (43rd percentile
+in 2022Q4) even though its top driver is the right one, and the case study explains why twenty
+years of training history, in which negative adjusted leverage never came with a clean credit
+book, argued against reading those features as risk.
 
 **Notebooks** (each executed in place, none retrains a walk-forward model):
 [`01_foundation`](notebooks/01_foundation.ipynb) (data, labels, Prototype 1 baselines),
