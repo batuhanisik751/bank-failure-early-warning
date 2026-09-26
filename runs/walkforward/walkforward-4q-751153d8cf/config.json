@@ -1,0 +1,45 @@
+{
+  "availability_lag_days": 60,
+  "backend": "lightgbm",
+  "features_version": "v2",
+  "first_test_prediction_date": "2022-05-30",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "iterations_capped": false,
+  "model": "gbdt",
+  "monotone": false,
+  "n_features": 83,
+  "n_test": 19285,
+  "n_train": 607303,
+  "params": {
+    "learning_rate": 0.03,
+    "min_samples_leaf": 200,
+    "n_estimators": 200,
+    "num_leaves": 15
+  },
+  "positives_test": 17,
+  "positives_train": 2226,
+  "test_year": 2022,
+  "train_repdte_max": "2020-12-31",
+  "train_repdte_min": "2001-03-31",
+  "tuning": {
+    "fallback": null,
+    "inner_train_repdte_max": "2017-12-31",
+    "metric": "pr_auc",
+    "n_inner_train": 543165,
+    "n_validation": 41837,
+    "positives_inner_train": 2194,
+    "positives_validation": 22,
+    "selected": {
+      "learning_rate": 0.03,
+      "min_samples_leaf": 200,
+      "n_estimators": 200,
+      "num_leaves": 15
+    },
+    "sufficient": true,
+    "validation_end": "2020-12-31",
+    "validation_quarters": 8,
+    "validation_start": "2019-03-31"
+  }
+}

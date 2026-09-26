@@ -648,3 +648,18 @@ open for the owner to revisit.
   longer horizon than a logit trained on the 8q label, which has to learn from windows that
   span two years of regime. Its isotonic map (full-model scorer) over-predicts 2010-2011
   (pooled Brier 0.0070 raw, 0.0080 calibrated) and is reported as such.
+- 2026-09-25 — **Remaining 4q walk-forward years regenerated with per-year tuning.** The
+  per-year tuning fix (f6fec75) had left 13 4q artefacts on the earlier fixed
+  hyper-parameters (no `tuning` key in `config.json`): 2020 `gbdt` and 2021-2024 `logit`,
+  `gbdt`, `hazard`; `texas` needs no fit and `gbdt_mono` was already consistent. Each pair
+  was refitted one model per call with `--no-rebuild` and `walkforward_scores` rebuilt once
+  from the per-year files; every 4q config now carries `tuning` whose `validation_end`
+  precedes the year's first prediction date. Refitted PR-AUC (4q): 2020 gbdt 0.0074 (was
+  0.5048 on 4 failures; the slice picked `learning_rate 0.1, num_leaves 63`), 2022 logit
+  0.0219 / gbdt 0.0092 / hazard 0.0048, 2023 logit 0.0417 / gbdt 0.1289 / hazard 0.0116,
+  2024 logit 0.1117 / gbdt 0.0578 / hazard 0.0283; 2021 has no failures. All of these years
+  hold at most 17 failures, so the changes sit inside the low-confidence intervals already
+  reported. The superseded `runs/walkforward/` records (80 directories not matching any
+  current `models/walkforward` config, among them the 17 v1-comparison runs kept on
+  purpose) are left in place: no pruning helper exists in `scripts/` or `tracking`, and the
+  index still names them. `reports/walkforward.md` is not regenerated in this pass.
