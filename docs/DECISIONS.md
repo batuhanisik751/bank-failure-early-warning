@@ -984,3 +984,13 @@ open for the owner to revisit.
   forces verified TLS, so the Vercel value carries `sslmode=verify-full` only. No
   `web/vercel.json`: the root directory is a project setting and Next.js is auto-detected.
   Nothing was deployed and no external account was touched.
+- 2026-09-26 — **CI: pytest runs with `_TYPER_FORCE_DISABLE_TERMINAL=1` and without
+  `GITHUB_OUTPUT`.** The first CI run after the web app landed failed five Python tests that
+  pass locally: Typer forces Rich's terminal mode whenever `GITHUB_ACTIONS` is set, so
+  `--help` comes out boxed and coloured with the option's first `-` styled separately
+  (`'--variant' in output` is false), and the runner exports `GITHUB_OUTPUT`, so
+  `write_github_output` writes a file in the test that expects it to do nothing. Both are
+  environment, not code, so the pytest step neutralises them; the tests themselves should
+  still become hermetic (`monkeypatch.delenv("GITHUB_OUTPUT")`, help assertions on
+  `_TYPER_FORCE_DISABLE_TERMINAL` set in `conftest.py`), which belongs to the steps that own
+  those files.

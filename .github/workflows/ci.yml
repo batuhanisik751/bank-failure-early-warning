@@ -42,7 +42,12 @@ jobs:
 
       - name: Pytest
         # Tests that need Postgres skip when DATABASE_URL is unset; everything else is synthetic.
-        run: uv run pytest
+        # Typer switches to a boxed, coloured help layout when GITHUB_ACTIONS is set, which
+        # breaks the `--flag in --help output` tests, and the runner's GITHUB_OUTPUT would make
+        # refresh.write_github_output write when the test expects it not to.
+        env:
+          _TYPER_FORCE_DISABLE_TERMINAL: "1"
+        run: env -u GITHUB_OUTPUT uv run pytest
 
   web:
     name: Web (lint + typecheck + unit tests)
