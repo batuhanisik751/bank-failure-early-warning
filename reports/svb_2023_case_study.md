@@ -20,15 +20,15 @@ Scored reports with a complete label: pr_auc 0.0145, recall_at_top100 0.2308, n 
 
 | bank | cert | quarter | probability | rank | percentile | n_scored |
 |---|---|---|---|---|---|---|
-| Signature Bank | 57053 | 2022Q3 | 0.0001 | 998 | 79.2645 | 4813 |
-| First Republic Bank | 59017 | 2022Q3 | 0.0001 | 1129 | 76.5427 | 4813 |
-| Silicon Valley Bank | 24735 | 2022Q3 | 0.0001 | 2600 | 45.9796 | 4813 |
-| First Republic Bank | 59017 | 2022Q4 | 0.0001 | 1207 | 74.7119 | 4773 |
-| Signature Bank | 57053 | 2022Q4 | 0.0001 | 1279 | 73.2034 | 4773 |
-| Silicon Valley Bank | 24735 | 2022Q4 | 0.0001 | 2149 | 54.9759 | 4773 |
-| First Republic Bank | 59017 | 2023Q1 | 0.0001 | 1181 | 75.0844 | 4740 |
+| First Republic Bank | 59017 | 2022Q3 | 0.0001 | 1052 | 78.1425 | 4813 |
+| Signature Bank | 57053 | 2022Q3 | 0.0001 | 1259 | 73.8417 | 4813 |
+| Silicon Valley Bank | 24735 | 2022Q3 | 0.0001 | 1980 | 58.8614 | 4813 |
+| First Republic Bank | 59017 | 2022Q4 | 0.0001 | 978 | 79.5097 | 4773 |
+| Signature Bank | 57053 | 2022Q4 | 0.0001 | 1008 | 78.8812 | 4773 |
+| Silicon Valley Bank | 24735 | 2022Q4 | 0.0001 | 2089 | 56.2330 | 4773 |
+| First Republic Bank | 59017 | 2023Q1 | 0.0002 | 863 | 81.7932 | 4740 |
 
-Scored reports with a complete label: pr_auc 0.0196, recall_at_top100 0.2308, n 14326, n_failures 13
+Scored reports with a complete label: pr_auc 0.0270, recall_at_top100 0.2308, n 14326, n_failures 13
 
 ## rate_aware / logit
 
@@ -48,15 +48,15 @@ Scored reports with a complete label: pr_auc 0.0228, recall_at_top100 0.2308, n 
 
 | bank | cert | quarter | probability | rank | percentile | n_scored |
 |---|---|---|---|---|---|---|
-| Signature Bank | 57053 | 2022Q3 | 0.0003 | 491 | 89.7985 | 4813 |
-| First Republic Bank | 59017 | 2022Q3 | 0.0002 | 734 | 84.7496 | 4813 |
-| Silicon Valley Bank | 24735 | 2022Q3 | 0.0001 | 2106 | 56.2435 | 4813 |
-| Signature Bank | 57053 | 2022Q4 | 0.0003 | 564 | 88.1835 | 4773 |
-| First Republic Bank | 59017 | 2022Q4 | 0.0002 | 901 | 81.1230 | 4773 |
-| Silicon Valley Bank | 24735 | 2022Q4 | 0.0001 | 2368 | 50.3876 | 4773 |
-| First Republic Bank | 59017 | 2023Q1 | 0.0004 | 258 | 94.5570 | 4740 |
+| Signature Bank | 57053 | 2022Q3 | 0.0003 | 295 | 93.8708 | 4813 |
+| First Republic Bank | 59017 | 2022Q3 | 0.0001 | 1541 | 67.9825 | 4813 |
+| Silicon Valley Bank | 24735 | 2022Q3 | 0.0001 | 2098 | 56.4097 | 4813 |
+| Signature Bank | 57053 | 2022Q4 | 0.0004 | 301 | 93.6937 | 4773 |
+| First Republic Bank | 59017 | 2022Q4 | 0.0001 | 1813 | 62.0155 | 4773 |
+| Silicon Valley Bank | 24735 | 2022Q4 | 0.0001 | 2711 | 43.2013 | 4773 |
+| First Republic Bank | 59017 | 2023Q1 | 0.0002 | 911 | 80.7806 | 4740 |
 
-Scored reports with a complete label: pr_auc 0.0676, recall_at_top100 0.3077, n 14326, n_failures 13
+Scored reports with a complete label: pr_auc 0.1590, recall_at_top100 0.2308, n 14326, n_failures 13
 
 ## Drivers, credit_only / logit (baseline log-odds -7.947, contributions sum -0.168)
 
@@ -73,20 +73,20 @@ Scored reports with a complete label: pr_auc 0.0676, recall_at_top100 0.3077, n 
 | early_delinquency | 0.0014 | -0.1830 | safer |
 | construction_to_capital | 0.0237 | -0.1685 | safer |
 
-## Drivers, credit_only / gbdt_mono (baseline log-odds -8.964, contributions sum -0.472)
+## Drivers, credit_only / gbdt_mono (baseline log-odds -8.868, contributions sum -0.410)
 
 | feature | value | contribution | direction |
 |---|---|---|---|
-| texas_ratio | 0.0088 | -0.3066 | safer |
-| liquid_assets_ratio | 0.6244 | -0.2415 | safer |
-| total_rbc_ratio | 16.0507 | -0.2184 | safer |
-| share_consumer | 0.0069 | 0.2109 | riskier |
-| equity_to_assets | 0.0739 | 0.1758 | riskier |
-| log_assets | 19.1580 | -0.1685 | safer |
-| tier1_leverage | 7.9626 | 0.1368 | riskier |
-| share_ci | 0.2572 | 0.1297 | riskier |
-| asset_growth_12q | 1.0948 | 0.1182 | riskier |
-| noncurrent_ratio | 0.0019 | -0.0929 | safer |
+| texas_ratio | 0.0088 | -0.3173 | safer |
+| share_consumer | 0.0069 | 0.2836 | riskier |
+| liquid_assets_ratio | 0.6244 | -0.1640 | safer |
+| total_rbc_ratio | 16.0507 | -0.1573 | safer |
+| log_assets | 19.1580 | -0.1316 | safer |
+| tier1_leverage | 7.9626 | 0.1238 | riskier |
+| noncurrent_ratio | 0.0019 | -0.1197 | safer |
+| equity_to_assets | 0.0739 | 0.1126 | riskier |
+| asset_growth_12q | 1.0948 | 0.1054 | riskier |
+| tangible_equity_to_assets | 0.0727 | 0.1004 | riskier |
 
 ## Drivers, rate_aware / logit (baseline log-odds -8.304, contributions sum -0.092)
 
@@ -103,17 +103,17 @@ Scored reports with a complete label: pr_auc 0.0676, recall_at_top100 0.3077, n 
 | d4q_unrealized_loss_to_tier1 | -0.9639 | 0.2050 | riskier |
 | adjusted_tier1_leverage | -0.3301 | 0.1957 | riskier |
 
-## Drivers, rate_aware / gbdt_mono (baseline log-odds -8.957, contributions sum -0.160)
+## Drivers, rate_aware / gbdt_mono (baseline log-odds -8.755, contributions sum -0.409)
 
 | feature | value | contribution | direction |
 |---|---|---|---|
-| adjusted_tier1_leverage | -0.3301 | 0.5144 | riskier |
-| total_rbc_ratio | 16.0507 | -0.2372 | safer |
-| securities_to_assets | 0.5612 | -0.2182 | safer |
-| macro_dgs10 | 3.9200 | 0.2044 | riskier |
-| equity_to_assets | 0.0739 | 0.1613 | riskier |
-| texas_ratio | 0.0088 | -0.1574 | safer |
-| large_time_deposit_share | 0.0080 | -0.1537 | safer |
-| liquid_assets_ratio | 0.6244 | -0.1472 | safer |
-| neg_roa_quarters_last_8 | 0.0000 | -0.1442 | safer |
-| macro_unemp_change_4q | -1.0000 | -0.1407 | safer |
+| adjusted_tier1_leverage | -0.3301 | 0.4670 | riskier |
+| securities_to_assets | 0.5612 | -0.2349 | safer |
+| total_rbc_ratio | 16.0507 | -0.2257 | safer |
+| texas_ratio | 0.0088 | -0.1718 | safer |
+| macro_unemp_change_4q | -1.0000 | -0.1712 | safer |
+| uninsured_share | 0.8644 | 0.1581 | riskier |
+| large_time_deposit_share | 0.0080 | -0.1504 | safer |
+| neg_roa_quarters_last_8 | 0.0000 | -0.1481 | safer |
+| liquid_assets_ratio | 0.6244 | -0.1255 | safer |
+| macro_hpi_change_4q | 0.1312 | -0.1004 | safer |

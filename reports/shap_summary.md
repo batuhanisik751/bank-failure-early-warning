@@ -6,54 +6,54 @@
 
 | feature | mean_abs_shap | share | mean_abs_2009 | mean_abs_2023 |
 |---|---|---|---|---|
-| texas_ratio | 0.2028 | 0.0696 | 0.3425 | 0.1751 |
-| macro_unemp_change_4q | 0.2099 | 0.0580 | 0.1925 | 0.1009 |
-| macro_hpi_change_4q | 0.2472 | 0.0551 | 1.0587 | 0.0729 |
-| securities_to_assets | 0.1701 | 0.0544 | 0.2988 | 0.1588 |
-| total_rbc_ratio | 0.1493 | 0.0517 | 0.0030 | 0.1830 |
-| macro_dgs10 | 0.1572 | 0.0440 | 0.1783 | 0.1747 |
-| adjusted_tier1_leverage | 0.1629 | 0.0407 | 0.3030 | 0.1520 |
-| neg_roa_quarters_last_8 | 0.1193 | 0.0394 | 0.0430 | 0.1560 |
-| equity_to_assets | 0.1073 | 0.0328 | 0.0684 | 0.0968 |
-| d4q_texas_ratio | 0.1033 | 0.0303 | 0.0318 | 0.0742 |
-| share_consumer | 0.1589 | 0.0280 | 0.0259 | 0.0624 |
-| log_assets | 0.1016 | 0.0280 | 0.0774 | 0.0774 |
-| roa_q | 0.0744 | 0.0267 | 0.1066 | 0.0722 |
-| early_delinquency | 0.0849 | 0.0254 | 0.0459 | 0.0535 |
-| large_time_deposit_share | 0.0845 | 0.0242 | 0.0064 | 0.1056 |
-| d4q_equity_to_assets | 0.0652 | 0.0219 | 0.0178 | 0.0586 |
-| share_agri | 0.0790 | 0.0187 | 0.0837 | 0.0600 |
-| share_residential | 0.0906 | 0.0185 | 0.0514 | 0.0451 |
-| brokered_share | 0.0562 | 0.0180 | 0.0988 | 0.0416 |
-| bkclass_NM | 0.0659 | 0.0165 | 0.0557 | 0.0285 |
+| texas_ratio | 0.1874 | 0.0666 | 0.0680 | 0.1686 |
+| macro_unemp_change_4q | 0.2294 | 0.0621 | 0.1940 | 0.1226 |
+| securities_to_assets | 0.1679 | 0.0536 | 0.2547 | 0.1713 |
+| total_rbc_ratio | 0.1629 | 0.0528 | 0.0101 | 0.1744 |
+| macro_hpi_change_4q | 0.2208 | 0.0500 | 1.0706 | 0.0862 |
+| macro_dgs10 | 0.1776 | 0.0498 | 0.1019 | 0.1726 |
+| neg_roa_quarters_last_8 | 0.1342 | 0.0419 | 0.0869 | 0.1599 |
+| adjusted_tier1_leverage | 0.1574 | 0.0409 | 0.2922 | 0.1920 |
+| d4q_texas_ratio | 0.1102 | 0.0325 | 0.2846 | 0.0756 |
+| equity_to_assets | 0.0925 | 0.0304 | 0.0772 | 0.0887 |
+| log_assets | 0.0998 | 0.0265 | 0.0872 | 0.0720 |
+| early_delinquency | 0.0806 | 0.0252 | 0.0858 | 0.0453 |
+| roa_q | 0.0668 | 0.0250 | 0.0028 | 0.0732 |
+| large_time_deposit_share | 0.0799 | 0.0246 | 0.0083 | 0.0909 |
+| d4q_equity_to_assets | 0.0654 | 0.0222 | 0.0097 | 0.0535 |
+| share_consumer | 0.0771 | 0.0202 | 0.0347 | 0.0620 |
+| share_agri | 0.0823 | 0.0201 | 0.0892 | 0.0691 |
+| afs_unrealized_to_tier1 | 0.0769 | 0.0181 | 0.1485 | 0.1976 |
+| bkclass_NM | 0.0680 | 0.0178 | 0.0648 | 0.0376 |
+| brokered_share | 0.0548 | 0.0175 | 0.1074 | 0.0416 |
 
-Shift in mean |SHAP| from 2009 to 2023: rose most for `total_rbc_ratio` (+0.180), `neg_roa_quarters_last_8` (+0.113), `large_time_deposit_share` (+0.099); fell most for `macro_hpi_change_4q` (-0.986), `asset_growth_12q` (-0.186), `texas_ratio` (-0.167). The crisis-year booster leans on credit quality and the housing cycle, the recent one on rate sensitivity (unrealised losses, the funds-rate change) and capital.
+Shift in mean |SHAP| from 2009 to 2023: rose most for `total_rbc_ratio` (+0.164), `texas_ratio` (+0.101), `large_time_deposit_share` (+0.083); fell most for `macro_hpi_change_4q` (-0.984), `d4q_texas_ratio` (-0.209), `bank_age_years` (-0.170). The crisis-year booster leans on credit quality and the housing cycle, the recent one on rate sensitivity (unrealised losses, the funds-rate change) and capital.
 
 ## Feature-importance smoke test (spec rule 6.6)
 
-Largest per-year normalised share: `texas_ratio` at 7.0%; the top three together carry 18.3%. Threshold 40%: no feature is flagged; importance is spread across capital, asset-quality, earnings and sensitivity ratios, with no single field acting as a failure marker.
+Largest per-year normalised share: `texas_ratio` at 6.7%; the top three together carry 18.2%. Threshold 40%: no feature is flagged; importance is spread across capital, asset-quality, earnings and sensitivity ratios, with no single field acting as a failure marker.
 
 ## Per-year top feature
 
 | year | top_feature | top_share | second_feature | third_feature |
 |---|---|---|---|---|
-| 2008 | macro_hpi_change_4q | 0.1569 | log_assets | asset_growth_12q |
-| 2009 | macro_hpi_change_4q | 0.1957 | texas_ratio | adjusted_tier1_leverage |
-| 2010 | macro_hpi_change_4q | 0.1429 | texas_ratio | adjusted_tier1_leverage |
-| 2011 | macro_hpi_change_4q | 0.0879 | macro_unemp_change_4q | adjusted_tier1_leverage |
-| 2012 | texas_ratio | 0.0955 | macro_hpi_change_4q | macro_dgs10 |
-| 2013 | texas_ratio | 0.1108 | securities_to_assets | total_rbc_ratio |
-| 2014 | texas_ratio | 0.0833 | total_rbc_ratio | macro_dgs10 |
-| 2015 | texas_ratio | 0.1132 | total_rbc_ratio | securities_to_assets |
-| 2016 | texas_ratio | 0.0857 | total_rbc_ratio | macro_unemp_change_4q |
-| 2017 | total_rbc_ratio | 0.0751 | texas_ratio | macro_unemp_change_4q |
-| 2018 | texas_ratio | 0.0828 | total_rbc_ratio | macro_unemp_change_4q |
-| 2019 | texas_ratio | 0.0764 | total_rbc_ratio | securities_to_assets |
-| 2020 | macro_unemp_change_4q | 0.1040 | securities_to_assets | texas_ratio |
-| 2021 | macro_unemp_change_4q | 0.0927 | securities_to_assets | texas_ratio |
-| 2022 | total_rbc_ratio | 0.0749 | adjusted_tier1_leverage | macro_unemp_change_4q |
-| 2023 | total_rbc_ratio | 0.0655 | texas_ratio | macro_dgs10 |
-| 2024 | share_consumer | 0.1498 | nim_q | share_residential |
-| production | share_consumer | 0.1684 | nim_q | share_residential |
+| 2008 | macro_hpi_change_4q | 0.0940 | adjusted_tier1_leverage | log_assets |
+| 2009 | macro_hpi_change_4q | 0.1998 | adjusted_tier1_leverage | d4q_texas_ratio |
+| 2010 | macro_hpi_change_4q | 0.1492 | texas_ratio | macro_unemp_change_4q |
+| 2011 | macro_unemp_change_4q | 0.0859 | macro_hpi_change_4q | adjusted_tier1_leverage |
+| 2012 | texas_ratio | 0.0889 | macro_dgs10 | macro_hpi_change_4q |
+| 2013 | texas_ratio | 0.1208 | macro_dgs10 | total_rbc_ratio |
+| 2014 | texas_ratio | 0.0864 | macro_dgs10 | total_rbc_ratio |
+| 2015 | texas_ratio | 0.1115 | total_rbc_ratio | macro_unemp_change_4q |
+| 2016 | texas_ratio | 0.0846 | total_rbc_ratio | macro_unemp_change_4q |
+| 2017 | texas_ratio | 0.0759 | macro_unemp_change_4q | large_time_deposit_share |
+| 2018 | texas_ratio | 0.0804 | total_rbc_ratio | macro_unemp_change_4q |
+| 2019 | texas_ratio | 0.0841 | total_rbc_ratio | securities_to_assets |
+| 2020 | macro_unemp_change_4q | 0.1072 | securities_to_assets | texas_ratio |
+| 2021 | macro_unemp_change_4q | 0.0974 | securities_to_assets | texas_ratio |
+| 2022 | macro_hpi_change_4q | 0.0657 | total_rbc_ratio | macro_unemp_change_4q |
+| 2023 | afs_unrealized_to_tier1 | 0.0661 | adjusted_tier1_leverage | total_rbc_ratio |
+| 2024 | macro_dgs10 | 0.0711 | total_rbc_ratio | macro_unemp_change_4q |
+| production | total_rbc_ratio | 0.0744 | macro_dgs10 | macro_unemp_change_4q |
 
 ![SHAP beeswarm, latest booster](figures/shap_summary_latest.png)

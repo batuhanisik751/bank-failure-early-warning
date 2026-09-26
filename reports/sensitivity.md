@@ -8,10 +8,10 @@ Fixed out-of-time split (train reports 2002-03-31..2008-12-31, rule 6.2 trimmed;
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | logit | 4q | 252330 | 554 | 2008-12-31 | 0.4437 | 0.9823 | 0.7815 | 0.0840 | 0.0051 | 118696 | 833 |
 | logit | 8q | 218358 | 660 | 2007-12-31 | 0.3764 | 0.9658 | 0.5846 | 0.0471 | 0.0084 | 118696 | 1295 |
-| gbdt | 4q | 252330 | 554 | 2008-12-31 | 0.4324 | 0.9840 | 0.7791 | 0.0732 | 0.0052 | 118696 | 833 |
-| gbdt | 8q | 218358 | 660 | 2007-12-31 | 0.1328 | 0.9029 | 0.2911 | 0.0263 | 0.0105 | 118696 | 1295 |
+| gbdt | 4q | 252330 | 554 | 2008-12-31 | 0.3913 | 0.9814 | 0.7887 | 0.0792 | 0.0062 | 118696 | 833 |
+| gbdt | 8q | 218358 | 660 | 2007-12-31 | 0.2385 | 0.9518 | 0.4950 | 0.0301 | 0.0101 | 118696 | 1295 |
 
-What moves: gbdt recall at 2% goes from 0.7791 (4q) to 0.2911 (8q, -0.4880), the largest shift in the table.
+What moves: gbdt recall at 2% goes from 0.7887 (4q) to 0.4950 (8q, -0.2937), the largest shift in the table.
 What does not: logit is the less sensitive model (largest shift 0.1970), and the PR-AUC ranking of the models is the same under every variant.
 
 ## Censored rows: kept against dropped from training and test
@@ -20,10 +20,10 @@ What does not: logit is the less sensitive model (largest shift 0.1970), and the
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | logit | kept | 252330 | 554 | 2008-12-31 | 0.4437 | 0.9823 | 0.7815 | 0.0840 | 0.0051 | 118696 | 833 |
 | logit | dropped | 243793 | 554 | 2008-12-31 | 0.4559 | 0.9826 | 0.7839 | 0.0876 | 0.0051 | 114819 | 833 |
-| gbdt | kept | 252330 | 554 | 2008-12-31 | 0.4324 | 0.9840 | 0.7791 | 0.0732 | 0.0052 | 118696 | 833 |
-| gbdt | dropped | 243793 | 554 | 2008-12-31 | 0.4467 | 0.9857 | 0.8055 | 0.0756 | 0.0053 | 114819 | 833 |
+| gbdt | kept | 252330 | 554 | 2008-12-31 | 0.3913 | 0.9814 | 0.7887 | 0.0792 | 0.0062 | 118696 | 833 |
+| gbdt | dropped | 243793 | 554 | 2008-12-31 | 0.4265 | 0.9826 | 0.7767 | 0.0756 | 0.0062 | 114819 | 833 |
 
-What moves: gbdt recall at 2% goes from 0.7791 (kept) to 0.8055 (dropped, +0.0264), the largest shift in the table.
+What moves: gbdt PR-AUC goes from 0.3913 (kept) to 0.4265 (dropped, +0.0352), the largest shift in the table.
 What does not: logit is the less sensitive model (largest shift 0.0122), and the PR-AUC ranking of the models is the same under every variant.
 
 ## Availability lag: 45 against 60 against 90 days
@@ -33,9 +33,9 @@ What does not: logit is the less sensitive model (largest shift 0.0122), and the
 | logit | 45d | 252339 | 537 | 2008-12-31 | 0.4692 | 0.9831 | 0.7944 | 0.0870 | 0.0050 | 118737 | 851 |
 | logit | 60d | 252330 | 554 | 2008-12-31 | 0.4437 | 0.9823 | 0.7815 | 0.0840 | 0.0051 | 118696 | 833 |
 | logit | 90d | 252311 | 606 | 2008-12-31 | 0.4273 | 0.9817 | 0.7787 | 0.0816 | 0.0050 | 118634 | 809 |
-| gbdt | 45d | 252339 | 537 | 2008-12-31 | 0.4494 | 0.9841 | 0.7697 | 0.0799 | 0.0055 | 118737 | 851 |
-| gbdt | 60d | 252330 | 554 | 2008-12-31 | 0.4324 | 0.9840 | 0.7791 | 0.0732 | 0.0052 | 118696 | 833 |
-| gbdt | 90d | 252311 | 606 | 2008-12-31 | 0.3613 | 0.9796 | 0.7244 | 0.0717 | 0.0054 | 118634 | 809 |
+| gbdt | 45d | 252339 | 537 | 2008-12-31 | 0.2005 | 0.9735 | 0.5570 | 0.0458 | 0.0068 | 118737 | 851 |
+| gbdt | 60d | 252330 | 554 | 2008-12-31 | 0.3913 | 0.9814 | 0.7887 | 0.0792 | 0.0062 | 118696 | 833 |
+| gbdt | 90d | 252311 | 606 | 2008-12-31 | 0.1467 | 0.9700 | 0.4611 | 0.0309 | 0.0071 | 118634 | 809 |
 
-What moves: gbdt PR-AUC goes from 0.4324 (60d) to 0.3613 (90d, -0.0711), the largest shift in the table.
+What moves: gbdt recall at 2% goes from 0.7887 (60d) to 0.4611 (90d, -0.3277), the largest shift in the table.
 What does not: logit is the less sensitive model (largest shift 0.0255), and the PR-AUC ranking of the models is the same under every variant.

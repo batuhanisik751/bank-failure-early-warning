@@ -1136,3 +1136,54 @@ open for the owner to revisit.
   8q pooled 0.4113). The 8q calibration, explain and production artefacts still carry the
   winsorised booster until their commands are re-run; `reports/walkforward.md` is regenerated
   by `bankcanary metrics-report`.
+- 2026-09-26 — **Boosters recalibrated, re-explained and promoted on raw features; case study
+  and sensitivity refit.** The 50 isotonic maps were refit one year per call (`gbdt_mono` and
+  `gbdt` at 4q for 2008-2024, `gbdt` at 8q for 2008-2023, inner scorer throughout) and
+  `walkforward_scores` rebuilt once; `reports/walkforward.md` now carries the raw-feature
+  numbers. Pooled 4q Brier raw / calibrated: `gbdt_mono` 0.0046 / 0.0049, `gbdt` 0.0046 /
+  0.0050 (hazard and logit unchanged at 0.0041 / 0.0038); pooled 8q `gbdt` 0.0087 / 0.0217
+  (winsorised: 0.0088 / 0.0203). Calibration still worsens the booster Brier in most years
+  because the map is learned on a crisis slice scored by an inner model whose score scale
+  differs from the full model's: at 8q the 2011 map (2008 slice, 1,108 failures, inner fit
+  through 2005) sends the mean calibrated probability to 0.353 against a 0.0117 failure rate
+  (Brier 0.1375, was 0.0842) and the 2012 map to 0.203 against 0.0067 (0.0529, was 0.0702);
+  at 4q `gbdt_mono` 2010 goes from 0.0110 raw to 0.0200 calibrated (2008 slice, 429 failures).
+  This is the same slice-scorer mismatch recorded for the winsorised boosters, not a new
+  effect of the raw inputs. SHAP: every `gbdt_mono` year 2008-2024 plus the production rows
+  were re-explained (4,525,760 driver rows). Silicon Valley Bank at 2022-12-31 now stores
+  `adjusted_tier1_leverage` at its raw −0.3301 (SHAP +0.517, the top driver; the winsorised
+  table had shown 3.94) and `unrealized_loss_to_tier1` reaches the 2022 booster at its raw
+  −1.0406 (`model_inputs` passes rows through because the pipeline's only step is `model`),
+  although that column is not among the ten stored drivers of that row. Pooled importance by
+  per-year share: `texas_ratio` 6.7%, `macro_unemp_change_4q` 6.2%, `securities_to_assets`
+  5.4%, `total_rbc_ratio` 5.3%, `macro_hpi_change_4q` 5.0%, `macro_dgs10` 5.0%; the top three
+  carry 18.2%, so the rule 6.6 smoke test flags nothing. The production booster's top mean
+  |SHAP| is `total_rbc_ratio` 0.500, `macro_dgs10` 0.458, `macro_unemp_change_4q` 0.350.
+  `models/production/gbdt_mono` is now byte-identical to the raw 2024 fit (`pipeline.joblib`
+  steps `['model']`, its new `calibration.joblib`), version `gbdt_mono-2022-12-31-8b3078e`;
+  the hazard stays at `hazard-2023-12-31-6740dae`. Gotcha: `promote_production_models.py`
+  takes `git_sha` from the commit that first added the walk-forward run record, and the raw
+  refit reproduced the same run id (`walkforward-4q-42cd0e63b7`, because `config.json` never
+  named the winsoriser), so the default provenance kept `bbc0230`, the winsorised fit; the
+  promotion was re-run with `--git-sha 8b3078e --trained-at` its committer date (provenance
+  `override`). The 2023 case study was refit through `run_case_study` on the bare booster at
+  the `settings.models.gbdt` parameters (learning rate 0.03, 31 leaves, `min_samples_leaf`
+  50). `gbdt_mono` ranks at 2022Q4 among 4,773 banks (winsorised in brackets): credit-only
+  Silicon Valley Bank 2,089, 56.2nd percentile (2,149, 55.0), Signature 1,008, 78.9 (1,279,
+  73.2), First Republic 978, 79.5 (1,207, 74.7); rate-aware Silicon Valley Bank 2,711, 43.2
+  (2,368, 50.4), Signature 301, 93.7 (564, 88.2), First Republic 1,813, 62.0 (901, 81.1).
+  The rate-aware booster's PR-AUC over the complete-label scored reports rises to 0.159 (from
+  0.068) on Signature's rank, but Silicon Valley Bank moves down: its leverage (−0.33) adds
+  +0.467 log-odds while `securities_to_assets` 0.56, `total_rbc_ratio` 16.1 and a Texas ratio
+  of 0.009 pull it back, so the raw tail does not flag SVB either; the case-study conclusion
+  stands. Sensitivity on the raw fixed-split `gbdt`: 4q PR-AUC 0.3913 / recall@2% 0.7887
+  (winsorised 0.4324 / 0.7791), 8q 0.2385 / 0.4950 (0.1328 / 0.2911), censored dropped 0.4265
+  (0.4467), lag 45d 0.2005 / 0.5570 (0.4494 / 0.7697) and 90d 0.1467 / 0.4611 (0.3613 /
+  0.7244); the logit moves only between 0.4273 and 0.4692 across the lags. The raw booster is
+  therefore fragile to the availability lag on the fixed split, which is the one finding here
+  that argues against the raw inputs; it is recorded rather than tuned away. Because the
+  sensitivity report reads every record under `runs/sensitivity/` and the case study logs one
+  record per config, the winsorised-era `gbdt` records (seven sensitivity, 33 `gbdt` calibration, two `gbdt_mono` and
+  two unconstrained `gbdt` case-study records) were removed and `runs/index.jsonl` rebuilt,
+  so the tables no longer show two rows per cell. `reports/p2_gbdt.md` was left as written by
+  the raw-feature `train-gbdt` run; nothing was published or deployed.

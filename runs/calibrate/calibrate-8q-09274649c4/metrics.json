@@ -1,16 +1,16 @@
 {
-  "brier_calibrated": 0.03260031684609904,
-  "brier_raw": 0.0326445307900624,
-  "brier_slice_calibrated": 0.0002505029158105074,
-  "brier_slice_raw": 0.002364705195407482,
+  "brier_calibrated": 0.03260410347119033,
+  "brier_raw": 0.03276227481455316,
+  "brier_slice_calibrated": 0.00024997326163669166,
+  "brier_slice_raw": 0.006570364981895885,
   "extrapolated_share": 0.0,
   "failure_rate": 0.032615094783939716,
-  "mean_calibrated": 0.00022737762557184868,
+  "mean_calibrated": 0.00017036429421720547,
   "n": 33972,
   "n_failures": 1108,
-  "n_thresholds": 4,
+  "n_thresholds": 5,
   "pr_auc": 0.032615094783939716,
   "pr_auc_calibrated": 0.032615094783939716,
   "slice_score_max": 1.0,
-  "top_plateau": 0.0013774104683195593
+  "top_plateau": 0.008695652173913044
 }
