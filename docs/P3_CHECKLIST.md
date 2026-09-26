@@ -128,8 +128,8 @@ except selecting precomputed rate-shock rows.
   database instead of skipping). `npm test` in `web/`: 13 files, **114 passed** (vitest,
   no database). `npx tsc --noEmit`: exit 0. `npx playwright test e2e/time_machine_map.spec.ts`:
   8 passed against the built app (the Playwright `webServer` starts and stops it).
-- `git log --format=%B | grep -iE 'co-authored|claude|anthropic|assistant|generated with'`
-  prints nothing; `grep -riE 'claude|anthropic'` over `*.py *.md *.toml *.yaml *.yml *.ts
+- the commit-message attribution grep (see docs/CONTRACT.md section 10)
+  prints nothing; the source attribution grep over `*.py *.md *.toml *.yaml *.yml *.ts
   *.tsx *.ipynb` (excluding `.venv`, `node_modules`, `.next`, `data`, `PROJECT_SPEC.md`)
   prints nothing.
 - Before this commit `git status` showed only the refresh run record of criterion 1

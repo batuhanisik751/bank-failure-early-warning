@@ -78,11 +78,12 @@ jobs:
           fi
 
       - name: Revalidate the web app
-        if: steps.refresh.outputs.new_quarter == 'true' && secrets.REVALIDATE_URL != ''
+        if: steps.refresh.outputs.new_quarter == 'true'
         env:
           REVALIDATE_URL: ${{ secrets.REVALIDATE_URL }}
           REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
         run: |
+          if [ -z "$REVALIDATE_URL" ]; then echo "REVALIDATE_URL not set; skipping"; exit 0; fi
           code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
             -H "Authorization: Bearer $REVALIDATE_SECRET" \
             -H "Content-Type: application/json" \
