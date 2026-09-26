@@ -828,3 +828,22 @@ open for the owner to revisit.
   are `elevated`/`high` or failed (the map draws `low` dots from `banks`), and hazard rows
   after 2015 only. Schema type changes are not applied to an existing table by
   `CREATE TABLE IF NOT EXISTS`: drop the table locally and re-run `publish --tables <t>`.
+- 2026-09-26 — **Web skeleton (step E3).** `web/` is a Next.js 16 App Router app on port
+  3100 with the read-only data layer of CONTRACT 18: `lib/db/schema.ts` mirrors the 14
+  published tables with Drizzle (dates as ISO strings, bigints as numbers) and
+  `tests/schema.test.ts` parses `schema.sql` to fail on any name or type drift;
+  `lib/queries/*.ts` are the only database readers, each wrapped in `cached()`
+  (`unstable_cache`, tag `data`, 3600 s) and taking quarters as labels (`2026Q2`).
+  `POST /api/revalidate` calls `revalidateTag("data", { expire: 0 })`, so the first request
+  after a publish blocks on fresh data instead of serving the old quarter for another
+  request. `next.config.ts` copies unset variables from the repository `.env` so the
+  database URL lives in one file; deployments set their own environment. Off-localhost
+  connections always verify TLS certificates regardless of the URL's `sslmode`. Fonts are
+  the system stack (no `next/font/google`, so builds never need the network). The
+  theme is `data-theme` on `<html>` with a pre-paint script and `useSyncExternalStore`;
+  `prefers-color-scheme` applies until the toggle stores a choice. Risk bands use colour,
+  a text label and a distinct glyph, and links inside text are underlined (axe
+  `link-in-text-block`). The five sections beyond the leaderboard are placeholder pages
+  until their steps land; `/bank/[cert]` is not routed yet so the top-10 names are not
+  links. `echarts` is pinned to 5.x (npm resolves 6 by default) and `@types/node` to 22
+  for vitest 5. Playwright runs `npm run start` itself against a prior `npm run build`.

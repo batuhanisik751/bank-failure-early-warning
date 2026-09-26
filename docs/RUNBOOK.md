@@ -82,3 +82,32 @@ levers in `docs/DECISIONS.md` before the next quarter lands.
   NOT EXISTS`): `DROP TABLE <t>` locally, then `publish --tables <t>` recreates and fills it.
 - Neon: the owner sets `DATABASE_URL` (pooled, `sslmode=verify-full`) as a GitHub
   secret and runs the same command from the refresh workflow; nothing here deploys.
+
+## 6. Web app (`web/`)
+
+```bash
+cd web
+npm install                       # Node 22, npm 10
+npx playwright install chromium   # once
+npm run build                     # reads DATABASE_URL (copied from ../.env by next.config.ts)
+npm run start                     # http://localhost:3100
+npm run lint && npm run typecheck && npm test      # eslint, tsc, vitest (no database)
+npm run test:e2e                  # Playwright + axe over the built app, starts/stops the server itself
+```
+
+- Port 3100 for `dev` and `start`, so it never collides with another project on 3000.
+- `npm run build` prerenders the home page from the database, so the local container must
+  be up and published (`bankcanary publish`); the other pages and `/api/revalidate` do not
+  read at build time.
+- `npm test` includes the schema drift test: after any change to
+  `src/bankcanary/publish/schema.sql`, mirror it in `web/lib/db/schema.ts` or the web CI
+  job fails.
+- After a publish, expire the web cache: `curl -X POST -H "Authorization: Bearer
+  $REVALIDATE_SECRET" <site>/api/revalidate` (the refresh workflow does this with the
+  `REVALIDATE_URL` and `REVALIDATE_SECRET` secrets). Locally the secret is optional; the
+  route answers 503 when it is unset and 401 on a wrong token.
+- Deploying (owner's action, nothing here deploys): a Vercel project with root directory
+  `web`, environment variables `DATABASE_URL` (Neon pooled URL with
+  `sslmode=verify-full`), `REVALIDATE_SECRET` (any long random string, the same value as
+  the GitHub secret) and `NEXT_PUBLIC_SITE_URL` (the public origin). The build command is
+  the default `npm run build`.
