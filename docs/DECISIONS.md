@@ -1028,3 +1028,14 @@ open for the owner to revisit.
   config, 6 on the database-down config. The "destination stream closed early" lines the
   server logs during the Playwright run come from tests that measure the skeleton with
   `waitUntil: "commit"`; they are noise, not failures.
+- 2026-09-26 — **Prototype 3 acceptance pass (`docs/P3_CHECKLIST.md`).** The end-to-end
+  dry run deleted 2026Q2 from `scores`, `drivers`, `map_quarters` and `quarters` in one
+  transaction and let the plain `bankcanary refresh` find the gap from the FDIC probe
+  rather than `--force-quarter`, so the decision path is the one the cron job takes;
+  identical counts came back in 119 s. The 2009 recall check reads the published raw
+  `score` column with `cert` as tie-breaker, exactly as the walk-forward evaluation
+  does, and is bit-identical (0.374079528718704) to `walkforward_metrics`. Traceability
+  used the rank-1 bank of the latest quarter (cert 8681) because its profile exercises
+  both models and the drivers table. Deployment stays "pending owner": the checklist
+  copies the seven RUNBOOK steps so the orchestrator can hand them over without the
+  runbook. The refresh run record is committed like every other run record.
