@@ -1,6 +1,6 @@
 # BankCanary — bank failure early-warning system
 
-> **Status:** Prototype 1 ("Foundation") complete; Prototype 2 not started. Nothing here is a credit rating,
+> **Status:** Prototype 1 ("Foundation") and Prototype 2 ("Depth") complete; Prototype 3 (the web dashboard) not started. Nothing here is a credit rating,
 > investment advice, or a supervisory assessment. See the disclaimer below.
 
 BankCanary is an open, reproducible early-warning system for US bank failures. It ingests
@@ -57,48 +57,60 @@ See [`PROJECT_SPEC.md`](PROJECT_SPEC.md) for the full specification and
 [`docs/CONTRACT.md`](docs/CONTRACT.md) for the build contract (module layout, table
 schemas, naming, storage paths) that every component follows.
 
-## Results so far
+## Results
 
-Prototype 1 is complete: FDIC data from 2001Q1 to 2026Q2 is ingested and cached, the
-bank-quarter panel (710,691 rows, 11,243 banks) carries leakage-safe labels, 43 CAMELS
-features are computed, and three baselines are evaluated on a fixed out-of-time split.
-The guided tour is [`notebooks/01_foundation.ipynb`](notebooks/01_foundation.ipynb); the
-acceptance checklist is [`docs/P1_CHECKLIST.md`](docs/P1_CHECKLIST.md).
+Prototype 2 is complete: FDIC data from 2001Q1 to 2026Q2 is ingested and cached, the
+bank-quarter panel (710,691 rows, 11,243 banks) carries leakage-safe labels at 1, 4 and 8
+quarters, 83 CAMELS, interest-rate, deposit-run, trend and macro features are computed
+([`docs/FEATURES.md`](docs/FEATURES.md)), and four models are backtested walk-forward: one
+model per test year from 2008 to 2024, trained only on outcomes known before that year's
+first prediction date, hyper-parameters chosen inside the training window. Everything a
+reader needs is in the model card ([`docs/model_card.md`](docs/model_card.md)) and the
+acceptance checklist ([`docs/P2_CHECKLIST.md`](docs/P2_CHECKLIST.md)).
 
-**Failures per year** (FDIC failed-bank list, `restype = FAILURE`; 574 failures, of which
-573 have at least one prior Call Report in the panel):
+**Walk-forward backtest, 4-quarter horizon** (test years 2008-2024 pooled, 426,019
+bank-quarters, 2,103 failures; 95% intervals from 200 cluster-bootstrap draws by bank; from
+[`reports/walkforward.md`](reports/walkforward.md)):
 
-| year | 2001 | 2002 | 2003 | 2004 | 2005 | 2006 | 2007 | 2008 | 2009 | 2010 | 2011 | 2012 | 2013 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| failures | 4 | 11 | 3 | 4 | 0 | 0 | 3 | 25 | 140 | 157 | 92 | 51 | 24 |
+| model | PR-AUC | 95% CI | recall @ top 2% | 95% CI | ROC-AUC |
+|---|---|---|---|---|---|
+| hazard (discrete-time, Shumway 2001) | 0.3261 | [0.293, 0.357] | 0.7042 | [0.679, 0.729] | 0.9577 |
+| logit (all 83 features, L2, per-year C) | 0.3066 | [0.276, 0.335] | 0.6843 | [0.657, 0.713] | 0.9613 |
+| gbdt (LightGBM, per-year tuning) | 0.2813 | [0.250, 0.311] | 0.6434 | [0.609, 0.669] | 0.8206 |
+| texas (rank by Texas ratio) | 0.2606 | [0.226, 0.298] | 0.7437 | [0.716, 0.771] | 0.9599 |
 
-| year | 2014 | 2015 | 2016 | 2017 | 2018 | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 | 2025 | 2026* |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| failures | 18 | 8 | 5 | 8 | 0 | 4 | 4 | 0 | 0 | 5 | 2 | 2 | 4 |
+**8-quarter horizon** (2008-2023 pooled, 407,621 bank-quarters, 3,768 failures): logit
+PR-AUC 0.2835 [0.252, 0.314], recall@2% 0.5488; gbdt 0.1169 [0.094, 0.138], 0.2710.
 
-\* through the failures pull of 2026-09-25.
+The honest reading: the hazard model pools best at 4q and the logit at 8q, but the two
+intervals overlap, so the backtest does not separate them; every learner beats the Texas
+ratio on PR-AUC while the Texas ratio still captures the most failures in its top 2%. The
+gradient booster is competitive year by year from 2010 on and weakest pooled, because its
+early years are starved of failures and its score scale drifts between years. Per-year
+tables with failure counts, Brier scores and reliability curves are in the report; years
+with fewer than ten failures are flagged low confidence. Lead time: of the 440 banks that
+failed in 2009-2012, the logit had put 89.8% in some quarter's top 2% before they failed,
+median 5 quarters ahead, 87.7% at least two quarters ahead (hazard 90.5% / 5 / 88.4%).
 
-**Baselines, 4-quarter horizon** (train on reports 2002Q1-2008Q4, 252,330 rows / 554
-failures; test on 2010Q1-2013Q4, 118,696 rows / 833 failures; from
-[`reports/p1_baselines.md`](reports/p1_baselines.md)):
+**The 2023 question.** A credit-only model trained through 2021 put Silicon Valley Bank at
+the 65th percentile of all banks on its last report before failure, and adding the
+interest-rate and uninsured-deposit features lifts it to the 95th percentile (rank 245 of
+4,773) in the gradient booster but not in the logit, which had learned over twenty years
+that uninsured deposits marked size rather than risk. None of the four models put SVB in
+its top 2%, Signature was flagged only by the credit-only logit on its concentration
+profile, and First Republic by nothing.
 
-| model | PR-AUC | ROC-AUC | recall @ top 2% | recall @ top 100 |
-|---|---|---|---|---|
-| texas (rank by Texas ratio) | 0.3726 | 0.9739 | 0.761 | 0.072 |
-| logit_small (6 features) | 0.3720 | 0.9791 | 0.738 | 0.079 |
-| logit (all 43 features, L2, C = 0.003) | 0.3867 | 0.9755 | 0.714 | 0.080 |
-
-The honest reading: the signal is clearly there (a plain Texas-ratio ranking puts three
-quarters of the banks that failed within a year inside its top 2%), the six-feature
-logistic only ties the Texas ratio, and the all-feature logistic beats it on PR-AUC by a
-small margin. That margin came from a lesson, not from a richer model: with balanced class
-weights the same logistic scored 0.20, because weighting 554 training failures up by a
-factor of 450 let its collinear capital measures overfit. The regularisation strength is
-chosen on a validation slice inside the training years (`scripts/tune_logit_c.py`), never
-on the test years. The report also gives every number with censored rows dropped and per
-failure event (same-day holding-company failures counted once), and `reports/figures/`
-holds the PR curves, score histograms and recall@k chart. Prototype 2 (feature selection,
-gradient boosting, walk-forward backtest) has to widen the gap.
+**Notebooks** (each executed in place, none retrains a walk-forward model):
+[`01_foundation`](notebooks/01_foundation.ipynb) (data, labels, Prototype 1 baselines),
+[`02_models_and_backtest`](notebooks/02_models_and_backtest.ipynb) (walk-forward tables,
+calibration, lead time),
+[`03_svb_2023_case_study`](notebooks/03_svb_2023_case_study.ipynb),
+[`04_false_positives`](notebooks/04_false_positives.ipynb) (what happened to the flagged
+banks that did not fail: a quarter failed later, a tenth were acquired),
+[`05_sensitivity`](notebooks/05_sensitivity.ipynb) (horizon, censoring, availability lag).
+Prototype 1's fixed-split baselines remain in
+[`reports/p1_baselines.md`](reports/p1_baselines.md) and
+[`docs/P1_CHECKLIST.md`](docs/P1_CHECKLIST.md).
 
 ### Reproduce
 
@@ -113,6 +125,26 @@ uv run bankcanary train --model all      # models/{texas,logit_small,logit}/
 uv run bankcanary evaluate               # reports/p1_baselines.md + reports/figures/
 uv run python scripts/make_notebook_01.py
 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/01_foundation.ipynb
+```
+
+Prototype 2 continues from there (every command is idempotent and logs a run record under
+`runs/`; the walk-forward, calibration and explanation steps run one test year per call so
+that no command takes more than a couple of minutes):
+
+```bash
+uv run bankcanary build-crosswalk        # crosswalk_rssd + reports/ffiec_crosscheck.md
+uv run bankcanary build-macro            # FRED series, point-in-time macro_state
+uv run bankcanary build-features-v2      # features_v2 (83 features); docs/FEATURES.md
+uv run bankcanary train-gbdt             # fixed-split booster, reports/p2_gbdt.md
+uv run bankcanary train-hazard           # fixed-split hazard, reports/p2_hazard.md
+for Y in $(seq 2008 2024); do uv run bankcanary walkforward --year $Y --model all; done
+for Y in $(seq 2008 2023); do uv run bankcanary walkforward --year $Y --model logit,gbdt --horizon 8; done
+uv run bankcanary calibrate --all-years  # isotonic maps, score_calibrated
+uv run bankcanary metrics-report         # reports/walkforward.md (CIs, Brier, lead time)
+uv run bankcanary explain --all          # SHAP drivers table, reports/shap_summary.md
+uv run bankcanary sensitivity            # reports/sensitivity.md
+for N in 02 03 04 05; do uv run python scripts/make_notebook_$N.py; done
+uv run jupyter nbconvert --to notebook --execute --inplace notebooks/0[2-5]_*.ipynb
 ```
 
 The first `ingest` downloads about 100 quarters of financials and takes a while; every
