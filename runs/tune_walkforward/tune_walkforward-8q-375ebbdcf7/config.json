@@ -1,0 +1,14 @@
+{
+  "availability_lag_days": 60,
+  "features_version": "v2",
+  "fit_horizon": 1,
+  "horizon": 8,
+  "model": "hazard",
+  "n_inner_train": 214169,
+  "params": {
+    "C": 0.03
+  },
+  "test_year": 2011,
+  "validation_end": "2008-12-31",
+  "validation_start": "2007-03-31"
+}

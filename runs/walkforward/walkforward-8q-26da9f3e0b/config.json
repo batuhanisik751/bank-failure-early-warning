@@ -1,0 +1,36 @@
+{
+  "C": 0.01,
+  "availability_lag_days": 60,
+  "class_weight": null,
+  "conversion": "1 - (1 - h)^H",
+  "features_version": "v2",
+  "first_test_prediction_date": "2020-05-30",
+  "fit_horizon": 1,
+  "fit_label": "y_1q",
+  "horizon": 8,
+  "model": "hazard",
+  "n_features": 83,
+  "n_test": 20475,
+  "n_train": 586828,
+  "positives_test": 4,
+  "positives_train": 557,
+  "test_year": 2020,
+  "train_repdte_max": "2019-12-31",
+  "train_repdte_min": "2001-03-31",
+  "tuning": {
+    "fallback": null,
+    "inner_train_repdte_max": "2015-12-31",
+    "metric": "pr_auc",
+    "n_inner_train": 495493,
+    "n_validation": 47672,
+    "positives_inner_train": 540,
+    "positives_validation": 48,
+    "selected": {
+      "C": 0.01
+    },
+    "sufficient": true,
+    "validation_end": "2017-12-31",
+    "validation_quarters": 8,
+    "validation_start": "2016-03-31"
+  }
+}

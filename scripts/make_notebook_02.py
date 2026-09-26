@@ -77,7 +77,7 @@ COLORS = {
     "hazard": "#eda100",
     "gbdt_mono": "#e87ba4",
 }
-MODELS_4Q = ["texas", "logit", "gbdt", "hazard"]
+MODELS_4Q = ["texas", "logit", "gbdt", "gbdt_mono", "hazard"]
 print("models_dir:", settings.models_dir)
 """)
 
@@ -253,14 +253,16 @@ pd.DataFrame(brier_rows).set_index("model").round(4)
 """)
 
 md("""
-The raw scores of all three models already sit close to the observed rate in the top
-deciles, and the calibrated curve is better only for the booster (Brier 0.0043 either
-way). For the logit and the hazard the calibrated scores overshoot: the map is learned
-on the inner model's scale and applied to a model that has seen one more year, and where
-the two scales differ (most of all in 2009-2010, when the crisis year enters the window)
-the calibrated probabilities inherit the inner model's plateaus. The raw outputs remain
-the better probabilities; `score_calibrated` is kept because the contract asks for it and
-the mismatch is documented decile by decile in `reports/walkforward.md`.
+The raw scores of every learner already sit close to the observed rate below the top
+decile and under-predict the top decile by about a factor of two. The isotonic map closes
+that gap for the logit and the hazard (pooled Brier 0.0041 raw against 0.0038 calibrated;
+top decile 0.042 predicted against 0.045 observed for the logit): their slice is scored by
+the year's own model, so the map is learned on the scale it is applied to. The boosters
+need an inner model to score the slice (their in-sample scores separate it perfectly), and
+their maps over-predict the top decile while leaving the pooled Brier score about where
+the raw scores had it. The decile tables are in `reports/walkforward.md`; the earlier
+inner-model recipe for the linear models and why it failed in 2009-2010 is in
+`docs/DECISIONS.md`.
 
 ## 5. Lead time: how many quarters ahead was a failure flagged?
 
@@ -331,9 +333,14 @@ Stated neutrally: on the fixed split the constrained booster scores lower on the
 inner-validation slice and higher on the 2010-2013 test rows, in three of the four test
 years. The inner slice is the only evidence a rule-6.7 selection may use; the test
 columns are what a reviewer would see afterwards. Neither ordering is a large gap
-against the year-to-year variation shown in section 3, and the walk-forward runs the
-setting in `settings.yaml`, so the choice is a policy call (explainability and
-guaranteed direction of effect against a free fit) rather than a statistical one.
+against the year-to-year variation shown in section 3, so on the fixed split the choice
+is a policy call (explainability and guaranteed direction of effect against a free fit)
+rather than a statistical one. The walk-forward, which fits both configurations with
+their own per-year tuning, is less neutral: `gbdt_mono` pools to PR-AUC 0.31 [0.28, 0.35]
+and recall@2% 0.71 [0.69, 0.74] against 0.28 [0.25, 0.31] and 0.64 [0.61, 0.67] for
+`gbdt` (section 3 above, the recall intervals disjoint), because the constraints hold
+the booster's score scale together across years. The setting is unchanged until the
+owner decides; the production booster and the SHAP drivers are the unconstrained one.
 
 ## 7. An honest paragraph on the years after 2014
 
@@ -367,16 +374,19 @@ late[["failures"] + [f"pr_auc {m}" for m in MODELS_4Q] + [f"CI {m}" for m in MOD
 md("""
 ## 8. The 8-quarter horizon
 
-The same walk-forward was run at 8 quarters for the logit and the booster (test years
-2008-2023, since the 2024 windows are not yet complete). Longer horizons are harder for
-every model, and the booster suffers most: its 8q pooled PR-AUC is 0.12 against 0.28 for
-the logit, largely because its 2008-2010 fits, trained on almost no two-year failure
-windows, rank the crisis cohort poorly.
+The same walk-forward was run at 8 quarters for the logit, the booster and the hazard
+(test years 2008-2023, since the 2024 windows are not yet complete). Longer horizons are
+harder for a model trained on the 8q label, and the booster suffers most: its 8q pooled
+PR-AUC is 0.12 against 0.28 for the logit, largely because its 2008-2010 fits, trained on
+almost no two-year failure windows, rank the crisis cohort poorly. The hazard, which
+learns the one-quarter event and is converted with `1 - (1 - h)^8`, pools to 0.41 with
+an interval disjoint from the logit's: the persistence approximation costs less than
+learning from two-year windows does.
 """)
 
 code("""
 wf8 = wf[wf["horizon"] == 8]
-ci8 = {m: ci_table(wf8[wf8["model"] == m]) for m in ["logit", "gbdt"]}
+ci8 = {m: ci_table(wf8[wf8["model"] == m]) for m in ["logit", "gbdt", "hazard"]}
 pooled8 = pd.DataFrame({m: ci8[m].set_index("year").loc["pooled"] for m in ci8}).T
 pooled8[["n", "n_failures", "pr_auc", "pr_auc_low", "pr_auc_high", "recall_at_2pct", "recall_at_2pct_low", "recall_at_2pct_high"]].astype(float).round(4)
 """)
@@ -385,13 +395,15 @@ md("""
 ## 9. Where this leaves Prototype 2
 
 - The walk-forward is the number to quote: pooled 4q PR-AUC of 0.33 (hazard), 0.31
-  (logit) and 0.28 (booster) with overlapping intervals, against 0.26 for the Texas ratio;
-  recall@2% between 0.64 and 0.74. The fixed-split figures are higher because 2010-2013 is
-  the easiest period to rank.
+  (monotone booster), 0.31 (logit) and 0.28 (unconstrained booster) with overlapping
+  intervals, against 0.26 for the Texas ratio; recall@2% between 0.64 and 0.74. At 8q the
+  hazard leads clearly (0.41). The fixed-split figures are higher because 2010-2013 is the
+  easiest period to rank.
 - The flagged failures are flagged early: median lead of 4.5-5 quarters, 82-88 percent of
   the 2009-2012 failures at least two quarters ahead.
-- Calibration is only trustworthy for the booster; the raw scores are the better
-  probabilities elsewhere, and the reason is documented rather than patched.
+- Calibrated probabilities track the observed rate for the logit and the hazard once the
+  map is learned on the calibrated model's own scale; the boosters' maps over-predict the
+  top decile, and every post-2013 map rests on a handful of failures.
 - Post-2014 metrics are noise-dominated; the model's value in a quiet decade is what it
   says about individual banks, which notebooks 03 (SVB, 2023) and 04 (false positives)
   examine one bank at a time.

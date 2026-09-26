@@ -16,6 +16,9 @@ def register(app: typer.Typer) -> None:
             "all", "--model", help="logit | gbdt | hazard | all (comma lists allowed)."
         ),
         horizon: int = typer.Option(4, "--horizon", help="Scoring horizon in quarters."),
+        scorer: str | None = typer.Option(
+            None, "--scorer", help="Who scores the slice: full | inner (default: per model)."
+        ),
         no_rebuild: bool = typer.Option(
             False, "--no-rebuild", help="Skip rebuilding the walkforward_scores table."
         ),
@@ -23,8 +26,10 @@ def register(app: typer.Typer) -> None:
         """Fit the isotonic map for one walk-forward year and fill ``score_calibrated``.
 
         For each probability model the calibration slice is the last complete label
-        year inside the year's training window; an inner model with the year's tuned
-        configuration (from ``models/walkforward/<Y>/<model>/config.json``) scores it and
+        year inside the year's training window; the year's own full-window model scores
+        it (``--scorer full``, the logits' default) or an inner model refitted with the
+        year's tuned configuration before the slice does (``--scorer inner``, the
+        boosters' default; ``calibration.SLICE_SCORER_BY_MODEL``), and
         ``IsotonicRegression(out_of_bounds="clip")`` is fitted there, then applied to the
         year's test scores. One year per call keeps each run short; ``--all-years`` loops
         over the years for an idle machine. Writes ``calibration.joblib`` next to the model,
@@ -44,16 +49,20 @@ def register(app: typer.Typer) -> None:
         unknown = [m for m in names if m not in c.MODELS]
         if unknown:
             raise typer.BadParameter(f"unknown model(s) {unknown}; choose from {c.MODELS}")
+        if scorer is not None and scorer not in c.SLICE_SCORERS:
+            raise typer.BadParameter(f"--scorer must be one of {c.SLICE_SCORERS}")
         frame = gbdt.load_training_frame(settings, w.FEATURE_VERSION)
         years = w.test_years(frame, horizon)
         if year is not None and year not in years:
             raise typer.BadParameter(f"{year} is outside the {horizon}q test years {years}")
         for y in years if all_years else [year]:
-            for r in c.calibrate_year(frame, settings, y, names, horizon, rebuild=False):
+            for r in c.calibrate_year(frame, settings, y, names, horizon, False, scorer):
                 m = r.metrics
                 typer.echo(
-                    f"{y} {r.model} {horizon}q: brier raw {m['brier_raw']:.5f} -> calibrated "
-                    f"{m['brier_calibrated']:.5f} (failure rate {m['failure_rate']:.5f}, mean "
+                    f"{y} {r.model} {horizon}q ({r.config['slice_scorer']}): brier raw "
+                    f"{m['brier_raw']:.5f} -> "
+                    f"calibrated {m['brier_calibrated']:.5f} (failure rate "
+                    f"{m['failure_rate']:.5f}, mean "
                     f"calibrated {m['mean_calibrated']:.5f}); slice "
                     f"{r.config['calibration_start']}..{r.config['calibration_end']} with "
                     f"{r.config['positives_calibration']} failures, inner fit through "

@@ -608,3 +608,43 @@ open for the owner to revisit.
   that `runs/index.jsonl` already named but that were never added to git are committed with
   this pass, so the index and the directories agree. `build-labels` and `build-features-v2`
   reproduce `labels.parquet` and `features_v2.parquet` byte for byte (sha256 unchanged).
+- 2026-09-25 — **Calibration slice is scored by the model being calibrated (linear models)
+  or by an inner model (boosters).** The completeness review flagged the unticked calibration
+  criterion. Cause, read from the saved `calibration.json` diagnostics: for 2009 the inner
+  hazard model (trained before any crisis failure) scored the 2007 slice with a maximum of
+  0.0015, so 37 percent of the 2009 test rows lay above its top threshold and were clipped
+  to a plateau of 1.0 (logit: 0.0057 and 13 percent); the map was learned on a score scale
+  the full-window model never used. `calibration.fit_calibrator` now takes `slice_scorer`:
+  `"full"` scores the slice with the year's own saved model (no refit), `"inner"` keeps the
+  old recipe. The default is per model (`SLICE_SCORER_BY_MODEL`): `full` for `logit` and
+  `hazard`, `inner` for `gbdt` and `gbdt_mono`, because the boosters' in-sample slice scores
+  separate the slice perfectly (slice Brier 0.0000, four isotonic thresholds), which is
+  visible on training-period data alone; the linear models' in-sample and out-of-sample
+  scales are close (2009 logit: slice maximum 0.19 against a 2009 test range that no longer
+  extrapolates). Pooled 4q Brier moves from 0.0189 to 0.0038 (logit) and 0.0545 to 0.0038
+  (hazard), both now below the raw 0.0041; 2009 mean calibrated falls from 0.19 / 0.47 to
+  0.022 / 0.025 against a rate of 0.021. The booster maps are unchanged, so their existing
+  calibration artefacts and run records were kept (their configs predate the
+  `slice_scorer` key; a rerun reproduces the same maps under `inner`). `bankcanary calibrate
+  --scorer` overrides the default. The contract's "inner model scores the slice" wording in
+  section 13 now describes the boosters' path only.
+- 2026-09-25 — **Decision Point 2 walked forward: `gbdt_mono` is a walk-forward model.**
+  `evaluation.walkforward.MODELS` gains `gbdt_mono` (`GBDT_MODELS = ("gbdt", "gbdt_mono")`);
+  `build_model` sets the constraint from the model name, not from
+  `settings.models.gbdt.monotone`, so both configurations are fitted with their own per-year
+  tuning (same 2x2x2 grid) and logged. Pooled 4q: `gbdt_mono` PR-AUC 0.3138 [0.282, 0.345],
+  recall@2% 0.7147 [0.692, 0.739], ROC-AUC 0.8993 against `gbdt` 0.2813 [0.250, 0.311],
+  0.6434 [0.609, 0.669], 0.8206; the recall intervals are disjoint and the constrained
+  booster wins 11 of the 16 years with failures on PR-AUC. This reverses the inner-validation
+  order (0.197 against 0.230) on which the unconstrained configuration was kept. The setting
+  is not flipped here: the contract reserves the choice for the owner, and the production
+  booster, the SHAP drivers and the 2023 case study keep `gbdt`. Recommendation for the
+  owner: adopt the constraints (better pooled ranking, stable scale, explanations that
+  cannot contradict the registry's stated directions).
+- 2026-09-25 — **Hazard walked forward at 8q.** `models/walkforward/<Y>/hazard_8q/` for 2008
+  to 2023 (the 1q hazard converted with `1 - (1 - h)^8`, `C` re-tuned per year on the 8q
+  validation slice). Pooled 8q PR-AUC 0.4113 [0.382, 0.442], recall@2% 0.6598 [0.634, 0.688]
+  against the logit's 0.2835 / 0.5488: the persistence approximation holds up better at the
+  longer horizon than a logit trained on the 8q label, which has to learn from windows that
+  span two years of regime. Its isotonic map (full-model scorer) over-predicts 2010-2011
+  (pooled Brier 0.0070 raw, 0.0080 calibrated) and is reported as such.

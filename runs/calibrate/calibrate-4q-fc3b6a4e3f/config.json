@@ -1,0 +1,30 @@
+{
+  "C": 0.003,
+  "availability_lag_days": 60,
+  "calibration_end": "2021-12-31",
+  "calibration_prediction_date": "2019-05-30",
+  "calibration_start": "2019-03-31",
+  "calibration_years": [
+    2019,
+    2020,
+    2021
+  ],
+  "class_weight": null,
+  "features_version": "v2",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "inner_train_repdte_max": "2017-12-31",
+  "method": "isotonic",
+  "model": "logit",
+  "n_calibration": 61779,
+  "n_inner_train": 543165,
+  "params": {
+    "C": 0.003
+  },
+  "positives_calibration": 22,
+  "positives_inner_train": 2194,
+  "slice_scorer": "full",
+  "sufficient": true,
+  "test_year": 2023
+}

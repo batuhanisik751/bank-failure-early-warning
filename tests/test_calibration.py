@@ -142,3 +142,36 @@ def test_calibrate_commands_are_registered():
     assert result.exit_code == 0 and "--horizon" in result.output
     result = CliRunner().invoke(app, ["calibrate", "--year", "2010", "--all-years"])
     assert result.exit_code != 0
+
+
+def test_slice_scorer_defaults_per_model_and_is_recorded(tmp_path, frame):
+    assert [c.default_slice_scorer(m) for m in ("logit", "hazard")] == ["full", "full"]
+    assert [c.default_slice_scorer(m) for m in ("gbdt", "gbdt_mono")] == ["inner", "inner"]
+    settings = make_settings(tmp_path)
+    w.fit_year(frame, settings, YEAR, "logit", 4)
+    full = c.fit_calibrator(frame, settings, YEAR, "logit", 4, save=False)
+    inner = c.fit_calibrator(frame, settings, YEAR, "logit", 4, save=False, slice_scorer="inner")
+    assert full.config["slice_scorer"] == "full" and inner.config["slice_scorer"] == "inner"
+    assert tracking.run_id("calibrate", full.config) != tracking.run_id("calibrate", inner.config)
+    # the full scorer uses the saved full-window model: its slice scores are that model's
+    pipeline, features, _ = w.load_year(settings, YEAR, "logit", 4)
+    _, sl, _ = c.calibration_masks(frame, 4, YEAR, lag_days=LAG, require_inner=False)
+    from bankcanary.models.baselines import score_pipeline
+
+    own = score_pipeline(pipeline, frame.loc[sl, list(features)])
+    assert full.metrics["slice_score_max"] == pytest.approx(float(np.max(own)))
+    assert full.metrics["slice_score_max"] != pytest.approx(inner.metrics["slice_score_max"])
+    with pytest.raises(ValueError, match="slice_scorer"):
+        c.fit_calibrator(frame, settings, YEAR, "logit", 4, save=False, slice_scorer="platt")
+
+
+def test_calibration_masks_can_ignore_the_inner_rows_when_widening(frame, monkeypatch):
+    _, _, strict = c.calibration_masks(frame, 4, YEAR, lag_days=LAG)
+    monkeypatch.setattr(c, "MIN_CALIBRATION_POSITIVES", strict["positives_inner_train"] + 1)
+    _, _, widened = c.calibration_masks(frame, 4, YEAR, lag_days=LAG)
+    _, _, loose = c.calibration_masks(frame, 4, YEAR, lag_days=LAG, require_inner=False)
+    # inner positives only shrink as the slice widens: the strict rule never succeeds
+    assert widened["sufficient"] is False and widened["calibration_years"] == [2008]
+    # the slice-only rule keeps widening and succeeds once the slice holds enough failures
+    assert loose["calibration_years"][0] < 2008 and loose["calibration_years"][-1] == 2008
+    assert loose["sufficient"] is (loose["positives_calibration"] >= c.MIN_CALIBRATION_POSITIVES)

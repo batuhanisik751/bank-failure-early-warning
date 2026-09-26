@@ -116,7 +116,7 @@ natively, so the booster keeps only the winsoriser.
 | `texas` | ranking by the Texas ratio (non-performing assets over tangible equity plus reserves) | one ratio | no fit; the classic single-number warning signal and the baseline everything must beat |
 | `logit` | L2 logistic regression, no class weighting, `C` re-selected per test year on the inner slice | 83 `features_v2` columns | the Prototype 1 learner (Cole and White 2012 style) on the richer feature set |
 | `gbdt` | gradient-boosted trees, `make_gbdt(backend, monotone)` | 83 features | backend `lightgbm` 4.7 (`settings.models.gbdt.backend`); `HistGradientBoostingClassifier` is the fallback when LightGBM cannot load its OpenMP runtime, same histogram algorithm, native NaN, monotone constraints |
-| `gbdt_mono` | the same with registry monotone constraints | 83 features | fixed-split only; Decision Point 2 (unconstrained kept, `monotone = false`, on the higher inner-validation PR-AUC of 0.230 against 0.197, although the constrained model tested better, 0.476 against 0.432 PR-AUC) |
+| `gbdt_mono` | the same booster under the registry's monotone signs (+1 risk-increasing, -1 risk-decreasing, 0 free) | 83 features | walked forward beside `gbdt` at 4q with its own per-year tuning (section 6); Decision Point 2 is open and both result sets are presented: the constrained booster pools better (PR-AUC 0.3138 against 0.2813, recall@2% 0.7147 against 0.6434, the recall intervals disjoint) although the inner-validation slice preferred the unconstrained one (0.197 against 0.230), so `settings.models.gbdt.monotone = false` stays until the owner decides and the production and SHAP models remain `gbdt` |
 | `hazard` | discrete-time hazard (Shumway 2001): logistic regression on the one-quarter event `y_1q`, converted to H quarters by `1 - (1 - h)^H` | 83 features | assumes covariates persist over the horizon (a documented approximation); trained at its own 1q mask inside each walk-forward year |
 
 Booster parameters at the fixed split: `learning_rate = 0.03`, `num_leaves = 63`,
@@ -136,14 +136,16 @@ percentile intervals from 200 cluster-bootstrap draws that resample banks (certs
 replacement so that a bank's consecutive quarters move together; years with fewer than ten
 failures are flagged low confidence and a year without failures has undefined ranking
 metrics. Scores for every bank-quarter, model and year live in `walkforward_scores`
-(2,519,318 rows); the per-year artefacts in `models/walkforward/<Y>/<model>[_8q]/`.
+(3,352,958 rows: `texas, logit, gbdt, gbdt_mono, hazard` at 4q and `logit, gbdt, hazard` at
+8q); the per-year artefacts in `models/walkforward/<Y>/<model>[_8q]/`.
 
 ### Pooled, 4-quarter horizon (test years 2008-2024, 426,019 bank-quarters, 2,103 failures)
 
 | model | PR-AUC | 95% CI | recall @ top 2% | 95% CI | ROC-AUC | Brier raw | Brier calibrated |
 |---|---|---|---|---|---|---|---|
-| hazard | 0.3261 | [0.293, 0.357] | 0.7042 | [0.679, 0.729] | 0.9577 | 0.0041 | 0.0545 |
-| logit | 0.3066 | [0.276, 0.335] | 0.6843 | [0.657, 0.713] | 0.9613 | 0.0041 | 0.0189 |
+| hazard | 0.3261 | [0.293, 0.357] | 0.7042 | [0.679, 0.729] | 0.9577 | 0.0041 | 0.0038 |
+| gbdt_mono | 0.3138 | [0.282, 0.345] | 0.7147 | [0.692, 0.739] | 0.8993 | 0.0045 | 0.0048 |
+| logit | 0.3066 | [0.276, 0.335] | 0.6843 | [0.657, 0.713] | 0.9613 | 0.0041 | 0.0038 |
 | gbdt | 0.2813 | [0.250, 0.311] | 0.6434 | [0.609, 0.669] | 0.8206 | 0.0043 | 0.0043 |
 | texas | 0.2606 | [0.226, 0.298] | 0.7437 | [0.716, 0.771] | 0.9599 | 0.1707 | n/a |
 
@@ -151,63 +153,69 @@ metrics. Scores for every bank-quarter, model and year live in `walkforward_scor
 
 | model | PR-AUC | 95% CI | recall @ top 2% | 95% CI | ROC-AUC | Brier raw | Brier calibrated |
 |---|---|---|---|---|---|---|---|
-| logit | 0.2835 | [0.252, 0.314] | 0.5488 | [0.522, 0.577] | 0.9120 | 0.0078 | 0.0117 |
+| hazard | 0.4113 | [0.382, 0.442] | 0.6598 | [0.634, 0.688] | 0.9416 | 0.0070 | 0.0080 |
+| logit | 0.2835 | [0.252, 0.314] | 0.5488 | [0.522, 0.577] | 0.9120 | 0.0078 | 0.0076 |
 | gbdt | 0.1169 | [0.094, 0.138] | 0.2710 | [0.243, 0.302] | 0.6524 | 0.0087 | 0.0283 |
 
-Reading: the hazard model pools best at 4q and the logit at 8q; the hazard-logit gap at 4q
-(0.020 PR-AUC) is inside both intervals, so the backtest does not separate them, and every
-learner beats the Texas ratio on PR-AUC while the Texas ratio keeps the highest recall in the
-top 2 percent. The booster is the weakest learner on pooled PR-AUC because its early years
-are starved of failures (the 2008 model trains on 37 positives) and its raw scale drifts
-between years, which the pooled ranking punishes; year by year it is competitive from 2010
-on. At 8q the booster collapses (recall 0.27) while the logit degrades gracefully. The
+Reading: the hazard model pools best at both horizons; at 4q the hazard-logit gap (0.020
+PR-AUC) is inside both intervals, so the backtest does not separate them, and every learner
+beats the Texas ratio on PR-AUC while the Texas ratio keeps the highest recall in the top 2
+percent. The unconstrained booster is the weakest learner on pooled PR-AUC because its early
+years are starved of failures (the 2008 model trains on 37 positives) and its raw scale
+drifts between years, which the pooled ranking punishes; year by year it is competitive from
+2010 on. The monotone booster does not share that weakness: the registry signs hold its raw
+scale together across years (pooled ROC-AUC 0.90 against 0.82) and it pools second on
+PR-AUC and first on recall@2% among the learners, which is the walk-forward evidence for
+Decision Point 2 (section 5). At 8q the unconstrained booster collapses (recall 0.27) while
+the logit degrades gracefully and the hazard, whose one-quarter event is converted with
+`1 - (1 - h)^8`, is clearly best (PR-AUC 0.41, the interval disjoint from the logit's). The
 Prototype 1 fixed-split logit (PR-AUC 0.3867, recall@2% 0.7143, test 2010-2013, v1 features)
 is a different test period and is not comparable with any pooled row.
 
 ### Per year, 4-quarter horizon: PR-AUC [95% CI] and recall @ top 2%
 
-| year | n | failures | hazard PR-AUC [95% CI] | logit PR-AUC [95% CI] | gbdt PR-AUC [95% CI] | texas PR-AUC [95% CI] | hazard recall@2% | logit recall@2% | gbdt recall@2% | texas recall@2% |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 2008 | 33972 | 429 | 0.3221 [0.267, 0.385] | 0.3025 [0.248, 0.361] | 0.1102 [0.086, 0.142] | 0.3506 [0.288, 0.427] | 0.5198 | 0.4918 | 0.2727 | 0.5408 |
-| 2009 | 32811 | 679 | 0.4559 [0.413, 0.502] | 0.4172 [0.376, 0.464] | 0.3863 [0.341, 0.447] | 0.5714 [0.516, 0.626] | 0.4433 | 0.4242 | 0.4197 | 0.5567 |
-| 2010 | 31431 | 408 | 0.4897 [0.429, 0.554] | 0.4590 [0.394, 0.529] | 0.4377 [0.378, 0.501] | 0.4840 [0.417, 0.566] | 0.6471 | 0.6176 | 0.6324 | 0.6471 |
-| 2011 | 30165 | 231 | 0.5506 [0.464, 0.636] | 0.5106 [0.430, 0.589] | 0.5422 [0.454, 0.629] | 0.4171 [0.329, 0.530] | 0.8701 | 0.8225 | 0.8571 | 0.7749 |
-| 2012 | 29130 | 121 | 0.5342 [0.421, 0.669] | 0.4854 [0.386, 0.608] | 0.4626 [0.347, 0.592] | 0.3574 [0.246, 0.527] | 0.9669 | 0.9421 | 0.9587 | 0.9091 |
-| 2013 | 27970 | 73 | 0.4190 [0.254, 0.610] | 0.3684 [0.204, 0.542] | 0.4074 [0.240, 0.602] | 0.1659 [0.081, 0.309] | 0.8767 | 0.8493 | 0.8767 | 0.7123 |
-| 2014 | 26792 | 37 | 0.4237 [0.260, 0.681] | 0.4364 [0.264, 0.678] | 0.5152 [0.304, 0.690] | 0.1225 [0.044, 0.283] | 0.9730 | 0.9730 | 0.9730 | 0.8649 |
-| 2015 | 25517 | 24 | 0.3305 [0.135, 0.631] | 0.2671 [0.134, 0.524] | 0.3090 [0.136, 0.641] | 0.1152 [0.039, 0.252] | 1.0000 | 1.0000 | 1.0000 | 0.9167 |
-| 2016 | 24351 | 28 | 0.4899 [0.275, 0.786] | 0.5337 [0.281, 0.800] | 0.4090 [0.208, 0.686] | 0.1038 [0.044, 0.234] | 0.8571 | 0.9643 | 0.9286 | 0.8214 |
-| 2017 (low confidence) | 23321 | 5 | 0.0446 [0.000, 0.389] | 0.0454 [0.000, 0.450] | 0.0664 [0.000, 0.538] | 0.0112 [0.000, 0.067] | 0.4000 | 0.4000 | 0.4000 | 0.4000 |
-| 2018 | 22301 | 10 | 0.0750 [0.010, 0.264] | 0.0961 [0.014, 0.331] | 0.1131 [0.018, 0.346] | 0.0219 [0.003, 0.078] | 0.7000 | 0.7000 | 0.7000 | 0.7000 |
-| 2019 | 21362 | 18 | 0.4849 [0.153, 0.859] | 0.5079 [0.176, 0.862] | 0.4509 [0.198, 0.802] | 0.3994 [0.072, 0.747] | 0.9444 | 0.9444 | 0.9444 | 0.9444 |
-| 2020 (low confidence) | 20475 | 4 | 0.8269 [0.567, 1.000] | 0.8750 [0.667, 1.000] | 0.5048 [0.133, 1.000] | 0.6506 [0.098, 1.000] | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
-| 2021 (low confidence) | 19942 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| 2022 | 19285 | 17 | 0.0036 [0.000, 0.032] | 0.0121 [0.001, 0.108] | 0.0072 [0.001, 0.030] | 0.0035 [0.000, 0.027] | 0.1176 | 0.2353 | 0.2353 | 0.1176 |
-| 2023 | 18796 | 10 | 0.0099 [0.000, 0.041] | 0.0247 [0.000, 0.159] | 0.0587 [0.000, 0.273] | 0.0068 [0.001, 0.035] | 0.5000 | 0.4000 | 0.6000 | 0.2000 |
-| 2024 (low confidence) | 18398 | 9 | 0.1119 [0.000, 0.630] | 0.1118 [0.000, 0.630] | 0.0580 [0.001, 0.505] | 0.0031 [0.000, 0.038] | 0.1111 | 0.1111 | 0.1111 | 0.1111 |
-| pooled | 426019 | 2103 | 0.3261 [0.293, 0.357] | 0.3066 [0.276, 0.335] | 0.2813 [0.250, 0.311] | 0.2606 [0.226, 0.298] | 0.7042 | 0.6843 | 0.6434 | 0.7437 |
+| year | n | failures | hazard PR-AUC [95% CI] | logit PR-AUC [95% CI] | gbdt PR-AUC [95% CI] | gbdt_mono PR-AUC [95% CI] | texas PR-AUC [95% CI] | hazard recall@2% | logit recall@2% | gbdt recall@2% | gbdt_mono recall@2% | texas recall@2% |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2008 | 33972 | 429 | 0.3221 [0.267, 0.385] | 0.3025 [0.248, 0.361] | 0.1102 [0.086, 0.142] | 0.2020 [0.159, 0.250] | 0.3506 [0.288, 0.427] | 0.5198 | 0.4918 | 0.2727 | 0.4289 | 0.5408 |
+| 2009 | 32811 | 679 | 0.4559 [0.413, 0.502] | 0.4172 [0.376, 0.464] | 0.3863 [0.341, 0.447] | 0.3414 [0.304, 0.390] | 0.5714 [0.516, 0.626] | 0.4433 | 0.4242 | 0.4197 | 0.3741 | 0.5567 |
+| 2010 | 31431 | 408 | 0.4897 [0.429, 0.554] | 0.4590 [0.394, 0.529] | 0.4377 [0.378, 0.501] | 0.4544 [0.398, 0.521] | 0.4840 [0.417, 0.566] | 0.6471 | 0.6176 | 0.6324 | 0.6471 | 0.6471 |
+| 2011 | 30165 | 231 | 0.5506 [0.464, 0.636] | 0.5106 [0.430, 0.589] | 0.5422 [0.454, 0.629] | 0.4245 [0.348, 0.505] | 0.4171 [0.329, 0.530] | 0.8701 | 0.8225 | 0.8571 | 0.8009 | 0.7749 |
+| 2012 | 29130 | 121 | 0.5342 [0.421, 0.669] | 0.4854 [0.386, 0.608] | 0.4626 [0.347, 0.592] | 0.4796 [0.349, 0.598] | 0.3574 [0.246, 0.527] | 0.9669 | 0.9421 | 0.9587 | 0.9421 | 0.9091 |
+| 2013 | 27970 | 73 | 0.4190 [0.254, 0.610] | 0.3684 [0.204, 0.542] | 0.4074 [0.240, 0.602] | 0.3906 [0.246, 0.575] | 0.1659 [0.081, 0.309] | 0.8767 | 0.8493 | 0.8767 | 0.8767 | 0.7123 |
+| 2014 | 26792 | 37 | 0.4237 [0.260, 0.681] | 0.4364 [0.264, 0.678] | 0.5152 [0.304, 0.690] | 0.4484 [0.249, 0.666] | 0.1225 [0.044, 0.283] | 0.9730 | 0.9730 | 0.9730 | 0.9730 | 0.8649 |
+| 2015 | 25517 | 24 | 0.3305 [0.135, 0.631] | 0.2671 [0.134, 0.524] | 0.3090 [0.136, 0.641] | 0.2998 [0.120, 0.581] | 0.1152 [0.039, 0.252] | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.9167 |
+| 2016 | 24351 | 28 | 0.4899 [0.275, 0.786] | 0.5337 [0.281, 0.800] | 0.4090 [0.208, 0.686] | 0.4653 [0.250, 0.765] | 0.1038 [0.044, 0.234] | 0.8571 | 0.9643 | 0.9286 | 0.9286 | 0.8214 |
+| 2017 (low confidence) | 23321 | 5 | 0.0446 [0.000, 0.389] | 0.0454 [0.000, 0.450] | 0.0664 [0.000, 0.538] | 0.2402 [0.000, 0.770] | 0.0112 [0.000, 0.067] | 0.4000 | 0.4000 | 0.4000 | 0.4000 | 0.4000 |
+| 2018 | 22301 | 10 | 0.0750 [0.010, 0.264] | 0.0961 [0.014, 0.331] | 0.1131 [0.018, 0.346] | 0.1330 [0.018, 0.427] | 0.0219 [0.003, 0.078] | 0.7000 | 0.7000 | 0.7000 | 0.7000 | 0.7000 |
+| 2019 | 21362 | 18 | 0.4849 [0.153, 0.859] | 0.5079 [0.176, 0.862] | 0.4509 [0.198, 0.802] | 0.5376 [0.274, 0.827] | 0.3994 [0.072, 0.747] | 0.9444 | 0.9444 | 0.9444 | 0.9444 | 0.9444 |
+| 2020 (low confidence) | 20475 | 4 | 0.8269 [0.567, 1.000] | 0.8750 [0.667, 1.000] | 0.5048 [0.133, 1.000] | 0.5521 [0.200, 1.000] | 0.6506 [0.098, 1.000] | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| 2021 (low confidence) | 19942 | 0 | n/a n/a | n/a n/a | n/a n/a | n/a n/a | n/a n/a | n/a | n/a | n/a | n/a | n/a |
+| 2022 | 19285 | 17 | 0.0036 [0.000, 0.032] | 0.0121 [0.001, 0.108] | 0.0072 [0.001, 0.030] | 0.0121 [0.001, 0.128] | 0.0035 [0.000, 0.027] | 0.1176 | 0.2353 | 0.2353 | 0.1176 | 0.1176 |
+| 2023 | 18796 | 10 | 0.0099 [0.000, 0.041] | 0.0247 [0.000, 0.159] | 0.0587 [0.000, 0.273] | 0.1761 [0.001, 0.750] | 0.0068 [0.001, 0.035] | 0.5000 | 0.4000 | 0.6000 | 0.6000 | 0.2000 |
+| 2024 (low confidence) | 18398 | 9 | 0.1119 [0.000, 0.630] | 0.1118 [0.000, 0.630] | 0.0580 [0.001, 0.505] | 0.1119 [0.000, 0.631] | 0.0031 [0.000, 0.038] | 0.1111 | 0.1111 | 0.1111 | 0.1111 | 0.1111 |
+| pooled | 426019 | 2103 | 0.3261 [0.293, 0.357] | 0.3066 [0.276, 0.335] | 0.2813 [0.250, 0.311] | 0.3138 [0.282, 0.345] | 0.2606 [0.226, 0.298] | 0.7042 | 0.6843 | 0.6434 | 0.7147 | 0.7437 |
 
 ### Per year, 8-quarter horizon: PR-AUC [95% CI] and recall @ top 2%
 
-| year | n | failures | logit PR-AUC [95% CI] | gbdt PR-AUC [95% CI] | logit recall@2% | gbdt recall@2% |
-|---|---|---|---|---|---|---|
-| 2008 | 33972 | 1108 | 0.3020 [0.266, 0.346] | 0.1773 [0.150, 0.208] | 0.2762 | 0.2112 |
-| 2009 | 32811 | 1087 | 0.4321 [0.383, 0.483] | 0.3799 [0.339, 0.426] | 0.3183 | 0.2935 |
-| 2010 | 31431 | 639 | 0.4330 [0.371, 0.509] | 0.2092 [0.174, 0.256] | 0.4820 | 0.2770 |
-| 2011 | 30165 | 352 | 0.4566 [0.374, 0.534] | 0.4102 [0.341, 0.495] | 0.6534 | 0.6506 |
-| 2012 | 29130 | 194 | 0.3933 [0.300, 0.518] | 0.4334 [0.348, 0.547] | 0.7732 | 0.8247 |
-| 2013 | 27970 | 110 | 0.3298 [0.210, 0.479] | 0.3702 [0.233, 0.541] | 0.8182 | 0.8273 |
-| 2014 | 26792 | 61 | 0.2968 [0.181, 0.473] | 0.4241 [0.267, 0.599] | 0.9508 | 0.9508 |
-| 2015 | 25517 | 52 | 0.3142 [0.151, 0.603] | 0.3412 [0.185, 0.598] | 0.8846 | 0.8269 |
-| 2016 | 24351 | 33 | 0.3771 [0.178, 0.729] | 0.2857 [0.135, 0.643] | 0.8182 | 0.7879 |
-| 2017 | 23321 | 15 | 0.0426 [0.005, 0.178] | 0.0331 [0.004, 0.140] | 0.4000 | 0.5333 |
-| 2018 | 22301 | 28 | 0.2348 [0.053, 0.490] | 0.2372 [0.051, 0.557] | 0.7500 | 0.7143 |
-| 2019 | 21362 | 22 | 0.5074 [0.183, 0.919] | 0.3972 [0.096, 0.790] | 0.8182 | 0.9545 |
-| 2020 (low confidence) | 20475 | 4 | 0.8750 [0.643, 1.000] | 0.4464 [0.086, 0.931] | 1.0000 | 1.0000 |
-| 2021 | 19942 | 17 | 0.0014 [0.000, 0.003] | 0.0014 [0.000, 0.003] | 0.0000 | 0.0000 |
-| 2022 | 19285 | 27 | 0.0174 [0.001, 0.115] | 0.0061 [0.001, 0.024] | 0.1481 | 0.1852 |
-| 2023 | 18796 | 19 | 0.0120 [0.001, 0.084] | 0.0174 [0.001, 0.056] | 0.2105 | 0.3684 |
-| pooled | 407621 | 3768 | 0.2835 [0.252, 0.314] | 0.1169 [0.094, 0.138] | 0.5488 | 0.2710 |
+| year | n | failures | hazard PR-AUC [95% CI] | logit PR-AUC [95% CI] | gbdt PR-AUC [95% CI] | hazard recall@2% | logit recall@2% | gbdt recall@2% |
+|---|---|---|---|---|---|---|---|---|
+| 2008 | 33972 | 1108 | 0.3727 [0.329, 0.417] | 0.3020 [0.266, 0.346] | 0.1773 [0.150, 0.208] | 0.2987 | 0.2762 | 0.2112 |
+| 2009 | 32811 | 1087 | 0.5104 [0.469, 0.553] | 0.4321 [0.383, 0.483] | 0.3799 [0.339, 0.426] | 0.3615 | 0.3183 | 0.2935 |
+| 2010 | 31431 | 639 | 0.5176 [0.463, 0.581] | 0.4330 [0.371, 0.509] | 0.2092 [0.174, 0.256] | 0.5258 | 0.4820 | 0.2770 |
+| 2011 | 30165 | 352 | 0.5488 [0.476, 0.621] | 0.4566 [0.374, 0.534] | 0.4102 [0.341, 0.495] | 0.7415 | 0.6534 | 0.6506 |
+| 2012 | 29130 | 194 | 0.4875 [0.393, 0.617] | 0.3933 [0.300, 0.518] | 0.4334 [0.348, 0.547] | 0.7990 | 0.7732 | 0.8247 |
+| 2013 | 27970 | 110 | 0.4280 [0.286, 0.579] | 0.3298 [0.210, 0.479] | 0.3702 [0.233, 0.541] | 0.8909 | 0.8182 | 0.8273 |
+| 2014 | 26792 | 61 | 0.3788 [0.239, 0.577] | 0.2968 [0.181, 0.473] | 0.4241 [0.267, 0.599] | 0.9836 | 0.9508 | 0.9508 |
+| 2015 | 25517 | 52 | 0.3337 [0.163, 0.594] | 0.3142 [0.151, 0.603] | 0.3412 [0.185, 0.598] | 0.8846 | 0.8846 | 0.8269 |
+| 2016 | 24351 | 33 | 0.4165 [0.202, 0.712] | 0.3771 [0.178, 0.729] | 0.2857 [0.135, 0.643] | 0.7273 | 0.8182 | 0.7879 |
+| 2017 | 23321 | 15 | 0.0254 [0.003, 0.136] | 0.0426 [0.005, 0.178] | 0.0331 [0.004, 0.140] | 0.4000 | 0.4000 | 0.5333 |
+| 2018 | 22301 | 28 | 0.2010 [0.048, 0.458] | 0.2348 [0.053, 0.490] | 0.2372 [0.051, 0.557] | 0.6786 | 0.7500 | 0.7143 |
+| 2019 | 21362 | 22 | 0.5557 [0.225, 0.898] | 0.5074 [0.183, 0.919] | 0.3972 [0.096, 0.790] | 0.9545 | 0.8182 | 0.9545 |
+| 2020 (low confidence) | 20475 | 4 | 0.8750 [0.643, 1.000] | 0.8750 [0.643, 1.000] | 0.4464 [0.086, 0.931] | 1.0000 | 1.0000 | 1.0000 |
+| 2021 | 19942 | 17 | 0.0007 [0.000, 0.002] | 0.0014 [0.000, 0.003] | 0.0014 [0.000, 0.003] | 0.0000 | 0.0000 | 0.0000 |
+| 2022 | 19285 | 27 | 0.0056 [0.001, 0.028] | 0.0174 [0.001, 0.115] | 0.0061 [0.001, 0.024] | 0.1852 | 0.1481 | 0.1852 |
+| 2023 | 18796 | 19 | 0.0065 [0.001, 0.031] | 0.0120 [0.001, 0.084] | 0.0174 [0.001, 0.056] | 0.2105 | 0.2105 | 0.3684 |
+| pooled | 407621 | 3768 | 0.4113 [0.382, 0.442] | 0.2835 [0.252, 0.314] | 0.1169 [0.094, 0.138] | 0.6598 | 0.5488 | 0.2710 |
 
 The post-2014 years hold 0 to 37 failures each, so their intervals span most of [0, 1]; the
 2022-2024 rows (17, 10 and 9 failures) are the years in which the 2008-shaped models did
@@ -216,30 +224,38 @@ worst, which section 9 takes up.
 ## 7. Calibration
 
 Per walk-forward year an isotonic map is fitted on the last complete label year inside the
-training window, using the scores of an inner model trained on the years before that slice
-(so no test outcome shapes the map), and then applied to the full-window model. The map is
-stored as `models/walkforward/<Y>/<model>[_8q]/calibration.joblib` and its output as
-`walkforward_scores.score_calibrated` (filled for logit, gbdt and hazard; the Texas ratio is
-a ranking, not a probability). Pooled 4q results against a failure rate of 0.49 percent:
+training window (widened backwards while it holds fewer than five failures) and applied to
+the full-window model. Who scores that slice depends on the learner
+(`calibration.SLICE_SCORER_BY_MODEL`): the logit and the hazard score it with the year's own
+full-window model, so the map is learned on the score scale it is applied to (in-sample for
+those rows, which an L2 logit on several hundred thousand rows tolerates); the boosters
+separate their training rows perfectly (in-sample slice Brier 0.0000 with four thresholds),
+so an inner model fitted on the years before the slice scores it instead. No test outcome
+shapes a map. The map is stored as `models/walkforward/<Y>/<model>[_8q]/calibration.joblib`
+and its output as `walkforward_scores.score_calibrated` (filled for logit, gbdt, gbdt_mono
+and hazard; the Texas ratio is a ranking, not a probability). Pooled 4q results against a
+failure rate of 0.49 percent:
 
-| model | mean raw score | mean calibrated | Brier raw | Brier calibrated | years where calibration worsens Brier |
-|---|---|---|---|---|---|
-| gbdt | 0.0020 | 0.0078 | 0.0043 | 0.0043 | 7 of 17 |
-| logit | 0.0025 | 0.0293 | 0.0041 | 0.0189 | 13 of 17 |
-| hazard | 0.0021 | 0.0659 | 0.0041 | 0.0545 | 12 of 17 |
+| model | slice scored by | mean raw score | mean calibrated | Brier raw | Brier calibrated | years where calibration worsens Brier | top decile: mean calibrated / observed |
+|---|---|---|---|---|---|---|---|
+| logit | full-window model | 0.0025 | 0.0044 | 0.0041 | 0.0038 | 9 of 17 | 0.042 / 0.045 |
+| hazard | full-window model | 0.0021 | 0.0055 | 0.0041 | 0.0038 | 10 of 17 | 0.053 / 0.043 |
+| gbdt | inner model | 0.0020 | 0.0078 | 0.0043 | 0.0043 | 7 of 17 | 0.045 / 0.036 |
+| gbdt_mono | inner model | 0.0044 | 0.0141 | 0.0045 | 0.0048 | 8 of 17 | 0.068 / 0.042 |
 
-Honest reading: the raw scores of all three learners are already close to the observed
-rate in the lower nine deciles (for the logit, decile 9 has mean raw 0.0010 against an
-observed 0.0021, decile 10 has 0.021 against 0.045; the raw curve under-predicts at the top
-by about a factor of two). The isotonic map helps the booster slightly and hurts the two
-linear models badly in the crisis years: the inner model that fits the map has a different
-score scale from the full-window model it is applied to (a crisis year enters the window, or
-`C` is re-selected), so 2009 and 2010 inherit the inner model's plateaus (logit mean
-calibrated 0.19 in 2009 against a failure rate of 0.021). The Brier score is reported for
-every model and year; the calibrated probabilities of the logit and hazard should not be
-presented as probabilities until the map is fitted on a slice scored by the same model that
-is being calibrated (a Prototype 3 item). Reliability curves:
-`reports/figures/reliability_{logit,gbdt,hazard}.png`.
+Reading: for the two linear models the map now lowers the pooled Brier score and puts the
+top decile within a few thousandths of the observed rate (the raw scores under-predicted it
+by about a factor of two); the years where it still worsens Brier are the post-2013 years
+with 0 to 37 failures, where any map fitted on a thin slice is noise, and the differences
+there are in the fifth decimal. Under the inner-model recipe that Prototype 2 first used for
+every learner the logit and hazard maps were unusable in the crisis years (2009 mean
+calibrated 0.19 and 0.47 against a failure rate of 0.021; pooled Brier 0.0189 and 0.0545)
+because the inner model, trained before any crisis failure, put the whole 2009 test year
+above its top threshold; `docs/DECISIONS.md` keeps those numbers. The boosters' maps are
+within tolerance but over-predict the top decile (gbdt_mono by half again), and the 8q maps
+follow the same pattern (logit 0.0078 raw against 0.0076 calibrated; hazard 0.0070 against
+0.0080, the converted eight-quarter hazard over-predicting 2010-2011). Reliability curves:
+`reports/figures/reliability_{logit,gbdt,gbdt_mono,hazard}.png`.
 
 ## 8. Lead time
 
@@ -253,6 +269,7 @@ scored only through the 2024 model.
 |---|---|---|---|---|
 | hazard | 440 | 398 (90.5%) | 5 | 88.4% |
 | logit | 440 | 395 (89.8%) | 5 | 87.7% |
+| gbdt_mono | 440 | 384 (87.3%) | 5 | 85.5% |
 | gbdt | 440 | 364 (82.7%) | 4.5 | 81.6% |
 | texas | 440 | 372 (84.5%) | 4 | 82.5% |
 
@@ -338,9 +355,10 @@ years, one in ten is bought, and the rest had the same symptoms and recovered.
 - Small-N years after 2014. From 2014 on no test year holds more than 37 failures and six
   hold fewer than ten, so the per-year confidence intervals span most of [0, 1] and a single
   bank changes a year's PR-AUC. Pooled numbers are dominated by 2008-2012.
-- Calibration. The isotonic maps of the logit and hazard are unreliable in crisis years
-  (section 7); only the booster's calibrated output and the raw scores of the linear models
-  should be read as probabilities, and the raw scores under-predict at the top by about two.
+- Calibration. The maps are fitted on one label year each, so after 2013 they rest on 0 to
+  37 failures and move the Brier score in the fifth decimal either way; the boosters'
+  maps over-predict the top decile and the eight-quarter hazard map over-predicts 2010-2011
+  (section 7). Calibrated probabilities are year-of-fit estimates, not a guarantee.
 - Backend caveat. The booster runs on LightGBM 4.7 here; on a machine without an OpenMP
   runtime the same code falls back to scikit-learn's `HistGradientBoostingClassifier`, which
   is the same algorithm with different defaults and tie handling, so refitted scores and SHAP

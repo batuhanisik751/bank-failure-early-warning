@@ -75,20 +75,29 @@ bank-quarters, 2,103 failures; 95% intervals from 200 cluster-bootstrap draws by
 | model | PR-AUC | 95% CI | recall @ top 2% | 95% CI | ROC-AUC |
 |---|---|---|---|---|---|
 | hazard (discrete-time, Shumway 2001) | 0.3261 | [0.293, 0.357] | 0.7042 | [0.679, 0.729] | 0.9577 |
+| gbdt_mono (LightGBM, registry monotone signs) | 0.3138 | [0.282, 0.345] | 0.7147 | [0.692, 0.739] | 0.8993 |
 | logit (all 83 features, L2, per-year C) | 0.3066 | [0.276, 0.335] | 0.6843 | [0.657, 0.713] | 0.9613 |
-| gbdt (LightGBM, per-year tuning) | 0.2813 | [0.250, 0.311] | 0.6434 | [0.609, 0.669] | 0.8206 |
+| gbdt (LightGBM, unconstrained, per-year tuning) | 0.2813 | [0.250, 0.311] | 0.6434 | [0.609, 0.669] | 0.8206 |
 | texas (rank by Texas ratio) | 0.2606 | [0.226, 0.298] | 0.7437 | [0.716, 0.771] | 0.9599 |
 
-**8-quarter horizon** (2008-2023 pooled, 407,621 bank-quarters, 3,768 failures): logit
-PR-AUC 0.2835 [0.252, 0.314], recall@2% 0.5488; gbdt 0.1169 [0.094, 0.138], 0.2710.
+**8-quarter horizon** (2008-2023 pooled, 407,621 bank-quarters, 3,768 failures): hazard
+PR-AUC 0.4113 [0.382, 0.442], recall@2% 0.6598; logit 0.2835 [0.252, 0.314], 0.5488; gbdt
+0.1169 [0.094, 0.138], 0.2710.
 
-The honest reading: the hazard model pools best at 4q and the logit at 8q, but the two
-intervals overlap, so the backtest does not separate them; every learner beats the Texas
-ratio on PR-AUC while the Texas ratio still captures the most failures in its top 2%. The
-gradient booster is competitive year by year from 2010 on and weakest pooled, because its
-early years are starved of failures and its score scale drifts between years. Per-year
-tables with failure counts, Brier scores and reliability curves are in the report; years
-with fewer than ten failures are flagged low confidence. Lead time: of the 440 banks that
+The honest reading: the hazard model pools best at both horizons; at 4q its interval
+overlaps the logit's, so the backtest does not separate them, while at 8q it is clearly
+ahead. Every learner beats the Texas ratio on PR-AUC while the Texas ratio still captures
+the most failures in its top 2%. The unconstrained gradient booster is competitive year by
+year from 2010 on and weakest pooled, because its early years are starved of failures and
+its score scale drifts between years; the same booster under the feature registry's
+monotone signs keeps its scale and pools second (the open Decision Point 2: the inner
+validation slice preferred the unconstrained booster, the backtest prefers the constrained
+one, and the unconstrained configuration stays in production until the owner decides).
+Calibrated probabilities track the observed failure rate for the logit and hazard (pooled
+Brier 0.0041 raw, 0.0038 calibrated; top decile 0.042 predicted against 0.045 observed for
+the logit). Per-year tables with failure counts, Brier scores and reliability curves are in
+the report; years with fewer than ten failures are flagged low confidence. Lead time: of
+the 440 banks that
 failed in 2009-2012, the logit had put 89.8% in some quarter's top 2% before they failed,
 median 5 quarters ahead, 87.7% at least two quarters ahead (hazard 90.5% / 5 / 88.4%).
 
@@ -138,8 +147,8 @@ uv run bankcanary build-features-v2      # features_v2 (83 features); docs/FEATU
 uv run bankcanary train-gbdt             # fixed-split booster, reports/p2_gbdt.md
 uv run bankcanary train-hazard           # fixed-split hazard, reports/p2_hazard.md
 for Y in $(seq 2008 2024); do uv run bankcanary walkforward --year $Y --model all; done
-for Y in $(seq 2008 2023); do uv run bankcanary walkforward --year $Y --model logit,gbdt --horizon 8; done
-uv run bankcanary calibrate --all-years  # isotonic maps, score_calibrated
+for Y in $(seq 2008 2023); do uv run bankcanary walkforward --year $Y --model logit,gbdt,hazard --horizon 8; done
+uv run bankcanary calibrate --all-years  # isotonic maps, score_calibrated (also --horizon 8)
 uv run bankcanary metrics-report         # reports/walkforward.md (CIs, Brier, lead time)
 uv run bankcanary explain --all          # SHAP drivers table, reports/shap_summary.md
 uv run bankcanary sensitivity            # reports/sensitivity.md

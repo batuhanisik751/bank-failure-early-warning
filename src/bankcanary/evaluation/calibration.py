@@ -7,11 +7,26 @@ the calibration map is learned strictly inside ``Y``'s training window so that n
 outcome shapes it: the *calibration slice* is the last complete label year inside
 :func:`bankcanary.splits.training_mask` at the scoring horizon (widened backwards a
 year at a time while it holds fewer than :data:`MIN_CALIBRATION_POSITIVES` failures),
-an *inner model* with the year's tuned configuration is fitted on the rows whose
-outcome windows closed before the slice's first prediction date and scores the slice,
-and ``IsotonicRegression(out_of_bounds="clip")`` is fitted on those (score, outcome)
-pairs. The map is then applied to the full-window model's test-year scores and stored
-as ``score_calibrated`` in ``data/walkforward/<Y>_<model>_<H>q.parquet``, from which
+the slice is scored, and ``IsotonicRegression(out_of_bounds="clip")`` is fitted on those
+(score, outcome) pairs. Who scores the slice is the ``slice_scorer`` choice:
+
+* ``"full"`` (the default for the L2 logits, :data:`SLICE_SCORER_BY_MODEL`): the
+  full-window model of year ``Y`` itself, so the map is learned on exactly the score
+  scale it is later applied to. The slice rows are part of that model's training set,
+  so its slice scores are in-sample; for a regularised logit on hundreds of thousands
+  of rows the in-sample and out-of-sample scales are close, and the map answers the
+  question a user asks ("what does a score of 0.02 from *this* model mean").
+* ``"inner"`` (the default for the boosters): an inner model with the year's tuned
+  configuration is fitted on the rows whose outcome windows closed before the slice's
+  first prediction date and scores the slice out of sample. Required for trees, whose
+  in-sample scores separate the slice perfectly and carry no calibration information.
+  For the logits it fails where the inner and full models see different regimes (2009:
+  the inner model has seen no crisis failure, the full model a year of them): the two
+  score scales are unrelated and the map clips most test rows onto the inner model's
+  top plateau; ``docs/DECISIONS.md`` records the Prototype 2 numbers.
+
+The map is applied to the full-window model's test-year scores and stored as
+``score_calibrated`` in ``data/walkforward/<Y>_<model>_<H>q.parquet``, from which
 :func:`bankcanary.evaluation.walkforward.rebuild_scores_table` rebuilds the
 ``walkforward_scores`` table. Isotonic regression is monotone, so the ranking metrics
 are unchanged up to ties; what changes is the Brier score and the reliability curve.
@@ -37,11 +52,16 @@ from bankcanary.splits import assert_no_leakage, prediction_date, training_mask
 log = logging.getLogger(__name__)
 
 #: Models whose output is a probability; the Texas ratio is a ranking and is not calibrated.
-MODELS: tuple[str, ...] = ("logit", "gbdt", "hazard")
+MODELS: tuple[str, ...] = ("logit", "gbdt", "gbdt_mono", "hazard")
 RUN_NAME = "calibrate"
 METHOD = "isotonic"
 #: A slice with fewer failures than this cannot pin down a monotone map; widen it.
 MIN_CALIBRATION_POSITIVES = 5
+SLICE_SCORERS: tuple[str, ...] = ("full", "inner")
+#: Who scores the calibration slice (module docstring), per model: the L2 logits score
+#: their own slice, the boosters need an inner model because their in-sample scores
+#: separate the slice perfectly (slice Brier 0, a handful of isotonic thresholds).
+SLICE_SCORER_BY_MODEL: dict[str, str] = {"logit": "full", "hazard": "full", "gbdt": "inner"}
 
 
 def _fmt(ts) -> str | None:
@@ -49,7 +69,12 @@ def _fmt(ts) -> str | None:
 
 
 def calibration_masks(
-    frame: pd.DataFrame, horizon: int, year: int, fit_horizon: int | None = None, lag_days=None
+    frame: pd.DataFrame,
+    horizon: int,
+    year: int,
+    fit_horizon: int | None = None,
+    lag_days=None,
+    require_inner: bool = True,
 ) -> tuple[pd.Series, pd.Series, dict]:
     """``(inner_train, calibration_slice, bounds)`` nested inside test year ``year``.
 
@@ -57,10 +82,12 @@ def calibration_masks(
     year's :func:`training_mask` at the scoring horizon, so every slice outcome was
     known on the year's first prediction date. The inner training rows are the year's
     training rows at ``fit_horizon`` whose windows closed before the slice's first
-    prediction date (re-checked with :func:`assert_no_leakage`). While the slice or the
-    inner rows hold fewer than :data:`MIN_CALIBRATION_POSITIVES` failures the slice is
-    widened backwards a complete year at a time; ``bounds["sufficient"]`` is ``False``
-    when no width works and the narrowest slice is returned for the caller to flag.
+    prediction date (re-checked with :func:`assert_no_leakage`). While the slice (or,
+    with ``require_inner``, the inner rows) holds fewer than
+    :data:`MIN_CALIBRATION_POSITIVES` failures the slice is widened backwards a complete
+    year at a time; ``bounds["sufficient"]`` is ``False`` when no width works and the
+    narrowest slice is returned for the caller to flag. The ``"full"`` slice scorer fits
+    no inner model and passes ``require_inner=False``.
     """
     from bankcanary.splits.time_split import DEFAULT_LAG_DAYS
 
@@ -97,8 +124,8 @@ def calibration_masks(
             "positives_calibration": int(frame.loc[sl, y_slice].sum()),
         }
         enough = MIN_CALIBRATION_POSITIVES
-        bounds["sufficient"] = (
-            bounds["positives_calibration"] >= enough and bounds["positives_inner_train"] >= enough
+        bounds["sufficient"] = bounds["positives_calibration"] >= enough and (
+            not require_inner or bounds["positives_inner_train"] >= enough
         )
         if first is None:
             first = (inner, sl, bounds)
@@ -131,11 +158,17 @@ def model_params(config: dict) -> dict:
     """The tuned hyper-parameters recorded in a walk-forward ``config.json``.
 
     ``C`` for the logits (the hazard included); the booster's full parameter set,
-    iteration cap included, for ``gbdt``; nothing for the Texas ranking.
+    iteration cap included, for ``gbdt`` and ``gbdt_mono``; nothing for the Texas ranking.
     """
-    if config.get("model") == "gbdt":
+    if config.get("model") in w.GBDT_MODELS:
         return dict(config.get("params", {}))
     return {"C": float(config["C"])} if "C" in config else {}
+
+
+def default_slice_scorer(model: str) -> str:
+    """:data:`SLICE_SCORER_BY_MODEL` for ``model`` (``gbdt_mono`` follows ``gbdt``)."""
+    key = "gbdt" if model in w.GBDT_MODELS else model
+    return SLICE_SCORER_BY_MODEL[key]
 
 
 def calibration_path(settings: Settings, year: int, model: str, horizon: int) -> Path:
@@ -144,16 +177,25 @@ def calibration_path(settings: Settings, year: int, model: str, horizon: int) ->
 
 
 def fit_calibrator(
-    frame: pd.DataFrame, settings: Settings, year: int, model: str, horizon: int = 4, save=True
+    frame: pd.DataFrame,
+    settings: Settings,
+    year: int,
+    model: str,
+    horizon: int = 4,
+    save=True,
+    slice_scorer: str | None = None,
 ) -> CalibrationResult:
     """Learn the isotonic map for one walk-forward year and apply it to that year's scores.
 
     Requires the full-window model saved by :func:`bankcanary.evaluation.walkforward.fit_year`
-    (its tuned hyper-parameters are reused for the inner model) and its per-year score
-    file. With ``save`` the calibrator goes next to the model as ``calibration.joblib``
-    plus ``calibration.json`` and the score file's ``score_calibrated`` column is filled
-    in place; the caller rebuilds ``walkforward_scores`` afterwards. Logs a ``calibrate``
-    run keyed by the slice bounds and the model configuration.
+    and its per-year score file. ``slice_scorer`` (module docstring) is ``"full"`` when
+    that model scores the calibration slice itself and ``"inner"`` when an inner model
+    with its tuned hyper-parameters is refitted before the slice and scores it; ``None``
+    takes the model's default from :func:`default_slice_scorer`. With
+    ``save`` the calibrator goes next to the model as ``calibration.joblib`` plus
+    ``calibration.json`` and the score file's ``score_calibrated`` column is filled in
+    place; the caller rebuilds ``walkforward_scores`` afterwards. Logs a ``calibrate``
+    run keyed by the slice bounds, the scorer and the model configuration.
     """
     from bankcanary import tracking
     from bankcanary.evaluation.metrics import brier, evaluate
@@ -163,31 +205,40 @@ def fit_calibrator(
     horizon, year = int(horizon), int(year)
     if model not in MODELS:
         raise ValueError(f"{model!r} is not a probability model; calibrate one of {MODELS}")
-    _, features, full_config = w.load_year(settings, year, model, horizon)
+    slice_scorer = default_slice_scorer(model) if slice_scorer is None else slice_scorer
+    if slice_scorer not in SLICE_SCORERS:
+        raise ValueError(f"slice_scorer must be one of {SLICE_SCORERS}, not {slice_scorer!r}")
+    full_pipeline, features, full_config = w.load_year(settings, year, model, horizon)
     score_file = w.scores_path(settings, year, model, horizon)
     if not score_file.exists():
         raise FileNotFoundError(f"no walk-forward scores for {model} {year} at {score_file}")
     fit_h = w.fit_horizon_of(model, horizon)
     lag = settings.availability_lag_days
-    inner, sl, bounds = calibration_masks(frame, horizon, year, fit_h, lag)
-    if not inner.any() or not sl.any():
+    use_inner = slice_scorer == "inner"
+    inner, sl, bounds = calibration_masks(frame, horizon, year, fit_h, lag, use_inner)
+    if (use_inner and not inner.any()) or not sl.any():
         raise ValueError(f"calibration {horizon}q {year} {model}: empty inner or slice rows")
     params = model_params(full_config)
     pipeline, _, config = w.build_model(model, settings, None, params)
     y_fit, y_slice = horizon_columns(fit_h)[0], horizon_columns(horizon)[0]
     tr, cal = frame.loc[inner], frame.loc[sl]
     log.info(
-        "calibration %dq %d %s: inner fit on %d rows (%d positives), slice %s-%s (%d positives)",
+        "calibration %dq %d %s: slice %s-%s (%d positives) scored by the %s model%s",
         horizon,
         year,
         model,
-        len(tr),
-        bounds["positives_inner_train"],
         bounds["calibration_start"],
         bounds["calibration_end"],
         bounds["positives_calibration"],
+        slice_scorer,
+        f" (inner fit on {len(tr)} rows, {bounds['positives_inner_train']} positives)"
+        if use_inner
+        else "",
     )
-    pipeline.fit(tr[list(features)], tr[y_fit].astype(int).to_numpy())
+    if use_inner:
+        pipeline.fit(tr[list(features)], tr[y_fit].astype(int).to_numpy())
+    else:
+        pipeline = full_pipeline
     slice_score = score_pipeline(pipeline, cal[list(features)])
     if model == "hazard":
         slice_score = convert_hazard(slice_score, horizon)
@@ -224,6 +275,7 @@ def fit_calibrator(
             "fit_label": y_fit,
             "test_year": year,
             "method": METHOD,
+            "slice_scorer": slice_scorer,
             "availability_lag_days": int(lag),
             "params": params,
             **bounds,
@@ -269,11 +321,13 @@ def calibrate_year(
     models=MODELS,
     horizon: int = 4,
     rebuild: bool = True,
+    slice_scorer: str | None = None,
 ) -> list[CalibrationResult]:
     """Calibrate every requested model that has a walk-forward fit for ``year``.
 
-    Models without a saved fit or score file at this horizon are skipped with a warning
-    (the 8-quarter horizon has no hazard, for instance). With ``rebuild`` the
+    Models without a saved fit or score file at this horizon are skipped with a warning.
+    ``slice_scorer`` is passed to :func:`fit_calibrator` (``None``: each model's own
+    default). With ``rebuild`` the
     ``walkforward_scores`` table is rebuilt from the per-year files afterwards.
     """
     results = []
@@ -284,7 +338,7 @@ def calibrate_year(
         if not have_fit or not w.scores_path(settings, year, model, horizon).exists():
             log.warning("no walk-forward %s fit for %d at %dq; skipped", model, year, horizon)
             continue
-        results.append(fit_calibrator(frame, settings, year, model, horizon))
+        results.append(fit_calibrator(frame, settings, year, model, horizon, True, slice_scorer))
     if rebuild and results:
         w.rebuild_scores_table(settings)
     return results

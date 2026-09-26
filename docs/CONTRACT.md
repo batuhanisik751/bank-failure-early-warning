@@ -188,9 +188,11 @@ concatenates module lists in a fixed order and `build.py` calls the builders in 
   chosen on the inner validation slice (reports 2007Q1–2008Q4, inner train windows closed
   before 2007-05-30), never on test years. Two configs are always trained and logged:
   `gbdt` (unconstrained) and `gbdt_mono` (monotone constraints from the registry's
-  `monotone` field: +1 risk-increasing, −1 risk-decreasing, 0 none). **Decision Point 2 is
-  presented to the owner with both sets of results; until then the config in
-  `settings.models.gbdt.monotone` (default: the better inner-validation config) is used.**
+  `monotone` field: +1 risk-increasing, −1 risk-decreasing, 0 none), at the fixed split and
+  as walk-forward models (`walkforward.GBDT_MODELS`). **Decision Point 2 is presented to
+  the owner with both sets of results; until then the config in
+  `settings.models.gbdt.monotone` (default: the better inner-validation config) is used
+  for the production booster, the SHAP drivers and the case study.**
 - `bankcanary.models.hazard`: discrete-time hazard (Shumway 2001) = logistic regression on
   bank-quarter rows with event "fails within the next quarter" (`y_1q`, built by
   `labels.build` for horizon 1); 4q/8q probabilities by `1 − (1 − h)^H` assuming persistence
@@ -201,8 +203,11 @@ concatenates module lists in a fixed order and `build.py` calls the builders in 
   `models/walkforward/<Y>/<model>/` and appends to `walkforward_scores`. Runs one year per
   CLI call (`bankcanary walkforward --year Y [--model …]`) so no command exceeds two minutes.
 - Calibration: per walk-forward year, isotonic regression fitted on the last complete year
-  inside the training window (an inner model trained on the earlier years scores that slice);
-  the map is then applied to the full-window model. Stored in `score_calibrated`.
+  inside the training window; the map is then applied to the full-window model and stored in
+  `score_calibrated`. Who scores the slice is per model (`calibration.SLICE_SCORER_BY_MODEL`,
+  see DECISIONS 2026-09-25): the full-window model itself for `logit` and `hazard`, an inner
+  model trained on the earlier years for `gbdt` and `gbdt_mono`, whose in-sample scores
+  separate the slice perfectly.
 - Metrics suite (`evaluation.metrics`): P1 metrics + `brier`, `lead_time_quarters` summary
   (median, share flagged ≥ 2 quarters ahead), cluster-bootstrap CIs by `cert` (200 draws;
   years with < 10 failures flagged `low_confidence`), per-year and pooled tables.

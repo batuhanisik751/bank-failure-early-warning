@@ -2,22 +2,24 @@
 
 Spec: `PROJECT_SPEC.md`, "Prototype 2 — Depth". Every criterion below was re-measured on
 2026-09-25 against the cached FDIC pull of the same date (`failures` `fetched_at =
-2026-09-25`), the committed run records under `runs/` (635 rows in `runs/index.jsonl`:
-167 `walkforward`, 278 `tune_walkforward`, 83 `calibrate`, 49 `tune_gbdt`, 7 `tune_hazard`,
-9 `train`, 14 `sensitivity`, 18 `explain`, 6 `metrics`, 4 `case_study_2023`; every run
+2026-09-25`), the committed run records under `runs/` (1,001 rows in `runs/index.jsonl`:
+200 `walkforward`, 526 `tune_walkforward`, 166 `calibrate`, 49 `tune_gbdt`, 7 `tune_hazard`,
+9 `train`, 14 `sensitivity`, 18 `explain`, 8 `metrics`, 4 `case_study_2023`; every run
 directory the index names is committed) and the warehouse tables named next to each item.
-`uv run pytest`: 396 passed in 19 s, no network, no `data/` reads. The written summary of
+`uv run pytest`: 402 passed in 22 s, no network, no `data/` reads. The written summary of
 everything below is [`docs/model_card.md`](model_card.md). The acceptance pass at the end of
 this file records the commands and numbers behind each tick.
 
 - [x] **Walk-forward results exist for every year from 2008 to the latest complete year, with
-  failure counts and CIs.** `walkforward_scores` holds 2,519,318 rows: 4q for `texas, logit,
-  gbdt, hazard` over 17 test years 2008-2024 (426,019 bank-quarters, 2,103 failures) and 8q
-  for `logit, gbdt` over 16 test years 2008-2023 (407,621 rows, 3,768 failures); 2024 is the
-  last 4q-complete year and 2023 the last 8q-complete year under the 2026-09-25 `as_of_date`.
-  `models/walkforward/<Y>/` exists for all 17 years with `pipeline.joblib, features.json,
-  config.json, metrics.json, tuning.json, calibration.{joblib,json}` per model (16 `_8q`
-  directories each for logit and gbdt). `reports/walkforward.md` lists every year with `n`,
+  failure counts and CIs.** `walkforward_scores` holds 3,352,958 rows: 4q for `texas, logit,
+  gbdt, gbdt_mono, hazard` over 17 test years 2008-2024 (426,019 bank-quarters, 2,103
+  failures) and 8q for `logit, gbdt, hazard` over 16 test years 2008-2023 (407,621 rows,
+  3,768 failures); 2024 is the last 4q-complete year and 2023 the last 8q-complete year under
+  the 2026-09-25 `as_of_date`. `models/walkforward/<Y>/` exists for all 17 years with
+  `pipeline.joblib, features.json, config.json, metrics.json, tuning.json,
+  calibration.{joblib,json}` per model (16 `_8q` directories each for logit, gbdt and
+  hazard). Both sides of Decision Point 2 are walked forward (`gbdt` and `gbdt_mono`, model
+  card section 5). `reports/walkforward.md` lists every year with `n`,
   `failures`, PR-AUC and recall@2% with 200-draw cluster-bootstrap 95% intervals, Brier raw
   and calibrated, and a `low confidence` flag for years under 10 failures (2017, 2020, 2021,
   2024 at 4q; 2020 at 8q; 2021 has no 4q failure and undefined ranking metrics).
@@ -58,19 +60,20 @@ this file records the commands and numbers behind each tick.
   signs over 2001-2021. The notebook also plots unrealised losses and uninsured share of the
   three banks against peer bands 2020-2023 (`reports/figures/svb_unrealized_losses.png`).
 
-- [ ] **Calibrated probabilities: reliability curve within reasonable tolerance on the test
-  period; Brier score reported.** Partly met. Brier is reported for every model, year and
-  horizon, raw and calibrated (`reports/walkforward.md`, `runs/metrics/`). The isotonic map
-  (fitted per year on the last complete label year inside the training window, from an inner
-  model's scores) is within tolerance for the booster only: gbdt pooled 4q Brier 0.0043 raw
-  and 0.0043 calibrated, top-decile mean calibrated 0.045 against an observed 0.036. For the
-  logit and the hazard the map hurts (Brier 0.0041 -> 0.0189 and 0.0041 -> 0.0545; 2009
-  logit mean calibrated 0.19 against a failure rate of 0.021) because the inner model's score
-  scale differs from the full-window model's in the crisis years. The raw scores of the linear
-  models track the observed rate in the lower nine deciles and under-predict the top decile
-  by about a factor of two (logit 0.021 against 0.045). Left unticked: the calibrated output
-  is not usable as a probability for two of the three learners; the fix (fit the map on a
-  slice scored by the model being calibrated) is noted in the model card, section 7.
+- [x] **Calibrated probabilities: reliability curve within reasonable tolerance on the test
+  period; Brier score reported.** Brier is reported for every model, year and horizon, raw
+  and calibrated (`reports/walkforward.md`, `runs/metrics/`). The isotonic map is fitted per
+  year on the last complete label year inside the training window; the logit and the hazard
+  score that slice with the year's own model, the boosters with an inner model fitted before
+  it (`calibration.SLICE_SCORER_BY_MODEL`; the boosters' in-sample slice scores separate
+  perfectly and carry no calibration information). Pooled 4q Brier raw / calibrated: logit
+  0.0041 / 0.0038, hazard 0.0041 / 0.0038, gbdt 0.0043 / 0.0043, gbdt_mono 0.0045 / 0.0048;
+  top-decile mean calibrated against observed: logit 0.042 / 0.045, hazard 0.053 / 0.043,
+  gbdt 0.045 / 0.036, gbdt_mono 0.068 / 0.042. The earlier inner-model recipe for the linear
+  models (pooled Brier 0.0189 and 0.0545, 2009 mean calibrated 0.19 and 0.47 against a rate
+  of 0.021) is recorded in `docs/DECISIONS.md`. Remaining caveats: post-2013 maps rest on 0
+  to 37 failures, the boosters over-predict the top decile, and the 8q hazard map
+  over-predicts 2010-2011 (Brier 0.0070 raw against 0.0080 calibrated).
 
 - [x] **Model card written.** `docs/model_card.md`: intended use and non-use; data sources,
   coverage 2001Q1-2026Q2, units, the FDIC securities and uninsured fields and their FFIEC
@@ -96,8 +99,8 @@ this file records the commands and numbers behind each tick.
 | 4 FRED macro features | done | `macro_state` (5,650 state-availability rows, point-in-time with publication lags); `macro_unemp_rate, macro_unemp_change_4q, macro_hpi_change_4q, macro_t10y3m, macro_fedfunds_change_4q` |
 | 5 full feature set with registry | done | 83 registered features (43 P1 + 40 P2), each with group, formula, unit, explanation and monotone sign; `docs/FEATURES.md` generated from the registry |
 | 6 LightGBM, hazard, optional Cox | done (Cox dropped) | `models.gbdt.make_gbdt` (LightGBM 4.7, sklearn fallback), `models.hazard`; `lifelines` pins pandas < 3 (`docs/DECISIONS.md`) |
-| 7 walk-forward harness, one artefact per test year | done | `bankcanary walkforward --year Y`, `models/walkforward/<Y>/<model>[_8q]/`, 150 run records |
-| 8 isotonic calibration and reliability plots | done, with the caveat above | `bankcanary calibrate`, `score_calibrated` filled for 2,519,318 rows (Texas NaN), `reports/figures/reliability_{logit,gbdt,hazard}.png` |
+| 7 walk-forward harness, one artefact per test year | done | `bankcanary walkforward --year Y`, `models/walkforward/<Y>/<model>[_8q]/`, 200 run records (`texas, logit, gbdt, gbdt_mono, hazard` at 4q; `logit, gbdt, hazard` at 8q) |
+| 8 isotonic calibration and reliability plots | done | `bankcanary calibrate [--scorer full|inner]`, `score_calibrated` filled for 3,352,958 rows (Texas NaN), `reports/figures/reliability_{logit,gbdt,gbdt_mono,hazard}.png` |
 | 9 SHAP per bank-quarter | done | `drivers` table: 4,525,760 rows over 452,576 bank-quarters, ten drivers each, for the 17 walk-forward boosters and the 2024 production model; `reports/shap_summary.md` |
 | 10 metrics suite | done | `evaluation.metrics`: PR-AUC, ROC-AUC, recall@k, Brier, lead time, cluster-bootstrap CIs; per-year and pooled tables in `reports/walkforward.md` |
 | 11 2023 case study notebook | done | `notebooks/03_svb_2023_case_study.ipynb` (see the criterion above) |
@@ -108,20 +111,22 @@ this file records the commands and numbers behind each tick.
 
 Notebooks 02-05 are built by `scripts/make_notebook_0{2,3,4,5}.py` and executed in place
 (`jupyter nbconvert --execute`); each runs in under a minute after the tables and `runs/`
-exist and none retrains a walk-forward model. Open items for Prototype 3: refit the isotonic
-maps on a slice scored by the calibrated model itself; treat post-2021 scores as out of
-regime (model card, section 12).
+exist and none retrains a walk-forward model. Open items for Prototype 3: settle Decision
+Point 2 (the walk-forward evidence for both boosters is in the model card, section 5);
+treat post-2021 scores as out of regime (model card, section 12).
 
 ## Acceptance pass (2026-09-25)
 
 | check | command | result |
 |---|---|---|
-| walk-forward coverage | DuckDB: `walkforward_scores` grouped by `model` where `horizon = 4` | `texas, logit, gbdt, hazard`: 17 test years each, 2008-2024, 426,019 rows, 2,103 positives, `label_complete` on every row; `score_calibrated` filled except for `texas`; per-year positives 429, 679, 408, 231, 121, 73, 37, 24, 28, 5, 10, 18, 4, 0, 17, 10, 9; latest failure in `failures` 2026-07-17, so 2024 is the last 4q-complete year |
+| walk-forward coverage | DuckDB: `walkforward_scores` grouped by `model` where `horizon = 4` | `texas, logit, gbdt, gbdt_mono, hazard`: 17 test years each, 2008-2024, 426,019 rows, 2,103 positives, `label_complete` on every row; `score_calibrated` filled except for `texas`; per-year positives 429, 679, 408, 231, 121, 73, 37, 24, 28, 5, 10, 18, 4, 0, 17, 10, 9; latest failure in `failures` 2026-07-17, so 2024 is the last 4q-complete year |
 | best model vs P1 logit | `features_v1` walk-forward logit, 17 fits (4-8 s each), pooled with `metrics.evaluate` and `cluster_bootstrap_ci` | see criterion 2: hazard 0.3261 / 0.7042 against 0.2194 / 0.5625, intervals disjoint |
 | lead time 2009-2012 | `reports/walkforward.md`, "Lead time" | hazard median 5 quarters, 88.4% flagged >= 2 quarters ahead (logit 5, 87.7%) |
 | notebook 03 | `jupyter nbconvert --execute` to a scratch copy, 110 s cell timeout | 7 code cells, 0 error outputs; SVB 2022Q4 ranks 1677 / 1412 (credit-only logit / gbdt) and 1854 / 245 (rate-aware); section 5 gives the explanation |
-| calibration | `reports/walkforward.md`, pooled table and "Calibration" | Brier raw / calibrated: hazard 0.0041 / 0.0545, logit 0.0041 / 0.0189, gbdt 0.0043 / 0.0043; `reports/figures/reliability_{logit,gbdt,hazard}.png` committed; criterion left unticked (see above) |
+| calibration | `reports/walkforward.md`, pooled table and "Calibration" | Brier raw / calibrated: hazard 0.0041 / 0.0038, logit 0.0041 / 0.0038, gbdt 0.0043 / 0.0043, gbdt_mono 0.0045 / 0.0048; `reports/figures/reliability_{logit,gbdt,gbdt_mono,hazard}.png` committed |
+| Decision Point 2 | `reports/walkforward.md`, pooled 4q table | gbdt_mono 0.3138 [0.282, 0.345] / 0.7147 [0.692, 0.739] against gbdt 0.2813 [0.250, 0.311] / 0.6434 [0.609, 0.669]; inner validation 0.197 against 0.230 (`config/settings.yaml`) |
+| hazard at 8q | `reports/walkforward.md`, "Horizon 8q" | 16 test years, PR-AUC 0.4113 [0.382, 0.442], recall@2% 0.6598 [0.634, 0.688] |
 | model card | `grep '^#' docs/model_card.md` | 14 sections: intended use, data, label and censoring, leakage, models, walk-forward metrics (pooled and per year at 4q and 8q), calibration, lead time, 2023 case study, sensitivity, false positives, limitations, ethics, references |
-| tests | `uv run pytest` | 396 passed in 19 s |
+| tests | `uv run pytest` | 402 passed in 22 s |
 | determinism | `bankcanary build-labels` then `bankcanary build-features-v2`, `shasum -a 256` before and after | `labels.parquet` `fe0c3237...86286fdec` and `features_v2.parquet` `8871e61c...af93cd0685a` unchanged |
 | hygiene | case-insensitive grep of every commit message for `co-authored`, tool and vendor names; the same grep over `*.py *.md *.toml *.yaml *.ipynb` excluding `.venv`, `data`, `PROJECT_SPEC.md` | both print nothing |

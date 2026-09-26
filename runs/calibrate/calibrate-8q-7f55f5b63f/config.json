@@ -1,0 +1,29 @@
+{
+  "C": 0.003,
+  "availability_lag_days": 60,
+  "calibration_end": "2009-12-31",
+  "calibration_prediction_date": "2009-05-30",
+  "calibration_start": "2009-03-31",
+  "calibration_years": [
+    2009
+  ],
+  "class_weight": null,
+  "conversion": "1 - (1 - h)^H",
+  "features_version": "v2",
+  "fit_horizon": 1,
+  "fit_label": "y_1q",
+  "horizon": 8,
+  "inner_train_repdte_max": "2008-09-30",
+  "method": "isotonic",
+  "model": "hazard",
+  "n_calibration": 32811,
+  "n_inner_train": 283297,
+  "params": {
+    "C": 0.003
+  },
+  "positives_calibration": 1087,
+  "positives_inner_train": 62,
+  "slice_scorer": "full",
+  "sufficient": true,
+  "test_year": 2012
+}

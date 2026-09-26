@@ -12,7 +12,9 @@ def register(app: typer.Typer) -> None:
     def walkforward_cmd(
         year: int = typer.Option(..., "--year", help="Test year Y (2008 .. latest complete)."),
         model: str = typer.Option(
-            "all", "--model", help="texas | logit | gbdt | hazard | all (comma lists allowed)."
+            "all",
+            "--model",
+            help="texas | logit | gbdt | gbdt_mono | hazard | all (comma lists allowed).",
         ),
         horizon: int = typer.Option(4, "--horizon", help="Scoring horizon in quarters."),
         gbdt_iterations: int | None = typer.Option(
@@ -49,7 +51,7 @@ def register(app: typer.Typer) -> None:
         if year not in years:
             raise typer.BadParameter(f"{year} is outside the {horizon}q test years {years}")
         for name in names:
-            cap = gbdt_iterations if name == "gbdt" else None
+            cap = gbdt_iterations if name in w.GBDT_MODELS else None
             result = w.fit_year(frame, settings, year, name, horizon, n_estimators=cap)
             m = result.metrics
             typer.echo(

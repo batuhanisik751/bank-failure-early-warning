@@ -211,3 +211,18 @@ def test_fit_year_records_and_saves_the_tuning(tmp_path, frame):
     # The slice is taken at the scoring horizon (4q closes at 2007Q4 for 2009), not at 1q.
     assert result.config["tuning"]["validation_end"] == "2007-12-31"
     assert "grid" not in result.config["tuning"] and len(saved["grid"]) == len(w.C_GRID)
+
+
+def test_gbdt_mono_walks_forward_under_the_registry_constraints(tmp_path, frame):
+    from bankcanary.models.gbdt import describe
+
+    settings = make_settings(tmp_path)
+    mono = w.fit_year(frame, settings, YEAR, "gbdt_mono", 4, n_estimators=5, save=False)
+    plain = w.fit_year(frame, settings, YEAR, "gbdt", 4, n_estimators=5, save=False)
+    assert mono.config["monotone"] is True and plain.config["monotone"] is False
+    assert describe(mono.pipeline)["monotone"] is True
+    assert (mono.scores["model"] == "gbdt_mono").all()
+    assert w.model_dir(settings, YEAR, "gbdt_mono").name == "gbdt_mono"
+    assert tracking.run_id("walkforward", mono.config) != tracking.run_id(
+        "walkforward", plain.config
+    )

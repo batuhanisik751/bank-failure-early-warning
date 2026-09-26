@@ -35,7 +35,9 @@ log = logging.getLogger(__name__)
 
 #: Walk-forward models: the Texas-ratio ranking (no fit), the regularised logit at the P1
 #: ``LOGIT_C`` on every v2 feature, the tuned gradient booster and the converted hazard.
-MODELS: tuple[str, ...] = ("texas", "logit", "gbdt", "hazard")
+MODELS: tuple[str, ...] = ("texas", "logit", "gbdt", "gbdt_mono", "hazard")
+#: The two booster configurations of Decision Point 2: unconstrained and registry-monotone.
+GBDT_MODELS: tuple[str, ...] = ("gbdt", "gbdt_mono")
 FIRST_TEST_YEAR = 2008
 PRIMARY_HORIZON = 4
 FEATURE_VERSION = "v2"
@@ -193,7 +195,7 @@ def candidate_grid(model: str, settings: Settings) -> list[dict]:
 
     if model in ("logit", "hazard"):
         return [{"C": float(c)} for c in C_GRID]
-    if model == "gbdt":
+    if model in GBDT_MODELS:
         base = dict(settings.models.gbdt.params)
         out = []
         for values in itertools.product(*GBDT_GRID.values()):
@@ -207,7 +209,7 @@ def fallback_params(model: str, settings: Settings) -> dict:
     grid = candidate_grid(model, settings)
     if model in ("logit", "hazard"):
         return {"C": min(C_GRID)}
-    if model == "gbdt":
+    if model in GBDT_MODELS:
         return {
             **grid[0],
             "learning_rate": min(GBDT_GRID["learning_rate"]),
@@ -223,9 +225,11 @@ def build_model(
     """``(unfitted pipeline, feature list, config)`` for one walk-forward model.
 
     ``texas`` ranks by the Texas ratio alone; ``logit`` is the Prototype 1 regularised
-    logit (no class weighting) on every v2 feature; ``gbdt`` takes backend and
-    constraints from ``settings.models.gbdt`` (``n_estimators`` overrides the iteration
-    count when a year's training set needs capping); ``hazard`` is the unweighted 1q
+    logit (no class weighting) on every v2 feature; ``gbdt`` takes its backend from
+    ``settings.models.gbdt`` and is unconstrained, ``gbdt_mono`` the same booster under
+    the registry's monotone signs (the two sides of Decision Point 2, both walked
+    forward; ``n_estimators`` overrides the iteration count when a year's training set
+    needs capping); ``hazard`` is the unweighted 1q
     logit whose output is converted with ``1 - (1 - h)^H``. ``params`` are the year's
     tuned hyper-parameters from :func:`tune_year` (``C`` for the logits, the booster
     parameters for ``gbdt``); without them the fixed-split constants (``LOGIT_C``,
@@ -250,16 +254,17 @@ def build_model(
         pipe = make_pipeline(LogisticRegression(C=c, max_iter=2000))
         config.update({"C": c, "class_weight": None})
         return pipe, features, config
-    if model == "gbdt":
+    if model in GBDT_MODELS:
         cfg = settings.models.gbdt
+        monotone = model == "gbdt_mono"
         params = {**cfg.params, **params}
         if n_estimators is not None:
             params["n_estimators"] = int(n_estimators)
-        pipe = gbdt.make_gbdt(cfg.backend, cfg.monotone, features, **params)
+        pipe = gbdt.make_gbdt(cfg.backend, monotone, features, **params)
         config.update(
             {
                 "backend": gbdt.resolve_backend(cfg.backend),
-                "monotone": bool(cfg.monotone),
+                "monotone": monotone,
                 "params": params,
                 "iterations_capped": n_estimators is not None
                 and int(n_estimators) < int(cfg.params.get("n_estimators", n_estimators)),
@@ -752,8 +757,9 @@ def write_walkforward_report(
         "test rows are the label-complete reports dated in Y. Scores of all years are pooled "
         "into one ranking for the pooled rows. `texas` ranks by the Texas ratio without a "
         "fit; `logit` is the Prototype 1 regularised logit refitted on the v2 features; "
-        "`gbdt` is the gradient booster (backend and monotone decision from "
-        "`config/settings.yaml`); `hazard` is the one-quarter hazard converted with "
+        "`gbdt` is the unconstrained gradient booster and `gbdt_mono` the same booster "
+        "under the registry's monotone signs (backend from `config/settings.yaml`); "
+        "`hazard` is the one-quarter hazard converted with "
         "`1 - (1 - h)^H`. Every model's hyper-parameters (`C` for the logits; learning "
         "rate, leaves and leaf size for the booster) are re-selected for each test year on "
         f"a nested validation slice: the last {VALIDATION_QUARTERS} report quarters of that "
