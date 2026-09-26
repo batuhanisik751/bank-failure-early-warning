@@ -301,10 +301,17 @@ def build_scores(
     table = table.drop_duplicates(["cert", "repdte", "model"], keep="last")
     table = rank_scores(table.rename(columns={"score_calibrated": "probability"}))
     table["delta_prob_prior_q"] = prior_quarter_delta(table)
-    table["model_version"] = [
-        versions.get((m, int(y)) if pd.notna(y) else (m, "production"))
+    keys = [
+        (m, int(y)) if pd.notna(y) else (m, "production")
         for m, y in zip(table["model"], table["test_year"])
     ]
+    missing = sorted({k for k in keys if versions.get(k) is None}, key=str)
+    if missing:
+        raise ValueError(
+            "CONTRACT 15: every score carries a model_version, but none is known for "
+            f"{missing} (model, test year or 'production')"
+        )
+    table["model_version"] = [versions[k] for k in keys]
     table["repdte"] = table["repdte"].dt.date
     columns = [
         "cert",
@@ -426,17 +433,56 @@ def _git_first_commit(path: Path, repo: Path) -> tuple[str, str] | None:
     return sha, when
 
 
+def _run_record(year: int, model: str, runs_dir: Path, repo: Path) -> tuple[dict, Path] | None:
+    """The committed walk-forward run record of ``(model, year)`` at :data:`HORIZON`.
+
+    ``runs/walkforward/<run id>/config.json`` is tracked in git, so a fresh clone can
+    name the walk-forward version without the (untracked) ``models/walkforward``
+    artefacts. When a year was run more than once the record added to git last wins
+    (an untracked record ranks first, as the freshest); the choice is deterministic.
+    """
+    best: tuple[tuple, dict, Path] | None = None
+    for path in sorted((runs_dir / "walkforward").glob("*/config.json")):
+        try:
+            config = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if (config.get("model"), config.get("test_year"), config.get("horizon")) != (
+            model,
+            year,
+            HORIZON,
+        ):
+            continue
+        found = _git_first_commit(path.parent / "metrics.json", repo)
+        key = (found is None, found[1] if found else "", path.parent.name)
+        if best is None or key > best[0]:
+            best = (key, config, path)
+    return (best[1], best[2]) if best else None
+
+
 def walkforward_version(
     year: int, model: str, models_dir: Path, runs_dir: Path, repo: Path
 ) -> dict | None:
-    """A ``model_versions`` row for one walk-forward fit, or ``None`` when it is not saved."""
+    """A ``model_versions`` row for one walk-forward fit, or ``None`` when nothing is saved.
+
+    The saved artefact ``models/walkforward/<year>/<model>/config.json`` names its run
+    record exactly (its run id is the config hash); without the artefact the committed run
+    record of that model and year is used (:func:`_run_record`), so provenance does not
+    depend on files that are not in git.
+    """
     from bankcanary.tracking import run_id
 
     config_path = models_dir / "walkforward" / str(year) / model / "config.json"
-    if not config_path.exists():
-        return None
-    config = json.loads(config_path.read_text(encoding="utf-8"))
-    record = runs_dir / "walkforward" / run_id("walkforward", config) / "metrics.json"
+    if config_path.exists():
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        record = runs_dir / "walkforward" / run_id("walkforward", config) / "metrics.json"
+        source = "artefact"
+    else:
+        hit = _run_record(year, model, runs_dir, repo)
+        if hit is None:
+            return None
+        config, record = hit[0], hit[1].parent / "metrics.json"
+        source = "run record"
     found = _git_first_commit(record, repo) or ("unknown", None)
     train_end = str(config.get("train_repdte_max"))
     return {
@@ -446,15 +492,39 @@ def walkforward_version(
         "git_sha": found[0],
         "trained_at": found[1],
         "features_version": config.get("features_version"),
-        "notes": f"Walk-forward {model} for test year {year}, trained through {train_end}.",
+        "notes": f"Walk-forward {model} for test year {year}, trained through {train_end}"
+        f" ({source}).",
+    }
+
+
+def derived_walkforward_version(year: int, model: str) -> dict:
+    """The ``model_versions`` row of a walk-forward year with no artefact and no run record.
+
+    The warehouse still says which test year scored the rows, so the version names that
+    year and an unknown commit rather than pretending the rows are production-scored.
+    """
+    return {
+        "model_version": f"{model}-wf{year}-unknown",
+        "model": model,
+        "train_end_repdte": None,
+        "git_sha": "unknown",
+        "trained_at": None,
+        "features_version": None,
+        "notes": f"Walk-forward {model} for test year {year}: no saved artefact and no run"
+        " record at publish time, so the training window and commit are unknown.",
     }
 
 
 def build_model_versions(
     production_dir: Path, models_dir: Path, runs_dir: Path, repo: Path, years=()
 ) -> tuple[pd.DataFrame, dict]:
-    """``model_versions`` (production artefacts + every saved walk-forward fit) and the
-    ``{(model, year|'production'): model_version}`` lookup the other builders use."""
+    """``model_versions`` (production artefacts + every walk-forward ``years`` entry) and the
+    ``{(model, year|'production'): model_version}`` lookup the other builders use.
+
+    Every walk-forward year gets a row: from the artefact or the committed run record
+    (:func:`walkforward_version`), else :func:`derived_walkforward_version` with a
+    warning. A backtest year is never attributed to the production version.
+    """
     rows, lookup = [], {}
     for model in MODELS:
         path = production_dir / model / "model_version.json"
@@ -464,11 +534,19 @@ def build_model_versions(
             lookup[(model, "production")] = meta["model_version"]
         for year in years:
             row = walkforward_version(int(year), model, models_dir, runs_dir, repo)
-            if row is not None:
-                rows.append(row)
-                lookup[(model, int(year))] = row["model_version"]
+            if row is None:
+                row = derived_walkforward_version(int(year), model)
+                log.warning(
+                    "no walk-forward artefact or run record for %s %d: publishing %s",
+                    model,
+                    int(year),
+                    row["model_version"],
+                )
+            rows.append(row)
+            lookup[(model, int(year))] = row["model_version"]
     out = pd.DataFrame(rows, columns=MODEL_VERSION_COLUMNS).drop_duplicates("model_version")
-    out["train_end_repdte"] = pd.to_datetime(out["train_end_repdte"]).dt.date
+    train_end = pd.to_datetime(out["train_end_repdte"], errors="coerce")
+    out["train_end_repdte"] = train_end.dt.date.where(train_end.notna(), None)
     out["trained_at"] = pd.to_datetime(out["trained_at"], utc=True, errors="coerce")
     return out.reset_index(drop=True), lookup
 
@@ -540,7 +618,12 @@ def build_all(
     want = [t for t in CORE_TABLES if tables is None or t in set(tables)]
     production_dir = Path(settings.models_dir) / "production"
     repo = repo or Path(settings.data_dir).resolve().parent
-    years = test_years(wh.labels, HORIZON) if len(wh.labels) else []
+    years = set(test_years(wh.labels, HORIZON)) if len(wh.labels) else set()
+    if len(wh.walkforward):
+        wf = wh.walkforward
+        scored = wf[(wf["horizon"] == HORIZON) & wf["model"].isin(MODELS)]["test_year"]
+        years |= {int(y) for y in scored.dropna().unique()}
+    years = sorted(years)
     versions, lookup = build_model_versions(
         production_dir, Path(settings.models_dir), Path(settings.runs_dir), repo, years
     )

@@ -936,3 +936,15 @@ open for the owner to revisit.
   spec is `web/e2e/time_machine_map.spec.ts`. The pages import from
   `@/lib/queries/timeMachine` and `@/lib/queries/map` directly rather than the shared index,
   which another step was editing in the same checkout at the same time.
+- 2026-09-26 — **Publish fix: walk-forward provenance no longer depends on untracked
+  artefacts.** `walkforward_version()` resolves a backtest year's `model_version` from
+  `models/walkforward/<year>/<model>/config.json` when it exists and otherwise from the
+  committed run record `runs/walkforward/<run id>/config.json` of that model, horizon 4 and
+  test year (the record added to git last wins when a year was run twice; on this machine
+  that choice reproduces every artefact-derived version exactly, so no score or quarter
+  changed). A year with neither source gets a derived row `<model>-wf<year>-unknown`
+  (`train_end_repdte` null, `git_sha` "unknown") and a warning, never the production
+  version; `build_all` also takes the walk-forward years from the warehouse frame, not
+  only from `labels`, and `build_scores` raises when any row's version is unknown, so a
+  publish from a fresh clone fails loudly or names the right version instead of writing
+  NULL provenance. `model_versions.notes` now says which source named the version.

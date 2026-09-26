@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -118,3 +121,50 @@ def test_build_scores_keeps_horizon_4_models_and_2008_onward_and_adds_production
         "model_version",
     ]
     assert not scores.duplicated(list(TABLE_KEYS["scores"])).any()
+
+
+def _run_record(runs: Path, run_id: str, **config) -> None:
+    (runs / "walkforward" / run_id).mkdir(parents=True)
+    base = {"model": "gbdt_mono", "horizon": 4, "test_year": 2008, "features_version": "v2"}
+    (runs / "walkforward" / run_id / "config.json").write_text(json.dumps({**base, **config}))
+    (runs / "walkforward" / run_id / "metrics.json").write_text("{}")
+
+
+def test_walkforward_version_falls_back_to_the_committed_run_record(tmp_path):
+    """No ``models/walkforward`` artefact: the run record of (model, year, horizon 4)
+    names the version; other models, years and horizons are ignored."""
+    runs = tmp_path / "runs"
+    _run_record(runs, "walkforward-4q-aaa", train_repdte_max="2006-12-31")
+    _run_record(runs, "walkforward-8q-bbb", horizon=8, train_repdte_max="2005-12-31")
+    _run_record(runs, "walkforward-4q-ccc", model="hazard", train_repdte_max="2007-12-31")
+    _run_record(runs, "walkforward-4q-ddd", test_year=2009, train_repdte_max="2007-12-31")
+    row = core.walkforward_version(2008, "gbdt_mono", tmp_path / "models", runs, tmp_path)
+    assert row["model_version"] == "gbdt_mono-2006-12-31-unknown", row
+    assert row["train_end_repdte"] == "2006-12-31" and "run record" in row["notes"]
+    assert core.walkforward_version(2010, "gbdt_mono", tmp_path / "models", runs, tmp_path) is None
+
+
+def test_build_model_versions_never_maps_a_backtest_year_to_production(tmp_path, caplog):
+    production = tmp_path / "models" / "production"
+    for model in core.MODELS:
+        (production / model).mkdir(parents=True)
+        meta = {"model_version": f"{model}-2022-12-31-prod", "model": model,
+                "train_end_repdte": "2022-12-31", "git_sha": "prod"}  # fmt: skip
+        (production / model / "model_version.json").write_text(json.dumps(meta))
+    _run_record(tmp_path / "runs", "walkforward-4q-aaa", train_repdte_max="2006-12-31")
+    with caplog.at_level("WARNING", logger="bankcanary.publish.core"):
+        frame, lookup = core.build_model_versions(
+            production, tmp_path / "models", tmp_path / "runs", tmp_path, years=[2008]
+        )
+    assert lookup[("gbdt_mono", 2008)] == "gbdt_mono-2006-12-31-unknown"
+    assert lookup[("hazard", 2008)] == "hazard-wf2008-unknown", "derived, not production"
+    assert "hazard 2008" in caplog.text
+    derived = frame.set_index("model_version").loc["hazard-wf2008-unknown"]
+    assert derived["train_end_repdte"] is None and derived["git_sha"] == "unknown"
+    assert set(frame["model_version"]) == set(lookup.values()) and len(frame) == 4
+
+
+def test_build_scores_refuses_rows_without_a_known_version():
+    versions = {("gbdt_mono", 2008): "gm-2008"}
+    with pytest.raises(ValueError, match=r"\('hazard', 2008\)"):
+        core.build_scores(_walkforward(), None, versions)

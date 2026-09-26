@@ -199,12 +199,6 @@ def test_time_machine_2009_pooled_recall_equals_walkforward_metrics_by_hand():
     assert pooled_row["n"] == 480 and pooled_row["n_failures"] == 12
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: publish silently attributes walk-forward quarters to the production "
-    "model_version (quarters.model_year NULL) and writes NULL scores.model_version when "
-    "models/walkforward/<year>/<model>/config.json is absent (fresh clone, CI)",
-)
 def test_publish_names_the_walkforward_version_of_every_backtest_quarter(tmp_path):
     """CONTRACT 15/19: backtest quarters carry the walk-forward model of their test
     year; ``build_all`` must not fall back to the production version silently."""

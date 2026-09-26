@@ -1,0 +1,7 @@
+{
+  "horizon": 4,
+  "started_at": "2026-09-26T19:28:17.736797+00:00",
+  "tables": [
+    "model_versions"
+  ]
+}
