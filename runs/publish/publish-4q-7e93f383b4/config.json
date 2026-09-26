@@ -1,0 +1,19 @@
+{
+  "horizon": 4,
+  "started_at": "2026-09-26T18:25:33.613510+00:00",
+  "tables": [
+    "model_versions",
+    "banks",
+    "quarters",
+    "scores",
+    "drivers",
+    "ratios",
+    "peer_stats",
+    "failures",
+    "walkforward_metrics",
+    "case_study_2023",
+    "case_study_series",
+    "rate_shock_scores",
+    "map_quarters"
+  ]
+}

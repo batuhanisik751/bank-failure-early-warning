@@ -13,7 +13,7 @@ def register(app: typer.Typer) -> None:
     @app.command("publish")
     def publish_cmd(
         tables: str | None = typer.Option(
-            None, "--tables", help="Comma-separated subset of the core tables (default: all)."
+            None, "--tables", help="Comma-separated subset of the tables (default: all)."
         ),
         dry_run: bool = typer.Option(
             False, "--dry-run", help="Build every frame and print row counts; no database."
@@ -31,16 +31,29 @@ def register(app: typer.Typer) -> None:
         """
         from bankcanary import tracking
         from bankcanary.config import load_settings
-        from bankcanary.publish import CORE_TABLES, DISCLAIMER, core, db, writer
+        from bankcanary.publish import (
+            ALL_TABLES,
+            CORE_TABLES,
+            DISCLAIMER,
+            PAGE_TABLES,
+            core,
+            db,
+            pages,
+            writer,
+        )
 
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
         settings = load_settings()
-        wanted = list(CORE_TABLES)
+        wanted = list(ALL_TABLES)
         if tables:
             wanted = [t.strip() for t in tables.split(",") if t.strip()]
-            unknown = sorted(set(wanted) - set(CORE_TABLES))
+            unknown = sorted(set(wanted) - set(ALL_TABLES))
             if unknown:
-                raise typer.BadParameter(f"unknown tables {unknown}; choose from {CORE_TABLES}")
+                raise typer.BadParameter(f"unknown tables {unknown}; choose from {ALL_TABLES}")
+        page_tables = [t for t in PAGE_TABLES if t in wanted]
+        core_tables = [t for t in CORE_TABLES if t in wanted] + sorted(
+            pages.core_dependencies(page_tables) - set(wanted)
+        )
         started = dt.datetime.now(dt.UTC)
         clock = time.perf_counter()
         if schema_only:
@@ -49,7 +62,9 @@ def register(app: typer.Typer) -> None:
             typer.echo("schema applied")
             return
         warehouse = core.load_warehouse(settings, set(wanted))
-        frames = core.build_all(warehouse, settings, wanted)
+        frames = core.build_all(warehouse, settings, core_tables)
+        frames.update(pages.build_all(warehouse, frames, settings, page_tables))
+        frames = {t: frames[t] for t in ALL_TABLES if t in wanted}
         for name, frame in frames.items():
             typer.echo(f"{name}: {len(frame)} rows")
         if dry_run:

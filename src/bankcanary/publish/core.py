@@ -499,23 +499,28 @@ class Warehouse:
 
 
 def load_warehouse(settings, tables: set[str] | None = None) -> Warehouse:
-    """Read the Parquet tables the requested ``tables`` need (all of them by default)."""
+    """Read the Parquet tables the requested ``tables`` need (the core tables by default).
+
+    Page tables (:data:`bankcanary.publish.PAGE_TABLES`) pull in the core frames they
+    are built from; the warehouse ``drivers`` table lands in ``extra['drivers']``.
+    """
+    from bankcanary.publish.pages import core_dependencies
     from bankcanary.storage.parquet import read_table
 
     need = set(tables or CORE_TABLES)
+    need |= core_dependencies(need)
     empty = pd.DataFrame()
     wants_scores = bool(need & {"scores", "quarters", "walkforward_metrics"})
+    wants_panel = bool(need & {"banks", "quarters", "ratios", "peer_stats", "rate_shock_scores"})
+    wants_features = bool(need & {"ratios", "peer_stats", "scores", "rate_shock_scores"})
     return Warehouse(
         institutions=read_table("institutions", settings) if "banks" in need else empty,
-        panel=read_table("panel", settings)
-        if need & {"banks", "quarters", "ratios", "peer_stats"}
-        else empty,
+        panel=read_table("panel", settings) if wants_panel else empty,
         labels=read_table("labels", settings),
-        features=read_table("features_v2", settings)
-        if need & {"ratios", "peer_stats", "scores"}
-        else empty,
+        features=read_table("features_v2", settings) if wants_features else empty,
         failures=read_table("failures", settings) if "failures" in need else empty,
         walkforward=read_table("walkforward_scores", settings) if wants_scores else empty,
+        extra={"drivers": read_table("drivers", settings)} if "drivers" in need else {},
     )
 
 
@@ -526,7 +531,9 @@ def build_all(
 
     Production scores are computed here from ``features_v2`` and ``models/production/``
     when ``wh.production`` is not given, for every quarter past the last complete test
-    year. ``ratios`` and ``peer_stats`` share one :func:`build_ratios` pass.
+    year. ``ratios`` and ``peer_stats`` share one :func:`build_ratios` pass; the
+    percentiles and peer stats use every quarter, but only the scored quarters
+    (:data:`FIRST_SCORED_YEAR` on) are published in ``ratios`` (size budget, CONTRACT 16).
     """
     from bankcanary.evaluation.walkforward import test_years
 
@@ -562,7 +569,9 @@ def build_all(
         if "peer_stats" in want:
             out["peer_stats"] = build_peer_stats(ratios)
         if "ratios" in want:
-            out["ratios"] = ratios.drop(columns=["size_bucket", "region"])
+            scored = pd.to_datetime(ratios["repdte"]).dt.year >= FIRST_SCORED_YEAR
+            out["ratios"] = ratios.loc[scored].drop(columns=["size_bucket", "region"])
+            out["ratios"] = out["ratios"].reset_index(drop=True)
     if "failures" in want:
         out["failures"] = build_failures(wh.failures)
     if "walkforward_metrics" in want:

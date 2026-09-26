@@ -57,9 +57,9 @@ CREATE TABLE IF NOT EXISTS scores (
     horizon             integer NOT NULL,
     rank                integer,
     score               double precision,
-    probability         double precision,
-    percentile          double precision,
-    delta_prob_prior_q  double precision,
+    probability         real,
+    percentile          real,
+    delta_prob_prior_q  real,
     model               text NOT NULL,
     band                text,
     model_version       text,
@@ -74,8 +74,8 @@ CREATE TABLE IF NOT EXISTS drivers (
     rank           integer NOT NULL,
     feature        text,
     feature_label  text,
-    shap_value     double precision,
-    feature_value  double precision,
+    shap_value     real,
+    feature_value  real,
     direction      text,
     PRIMARY KEY (cert, repdte, model, rank)
 );
@@ -198,14 +198,13 @@ CREATE TABLE IF NOT EXISTS rate_shock_scores (
 CREATE TABLE IF NOT EXISTS map_quarters (
     repdte               date NOT NULL,
     cert                 bigint NOT NULL,
-    latitude             double precision,
-    longitude            double precision,
+    latitude             real,
+    longitude            real,
     band                 text,
-    probability          double precision,
+    probability          real,
     failed_this_quarter  boolean,
     PRIMARY KEY (repdte, cert)
 );
-CREATE INDEX IF NOT EXISTS map_quarters_cert_idx ON map_quarters (cert);
 
 CREATE TABLE IF NOT EXISTS pipeline_runs (
     run_id         text PRIMARY KEY,

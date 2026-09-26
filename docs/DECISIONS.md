@@ -802,3 +802,29 @@ open for the owner to revisit.
   failures list carry no certificate number, so they cannot be keyed by `(cert, fail_date)`;
   3,629 rows remain. `banks.holding_company_name` is null for now: the institutions table
   carries `rssdhcr` but no holding-company name, which a later step can fetch.
+- 2026-09-26 — **Page tables published (step E1b).** `src/bankcanary/publish/pages.py` builds
+  `drivers` (the warehouse SHAP table of `bankcanary explain`, backtest and production rows
+  both under `model = 'gbdt_mono'`, filtered to the CONTRACT subset: latest 4 quarters of
+  every bank, every quarter of every failed bank, top 5 percent of every quarter; 57,537
+  bank-quarters; `feature_label` = the registry explanation's first clause), `map_quarters`
+  (every `gbdt_mono` bank-quarter with head-office coordinates; `failed_this_quarter` marks
+  the report a failure follows: `fail_date` within the next quarter, or within four quarters
+  of the bank's last report; 558 of the 560 failures since 2008Q2 land on a dot),
+  `rate_shock_scores` (latest quarter, 4 shocks x 5 durations = 86,260 rows; the extra loss
+  is added to the unrealised total before `unrealized_loss_to_tier1` and
+  `adjusted_tier1_leverage` are recomputed with the sensitivity module's formulas, missing
+  amortised cost counts as zero, then the production `gbdt_mono` pipeline + isotonic map
+  re-score and `rank_scores` bands each scenario) and the 2023 case study (28 rank rows and
+  37 series rows by re-running `run_case_study` without a run record, about 30 s). `publish`
+  now writes all 13 tables in `TABLE_KEYS` order in about 100 s; `--tables` accepts any
+  subset and builds the core frames a page table needs without writing them.
+- 2026-09-26 — **The size budget needed the pre-named levers.** With ten drivers per
+  bank-quarter and every `ratios` row the database was 538 MB. Applied: five drivers per
+  bank-quarter (largest |SHAP|, both signs), `ratios` from 2008Q1, `real` for the display
+  columns of `scores`, `drivers` and `map_quarters`, no `cert` index on `map_quarters`:
+  399.6 MB (scores 178, ratios 85, drivers 61, map 49, rate shock 11). Recorded in CONTRACT
+  16. The next levers, in order: `scores.model_version` as a short code joined to
+  `model_versions` (about 26 MB of repeated text), `map_quarters` restricted to banks that
+  are `elevated`/`high` or failed (the map draws `low` dots from `banks`), and hazard rows
+  after 2015 only. Schema type changes are not applied to an existing table by
+  `CREATE TABLE IF NOT EXISTS`: drop the table locally and re-run `publish --tables <t>`.

@@ -13,9 +13,8 @@ publish order (foreign-key-like columns point at tables written earlier).
 
 from __future__ import annotations
 
-#: Primary key columns per table, in publish order. The tables that later steps fill
-#: (``drivers``, the case study, the rate shock grid and ``map_quarters``) are created by
-#: the schema but not written by this step.
+#: Primary key columns per table, in publish order (foreign-key-like columns point at
+#: tables written earlier).
 TABLE_KEYS: dict[str, tuple[str, ...]] = {
     "model_versions": ("model_version",),
     "banks": ("cert",),
@@ -33,7 +32,7 @@ TABLE_KEYS: dict[str, tuple[str, ...]] = {
     "pipeline_runs": ("run_id",),
 }
 
-#: Tables this step builds, in publish order.
+#: Tables :mod:`core` builds, in publish order.
 CORE_TABLES: tuple[str, ...] = (
     "model_versions",
     "banks",
@@ -44,6 +43,19 @@ CORE_TABLES: tuple[str, ...] = (
     "failures",
     "walkforward_metrics",
 )
+
+#: Page-specific tables :mod:`pages` builds from the core frames, in publish order.
+PAGE_TABLES: tuple[str, ...] = (
+    "drivers",
+    "case_study_2023",
+    "case_study_series",
+    "rate_shock_scores",
+    "map_quarters",
+)
+
+#: Every table ``bankcanary publish`` writes, in publish order (``pipeline_runs`` is
+#: appended by the command itself).
+ALL_TABLES: tuple[str, ...] = tuple(t for t in TABLE_KEYS if t in CORE_TABLES or t in PAGE_TABLES)
 
 DISCLAIMER = (
     "Educational project, not a credit rating, not investment advice, not a supervisory "

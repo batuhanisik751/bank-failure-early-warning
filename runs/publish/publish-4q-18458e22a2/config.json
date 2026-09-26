@@ -1,0 +1,9 @@
+{
+  "horizon": 4,
+  "started_at": "2026-09-26T18:29:37.608988+00:00",
+  "tables": [
+    "drivers",
+    "map_quarters",
+    "ratios"
+  ]
+}

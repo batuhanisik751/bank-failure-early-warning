@@ -20,8 +20,10 @@ credentials into `.env` as `DATABASE_URL=postgresql://<user>:<password>@localhos
 ```bash
 uv run bankcanary publish --schema-only     # tables, indexes and comments only
 uv run bankcanary publish --dry-run         # build every frame, print counts, write nothing
-uv run bankcanary publish                   # full rebuild: about 60 s locally
+uv run bankcanary publish                   # full rebuild, all 13 tables: about 100 s locally
 uv run bankcanary publish --tables scores,quarters
+uv run bankcanary publish --tables drivers,map_quarters,rate_shock_scores   # about 10 s
+uv run bankcanary publish --tables case_study_2023,case_study_series        # about 30 s
 ```
 
 What it does (CONTRACT 16-17): applies `src/bankcanary/publish/schema.sql` idempotently,
@@ -31,8 +33,16 @@ loads each table inside one transaction (truncate + COPY), runs `ANALYZE`, appen
 database size. The label-incomplete quarters (after the last complete walk-forward year)
 are scored on the fly with `models/production/{gbdt_mono,hazard}/`.
 
+The page tables (`src/bankcanary/publish/pages.py`) come after the core ones: `drivers`
+filters the warehouse `drivers` table (`bankcanary explain --all` must have run) to the
+CONTRACT subset and keeps the five largest contributions per bank-quarter; `map_quarters`
+joins `scores` to the coordinates in `banks`; `rate_shock_scores` re-scores the latest
+quarter under 4 shocks x 5 durations with the production `gbdt_mono`; the two case study
+tables re-run `bankcanary.evaluation.case_study_2023` (four fits, no run record). A subset
+request builds the core frames a page table needs in memory without writing them.
+
 Prerequisites: the warehouse tables `institutions`, `panel`, `labels`, `features_v2`,
-`failures`, `walkforward_scores`, plus `models/walkforward/<year>/<model>/config.json`
+`failures`, `walkforward_scores`, `drivers`, plus `models/walkforward/<year>/<model>/config.json`
 for every test year (the `model_version` of a backtest year is
 `<model>-<train_end_repdte>-<sha of the commit that added its run record>`).
 
@@ -40,18 +50,27 @@ for every test year (the `model_version` of a backtest year is
 
 ```bash
 uv run python -c "
-from bankcanary.publish import CORE_TABLES, db
+from bankcanary.publish import ALL_TABLES, db
 with db.connect() as c:
-    print(db.table_counts(c, list(CORE_TABLES) + ['pipeline_runs']))
+    print(db.table_counts(c, list(ALL_TABLES) + ['pipeline_runs']))
     print(round(db.database_size_bytes(c) / 1e6, 1), 'MB')
 "
-DATABASE_URL=... uv run pytest tests/test_publish_db.py -q   # scratch schema round trip
+uv run pytest tests/test_publish_db.py tests/test_publish.py   # scratch round trip + hooks
 ```
 
+`tests/test_publish.py` is the CONTRACT 19 time-machine hook: the 2009 `gbdt_mono` rows of
+`scores`, pooled over the four quarters and labelled from the warehouse `labels` table,
+must reproduce `walkforward_metrics.recall_at_2pct` for 2009 within 1e-6; it also checks
+that every table is filled, every driver row has its score row and every rate-shock
+scenario ranks 1..n. Both files skip when `DATABASE_URL` is unset or unreachable.
+
 Expected after a full publish: `scores` about 905 k rows (two models x every quarter
-2008Q1 onward), `ratios` about 711 k, `peer_stats` about 29 k, `banks` about 28 k,
-`failures` about 4 k, `quarters` about 100, `walkforward_metrics` 36 (17 years + pooled
-per model), `model_versions` 34. The database must stay under 400 MB (Neon free tier).
+2008Q1 onward), `drivers` about 288 k, `map_quarters` about 448 k, `ratios` about 453 k
+(2008Q1 onward), `rate_shock_scores` 86,260 (20 scenarios x the latest quarter's banks),
+`peer_stats` about 29 k, `banks` about 28 k, `failures` about 4 k, `quarters` about 100,
+`walkforward_metrics` 36, `model_versions` 34, `case_study_2023` 28, `case_study_series`
+37. The database must stay under 400 MB (Neon free tier); it is 399.6 MB, so see the
+levers in `docs/DECISIONS.md` before the next quarter lands.
 
 ## 4. Troubleshooting
 
@@ -59,5 +78,7 @@ per model), `model_versions` 34. The database must stay under 400 MB (Neon free 
 - Port 5433 is deliberate: another project's Postgres holds 5432.
 - `DATABASE_URL is not set`: the `.env` file is missing or the variable is absent.
 - A failed table load rolls back that table only; re-run `publish` (idempotent).
+- A column type changed in `schema.sql` does not reach an existing table (`CREATE TABLE IF
+  NOT EXISTS`): `DROP TABLE <t>` locally, then `publish --tables <t>` recreates and fills it.
 - Neon: the owner sets `DATABASE_URL` (pooled, `sslmode=verify-full`) as a GitHub
   secret and runs the same command from the refresh workflow; nothing here deploys.

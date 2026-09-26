@@ -1,0 +1,16 @@
+{
+  "db_bytes": 537893911,
+  "rows_banks": 27834,
+  "rows_case_study_2023": 28,
+  "rows_case_study_series": 37,
+  "rows_drivers": 575370,
+  "rows_failures": 3629,
+  "rows_map_quarters": 447975,
+  "rows_model_versions": 34,
+  "rows_peer_stats": 28616,
+  "rows_quarters": 102,
+  "rows_rate_shock_scores": 86260,
+  "rows_ratios": 710691,
+  "rows_scores": 905152,
+  "rows_walkforward_metrics": 36
+}

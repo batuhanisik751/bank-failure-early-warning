@@ -270,6 +270,14 @@ Deviation (2026-09-26, step E1a): the 12 ratio columns and their 12 `_pct` peer 
 `ratios` are `real`, not `double precision` (`total_assets` stays double). With doubles the
 table alone was 194 MB and the database 426 MB before `drivers` and `map_quarters` existed;
 seven significant digits are more than any ratio display uses. `scores` keeps doubles.
+Deviation (2026-09-26, step E1b): with every page table the database was 538 MB, so
+`drivers` keeps five rows per bank-quarter (the five largest `|shap_value|`, re-ranked 1-5,
+`direction` kept) instead of ten; `ratios` publishes the scored quarters only (2008Q1 on; the
+percentiles and `peer_stats` still use every quarter); `scores.probability`, `percentile` and
+`delta_prob_prior_q` (raw `score` stays double so ranks reproduce), `drivers.shap_value` and
+`feature_value`, and `map_quarters.latitude`, `longitude` and `probability` are `real`; and
+`map_quarters` has no `cert` index (the map reads by `repdte`; the primary key leads with it).
+Result: 399.6 MB. A new quarter adds about 2 MB, so the next lever is due soon.
 
 ### 17. Publish and refresh (`src/bankcanary/publish/`)
 
