@@ -64,7 +64,7 @@ bank-quarter panel (710,691 rows, 11,243 banks) carries leakage-safe labels at 1
 quarters, 83 CAMELS, interest-rate, deposit-run, trend and macro features are computed
 ([`docs/FEATURES.md`](docs/FEATURES.md)), and four models are backtested walk-forward: one
 model per test year from 2008 to 2024, trained only on outcomes known before that year's
-first prediction date, hyper-parameters chosen inside the training window. Everything a
+first prediction date, hyper-parameters re-selected inside each year's training window. Everything a
 reader needs is in the model card ([`docs/model_card.md`](docs/model_card.md)) and the
 acceptance checklist ([`docs/P2_CHECKLIST.md`](docs/P2_CHECKLIST.md)).
 
@@ -74,15 +74,15 @@ bank-quarters, 2,103 failures; 95% intervals from 200 cluster-bootstrap draws by
 
 | model | PR-AUC | 95% CI | recall @ top 2% | 95% CI | ROC-AUC |
 |---|---|---|---|---|---|
-| hazard (discrete-time, Shumway 2001) | 0.3261 | [0.293, 0.357] | 0.7042 | [0.679, 0.729] | 0.9577 |
+| hazard (discrete-time, Shumway 2001) | 0.3268 | [0.294, 0.357] | 0.7038 | [0.679, 0.730] | 0.9575 |
 | gbdt_mono (LightGBM, registry monotone signs) | 0.3138 | [0.282, 0.345] | 0.7147 | [0.692, 0.739] | 0.8993 |
-| logit (all 83 features, L2, per-year C) | 0.3066 | [0.276, 0.335] | 0.6843 | [0.657, 0.713] | 0.9613 |
-| gbdt (LightGBM, unconstrained, per-year tuning) | 0.2813 | [0.250, 0.311] | 0.6434 | [0.609, 0.669] | 0.8206 |
+| logit (all 83 features, L2, per-year C) | 0.3056 | [0.275, 0.334] | 0.6833 | [0.657, 0.713] | 0.9601 |
+| gbdt (LightGBM, unconstrained, per-year tuning) | 0.2647 | [0.236, 0.297] | 0.6367 | [0.603, 0.663] | 0.8204 |
 | texas (rank by Texas ratio) | 0.2606 | [0.226, 0.298] | 0.7437 | [0.716, 0.771] | 0.9599 |
 
 **8-quarter horizon** (2008-2023 pooled, 407,621 bank-quarters, 3,768 failures): hazard
-PR-AUC 0.4113 [0.382, 0.442], recall@2% 0.6598; logit 0.2835 [0.252, 0.314], 0.5488; gbdt
-0.1169 [0.094, 0.138], 0.2710.
+PR-AUC 0.4113 [0.382, 0.442], recall@2% 0.6598; logit 0.2566 [0.225, 0.288], 0.5207; gbdt
+0.0887 [0.070, 0.108], 0.2200.
 
 The honest reading: the hazard model pools best at both horizons; at 4q its interval
 overlaps the logit's, so the backtest does not separate them, while at 8q it is clearly

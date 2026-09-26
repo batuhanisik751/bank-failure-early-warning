@@ -713,3 +713,16 @@ open for the owner to revisit.
   or whose `tuning.validation_end` is on or after Y's first prediction date (03-31 plus the
   lag); configs recording no fit (`texas`) are skipped. Against the real tree: 133 configs,
   0 violations. Not wired into a command; run it from Python when artefacts change.
+- 2026-09-25 — **Notebooks, model card, README and checklist refreshed to the regenerated
+  walk-forward.** Notebooks 02 and 04 re-executed in place (02 rebuilt from
+  `scripts/make_notebook_02.py` after its three hard-coded booster figures were updated: 4q
+  `gbdt` 0.28 / 0.64 -> 0.26 / 0.64, 8q `gbdt` 0.12 -> 0.09 against logit 0.26); 05 does not
+  read `walkforward_scores` and is untouched. The false-positive report changed only in its
+  all-years row (3,713 -> 3,723 flagged non-failing bank-years; 76.6 -> 76.5 percent still
+  open), because the 2009-2012 boosters were not refitted. The model card's per-year tables
+  are regenerated from `reports/walkforward.md` by a throwaway parser rather than edited by
+  hand; the 2022-2024 limitation now reads "PR-AUC below 0.18" (`gbdt_mono` 2023 is
+  0.1761) and a new limitation states that hyper-parameters are re-selected inside each
+  year's training period, naming the 2020 4q and 2008 8q boosters as the degenerate picks.
+  The v1-logit comparison runs (checklist criterion 2) were not refitted; their per-year `C`
+  came from the v2 selection at the time, so the 0.2194 / 0.5625 figure predates the fix.

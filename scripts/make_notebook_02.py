@@ -337,7 +337,7 @@ against the year-to-year variation shown in section 3, so on the fixed split the
 is a policy call (explainability and guaranteed direction of effect against a free fit)
 rather than a statistical one. The walk-forward, which fits both configurations with
 their own per-year tuning, is less neutral: `gbdt_mono` pools to PR-AUC 0.31 [0.28, 0.35]
-and recall@2% 0.71 [0.69, 0.74] against 0.28 [0.25, 0.31] and 0.64 [0.61, 0.67] for
+and recall@2% 0.71 [0.69, 0.74] against 0.26 [0.24, 0.30] and 0.64 [0.60, 0.66] for
 `gbdt` (section 3 above, the recall intervals disjoint), because the constraints hold
 the booster's score scale together across years. The setting is unchanged until the
 owner decides; the production booster and the SHAP drivers are the unconstrained one.
@@ -377,8 +377,9 @@ md("""
 The same walk-forward was run at 8 quarters for the logit, the booster and the hazard
 (test years 2008-2023, since the 2024 windows are not yet complete). Longer horizons are
 harder for a model trained on the 8q label, and the booster suffers most: its 8q pooled
-PR-AUC is 0.12 against 0.28 for the logit, largely because its 2008-2010 fits, trained on
-almost no two-year failure windows, rank the crisis cohort poorly. The hazard, which
+PR-AUC is 0.09 against 0.26 for the logit, largely because its 2008 fit, trained on
+almost no two-year failure windows, scores every 2008 row identically (ROC-AUC 0.50)
+and its raw scale drifts between the later years. The hazard, which
 learns the one-quarter event and is converted with `1 - (1 - h)^8`, pools to 0.41 with
 an interval disjoint from the logit's: the persistence approximation costs less than
 learning from two-year windows does.
@@ -395,7 +396,7 @@ md("""
 ## 9. Where this leaves Prototype 2
 
 - The walk-forward is the number to quote: pooled 4q PR-AUC of 0.33 (hazard), 0.31
-  (monotone booster), 0.31 (logit) and 0.28 (unconstrained booster) with overlapping
+  (monotone booster), 0.31 (logit) and 0.26 (unconstrained booster) with overlapping
   intervals, against 0.26 for the Texas ratio; recall@2% between 0.64 and 0.74. At 8q the
   hazard leads clearly (0.41). The fixed-split figures are higher because 2010-2013 is the
   easiest period to rank.
