@@ -10,8 +10,13 @@ Each scored configuration is logged through ``bankcanary.tracking`` under
 ``runs/tune_gbdt/``, so a re-run skips what is already scored. One call fits at most
 ``--chunk`` configurations and stops after ``--budget`` seconds; run the script again
 until it reports the grid complete, at which point it writes the winner (parameters,
-backend, and the monotone decision = the better variant on inner PR-AUC) into
-``config/settings.yaml`` under ``models.gbdt``.
+backend, and the monotone flag) into ``config/settings.yaml`` under ``models.gbdt``. The
+monotone flag is derived from the better inner-PR-AUC variant only on the first tune
+(no ``models.gbdt.backend`` yet); a re-tune keeps the flag already in the file, because
+Decision Point 2 is the owner's ruling, and only refreshes parameters and ``inner_pr_auc``.
+
+The booster configs carry ``inputs: raw`` since the winsoriser left the tree pipelines,
+so the runs scored on winsorised inputs do not satisfy a re-tune.
 """
 
 from __future__ import annotations
@@ -67,6 +72,7 @@ def _config(model: str, backend: str | None, params: dict) -> dict:
         "features_version": FEATURE_VERSION,
         "backend": backend,
         "monotone": model == "gbdt_mono",
+        "inputs": "raw" if model.startswith("gbdt") else "winsorised",
         "params": params,
         "split": SPLIT,
     }
@@ -160,14 +166,16 @@ def finish(configs: list[dict], settings, backend: str) -> None:
     same = gb[(gb[list(GRID)] == pd.Series(params)).all(axis=1)].set_index("model")
     inner = {m: float(same.loc[m, "pr_auc"]) for m in ("gbdt", "gbdt_mono")}
     inner["logit_v2"] = float(table.loc[table["model"] == "logit_v2", "pr_auc"].iloc[0])
-    monotone = best["model"] == "gbdt_mono"
+    first_tune = settings.models.gbdt.backend is None
+    monotone = best["model"] == "gbdt_mono" if first_tune else bool(settings.models.gbdt.monotone)
     print(
         f"\nwinner: {best['model']} {params} (inner PR-AUC {best['pr_auc']:.4f}; other variant "
         f"at the same parameters {min(inner['gbdt'], inner['gbdt_mono']):.4f}; logit_v2 "
         f"{inner['logit_v2']:.4f}); slowest fit {gb['fit_seconds'].max():.1f}s"
     )
     path = write_gbdt_settings(DEFAULT_SETTINGS_PATH, backend, monotone, params, inner)
-    print(f"wrote models.gbdt (backend={backend}, monotone={monotone}) to {path}")
+    source = "better inner variant" if first_tune else "Decision Point 2 ruling kept"
+    print(f"wrote models.gbdt (backend={backend}, monotone={monotone}, {source}) to {path}")
 
 
 if __name__ == "__main__":

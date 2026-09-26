@@ -79,13 +79,13 @@ def make_frame(n_certs: int = 40, seed: int = 0) -> pd.DataFrame:
     return frame.assign(**cols)
 
 
-def test_make_gbdt_builds_winsorizer_then_estimator_for_both_backends():
+def test_make_gbdt_builds_a_bare_estimator_pipeline_for_both_backends():
     for backend, cls in (
         ("lightgbm", "LGBMClassifier"),
         ("sklearn", "HistGradientBoostingClassifier"),
     ):
         pipe = gbdt.make_gbdt(backend, monotone=True, **SMALL)
-        assert [s for s, _ in pipe.steps] == ["winsorize", "model"]
+        assert [s for s, _ in pipe.steps] == ["model"]  # no winsoriser (CONTRACT 13)
         model = pipe.named_steps["model"]
         assert type(model).__name__ == cls
         desc = gbdt.describe(pipe)
@@ -233,3 +233,31 @@ def test_train_gbdt_command_is_registered():
 
     result = CliRunner().invoke(app, ["train-gbdt", "--help"])
     assert result.exit_code == 0 and "--variant" in result.output
+
+
+def test_booster_sees_the_tail_a_winsoriser_would_clip():
+    """A fitted booster scores an extreme value differently from its clipped copy.
+
+    Forty of 20,000 rows (0.2 percent, inside the 0.5 percent tail a ``Winsorizer``
+    clips) carry a deeply negative ``x`` and always fail; every other row is noise.
+    A raw-feature booster separates the tail from the clip point, which is the
+    Silicon Valley Bank situation (``unrealized_loss_to_tier1``) in miniature.
+    """
+    from bankcanary.models.preprocess import Winsorizer
+
+    rng = np.random.default_rng(7)
+    n, tail = 20_000, 40
+    x = rng.normal(0.0, 0.05, size=n)
+    y = rng.random(n) < 0.02
+    x[:tail], y[:tail] = rng.uniform(-7.0, -0.5, size=tail), True
+    frame = pd.DataFrame({"x": x, "z": rng.normal(size=n)})
+    bound = Winsorizer().fit(frame).lower_bounds_[0]
+    assert bound > -0.4  # the clip point sits above every tail value
+    for backend in ("lightgbm", "sklearn"):
+        pipe = gbdt.make_gbdt(backend, features=["x", "z"], min_samples_leaf=5, n_estimators=30)
+        pipe.fit(frame, y.astype(int))
+        assert [s for s, _ in pipe.steps] == ["model"]
+        row = pd.DataFrame({"x": [-3.0], "z": [0.0]})
+        raw_score = pipe.predict_proba(row)[:, 1][0]
+        clipped_score = pipe.predict_proba(row.assign(x=bound))[:, 1][0]
+        assert raw_score > clipped_score + 0.1, (backend, raw_score, clipped_score)

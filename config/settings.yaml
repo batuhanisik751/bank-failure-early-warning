@@ -49,10 +49,10 @@ models:
     monotone: true
     params:
       learning_rate: 0.03
-      min_samples_leaf: 200
+      min_samples_leaf: 50
       n_estimators: 200
-      num_leaves: 63
+      num_leaves: 31
     inner_pr_auc:
-      gbdt: 0.229933
-      gbdt_mono: 0.196765
+      gbdt: 0.158323
+      gbdt_mono: 0.214172
       logit_v2: 0.258907

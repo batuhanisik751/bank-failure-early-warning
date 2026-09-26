@@ -260,10 +260,10 @@ def test_gbdt_backends_never_carve_a_validation_split_or_stop_early():
         assert not lgb.best_iteration_  # 0/None: no early-stopping callback ran
 
 
-def test_gbdt_pipeline_is_winsorizer_then_estimator_and_rejects_unknown_params():
+def test_gbdt_pipeline_is_a_bare_estimator_and_rejects_unknown_params():
     pipe = gbdt.make_gbdt("sklearn")
-    assert [name for name, _ in pipe.steps] == ["winsorize", "model"]
-    assert isinstance(pipe.named_steps["winsorize"], Winsorizer)
+    assert [name for name, _ in pipe.steps] == ["model"]
+    assert not any(isinstance(step, Winsorizer) for _, step in pipe.steps)
     with pytest.raises(ValueError, match="unknown gbdt parameter"):
         gbdt.make_gbdt("sklearn", max_depth=3)
     with pytest.raises(ValueError, match="monotone signs"):

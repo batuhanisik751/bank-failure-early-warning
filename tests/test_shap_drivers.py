@@ -50,12 +50,13 @@ def test_shap_values_reconcile_with_the_raw_score(fitted, frame):
     pipeline, features, _ = w.load_year(fitted, YEAR, sd.MODEL)
     _, test = w.year_masks(frame, 4, YEAR, lag_days=60)
     X = frame.loc[test, features]
-    values, expected, clipped = sd.shap_matrix(pipeline, X)
+    values, expected, inputs = sd.shap_matrix(pipeline, X)
     assert values.shape == (len(X), len(features))
-    raw = pipeline.named_steps["model"].predict(clipped, raw_score=True)
+    raw = pipeline.named_steps["model"].predict(X, raw_score=True)
     np.testing.assert_allclose(values.sum(axis=1) + expected, raw, atol=1e-6)
-    lo = pipeline.named_steps["winsorize"].lower_bounds_
-    assert (np.nan_to_num(clipped, nan=np.inf) >= lo).all()
+    # the booster has no transformer: the explainer saw the raw ratios, NaN included
+    assert [s for s, _ in pipeline.steps] == ["model"]
+    np.testing.assert_array_equal(inputs, X.to_numpy(dtype=float))
 
 
 def test_explain_year_saves_file_logs_run_and_rebuilds_deterministically(fitted, frame):
@@ -170,3 +171,17 @@ def test_write_summary_reads_the_run_records_and_writes_the_figure(fitted, frame
     first = figure.read_bytes()
     sd.write_summary(frame, fitted)
     assert figure.read_bytes() == first
+
+
+def test_feature_value_is_the_raw_ratio(fitted, frame):
+    """``drivers.feature_value`` is the bank's own ratio, not a winsorised copy."""
+    drivers, _ = sd.explain_year(frame, fitted, YEAR)
+    long = frame.melt(id_vars=["cert", "repdte"], var_name="feature", value_name="raw")
+    keys = ["cert", "repdte", "feature"]
+    merged = drivers.merge(long, on=keys, how="left", validate="1:1", indicator=True)
+    assert (merged["_merge"] == "both").all()
+    # NaN-aware equality: a missing ratio is a legitimate driver (trees split on NaN)
+    np.testing.assert_array_equal(
+        merged["feature_value"].to_numpy(dtype=float), merged["raw"].to_numpy(dtype=float)
+    )
+    assert merged["feature_value"].isna().any() and merged["feature_value"].notna().any()

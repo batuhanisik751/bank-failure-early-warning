@@ -1,9 +1,14 @@
 """Gradient-boosted trees on the Prototype 2 features (CONTRACT section 13).
 
-One factory, :func:`make_gbdt`, builds ``Winsorizer -> estimator``: trees take missing
-values natively, so the imputer and scaler of the logit pipeline are dropped, and the
-winsoriser stays only so that a handful of absurd ratios (a de-novo bank's 10x growth)
-cannot open their own leaves. The estimator is LightGBM when it imports, otherwise
+One factory, :func:`make_gbdt`, builds a one-step ``Pipeline([("model", estimator)])``
+on the raw registry features: trees take missing values natively and split on rank
+order, so none of the logit front end (winsorise, impute, scale) applies. In
+particular there is no winsoriser: clipping the 0.5% tails erased exactly the values
+that carry the interest-rate signal (Silicon Valley Bank at 2022-12-31 had
+``unrealized_loss_to_tier1 = -1.04`` and ``adjusted_tier1_leverage = -0.33``; the
+winsorised pipeline showed the trees about -0.19 and 3.94), and a booster cannot be hurt
+by an outlier the way a linear model can, because a leaf's value is bounded by
+``min_samples_leaf`` rows. The estimator is LightGBM when it imports, otherwise
 scikit-learn's ``HistGradientBoostingClassifier`` (same histogram algorithm, native NaN,
 monotone constraints); the parameters are named once here and translated per backend.
 
@@ -21,7 +26,6 @@ import logging
 from sklearn.pipeline import Pipeline
 
 from bankcanary.features.registry import feature_names, monotone_constraints
-from bankcanary.models.preprocess import Winsorizer
 
 log = logging.getLogger(__name__)
 
@@ -109,7 +113,10 @@ def make_gbdt(
     random_state: int = 0,
     **params,
 ) -> Pipeline:
-    """``Winsorizer -> gradient-boosting classifier`` for the given backend and constraints.
+    """One-step pipeline around a gradient-boosting classifier on raw features.
+
+    The pipeline object is kept (``named_steps["model"]``, ``.steps``) so every caller
+    treats a booster like the other estimators, but it holds no transformer.
 
     ``params`` use the backend-neutral names ``learning_rate, num_leaves,
     min_samples_leaf, n_estimators`` (see :data:`DEFAULT_PARAMS`); anything else raises so
@@ -125,7 +132,7 @@ def make_gbdt(
     names = list(features) if features is not None else gbdt_features()
     signs = constraint_vector(names, monotone)
     estimator = _estimator(backend, merged, signs, random_state)
-    return Pipeline([("winsorize", Winsorizer()), ("model", estimator)])
+    return Pipeline([("model", estimator)])
 
 
 def describe(pipeline: Pipeline) -> dict:

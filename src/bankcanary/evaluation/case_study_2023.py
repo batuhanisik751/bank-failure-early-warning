@@ -306,9 +306,10 @@ def bank_table(fits: list[CaseStudyFit], banks: dict[int, str] | None = None) ->
 def drivers(fit: CaseStudyFit, frame: pd.DataFrame, cert: int, repdte, top: int = TOP_DRIVERS):
     """Per-feature contributions to one bank-quarter's log-odds under ``fit``.
 
-    For the boosters these are SHAP values from the tree explainer (winsorised inputs); for
-    ``logit`` they are coefficient x standardised value on the pipeline's own
-    winsorise-impute-scale output, so both sum to ``log-odds - baseline`` and read the same
+    For the boosters these are SHAP values from the tree explainer on the raw features
+    (the boosters carry no transformer); for ``logit`` they are coefficient x standardised
+    value on the pipeline's own winsorise-impute-scale output, so both sum to
+    ``log-odds - baseline`` and read the same
     way: positive pushes the bank towards failure. Columns ``feature, value,
     contribution, direction``; the ``top`` largest absolute contributions, plus the
     ``baseline`` (expected log-odds / intercept) in ``attrs``.

@@ -11,8 +11,8 @@ units: they add up, with the explainer's expected value, to the raw score, so th
 rows kept per bank-quarter (five largest positive, five largest negative contributions)
 say which ratios pushed that bank's odds of failure up and which pulled them down.
 
-The winsoriser is applied before the explainer so the feature values stored next to each
-contribution are the ones the trees saw. Per-year files land in ``data/drivers/`` and
+The boosters take raw features (no winsoriser, CONTRACT 13), so the feature value stored
+next to each contribution is the bank's own ratio. Per-year files land in ``data/drivers/`` and
 :func:`rebuild_drivers_table` folds them into the ``drivers`` table (Parquet + DuckDB).
 Every year logs an ``explain`` run whose metrics carry the mean absolute SHAP of each
 feature; :func:`write_summary` reads those back to write ``reports/shap_summary.md``,
@@ -55,34 +55,49 @@ DOMINANCE_SHARE = 0.40
 
 
 def shap_matrix(pipeline: Pipeline, X: pd.DataFrame) -> tuple[np.ndarray, float, np.ndarray]:
-    """``(shap_values, expected_value, X_winsorised)`` of a ``make_gbdt`` pipeline on ``X``.
+    """``(shap_values, expected_value, inputs)`` of a ``make_gbdt`` pipeline on ``X``.
 
-    The pipeline's fitted ``Winsorizer`` transforms ``X`` first (the explainer must see
-    the clipped values the trees split on); ``TreeExplainer`` then returns one log-odds
-    contribution per (row, feature). shap returns either a ``(n, p)`` array or a two-class
-    list for a binary booster depending on its version; the positive class is kept.
+    ``inputs`` is the ``(n, p)`` float array the trees actually split on: ``X`` itself
+    for a raw-feature booster (every pipeline built since the winsoriser was removed), or
+    the output of the pipeline's transformer steps for an older artefact that still
+    carries one (``pipeline[:-1]`` is applied only when such steps exist).
+    ``TreeExplainer`` then returns one log-odds contribution per (row, feature). shap
+    returns either a ``(n, p)`` array or a two-class list for a binary booster depending
+    on its version; the positive class is kept.
     """
     import warnings
 
     import shap
 
-    clipped = pipeline.named_steps["winsorize"].transform(X)
+    inputs = model_inputs(pipeline, X)
     explainer = shap.TreeExplainer(pipeline.named_steps["model"])
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message=".*binary classifier with TreeExplainer.*")
-        values = explainer.shap_values(clipped)
+        values = explainer.shap_values(inputs)
     expected = explainer.expected_value
     if isinstance(values, list):
         values, expected = values[-1], np.ravel(expected)[-1]
     elif values.ndim == 3:
         values, expected = values[:, :, -1], np.ravel(expected)[-1]
-    return np.asarray(values, dtype=float), float(np.ravel(expected)[-1]), clipped
+    return np.asarray(values, dtype=float), float(np.ravel(expected)[-1]), inputs
+
+
+def model_inputs(pipeline: Pipeline, X: pd.DataFrame) -> np.ndarray:
+    """The float matrix the pipeline's final estimator sees for ``X``.
+
+    Raw values when the pipeline has no transformer step (the boosters); otherwise the
+    transformers' output, so the explainer and the stored ``feature_value`` agree with
+    the estimator for any older artefact loaded from disk.
+    """
+    if len(pipeline.steps) > 1:
+        return np.asarray(pipeline[:-1].transform(X), dtype=float)
+    return np.asarray(X, dtype=float)
 
 
 def drivers_table(
     keys: pd.DataFrame,
     values: np.ndarray,
-    clipped: np.ndarray,
+    inputs: np.ndarray,
     features: list[str],
     model: str,
     model_year: int,
@@ -91,7 +106,7 @@ def drivers_table(
     """The CONTRACT ``drivers`` rows for one block of bank-quarters.
 
     ``keys`` holds ``cert, repdte`` for the rows of ``values`` (``(n, p)`` SHAP values)
-    and ``clipped`` (the winsorised feature values). Ranks ``1..top_n`` are the largest
+    and ``inputs`` (the raw feature values the trees saw). Ranks ``1..top_n`` are the largest
     positive contributions (``direction = 'raises'``, biggest first); ranks
     ``top_n + 1 .. 2 * top_n`` the most negative ones (``'lowers'``, most negative
     first). A contribution of exactly zero is never a driver, so a bank-quarter can have
@@ -118,7 +133,7 @@ def drivers_table(
                     "rank": ranks + offset,
                     "feature": np.asarray(features, dtype=object)[cols],
                     "shap_value": values[rows, cols],
-                    "feature_value": np.asarray(clipped, dtype=float)[rows, cols],
+                    "feature_value": np.asarray(inputs, dtype=float)[rows, cols],
                     "direction": direction,
                     "model_year": int(model_year),
                 }
@@ -226,9 +241,9 @@ def explain_year(
         raise ValueError(f"no rows to explain for {year}")
     pipeline, features, _ = load_year(settings, model_year, model, HORIZON)
     rows = frame.loc[mask]
-    values, expected, clipped = shap_matrix(pipeline, rows[list(features)])
+    values, expected, inputs = shap_matrix(pipeline, rows[list(features)])
     label = production_model(model) if year == PRODUCTION else model
-    drivers = drivers_table(rows[["cert", "repdte"]], values, clipped, features, label, model_year)
+    drivers = drivers_table(rows[["cert", "repdte"]], values, inputs, features, label, model_year)
     mean_abs = pd.Series(np.abs(values).mean(axis=0), index=features, name="mean_abs_shap")
     mean_abs = mean_abs.sort_values(ascending=False, kind="mergesort")
     share = float(mean_abs.iloc[0] / mean_abs.sum()) if mean_abs.sum() > 0 else 0.0
@@ -370,10 +385,10 @@ def report_path(settings: Settings) -> Path:
     return Path(settings.reports_dir) / "shap_summary.md"
 
 
-def beeswarm(values: np.ndarray, clipped: np.ndarray, features: list[str], path, top: int = 15):
+def beeswarm(values: np.ndarray, inputs: np.ndarray, features: list[str], path, top: int = 15):
     """Beeswarm of the ``top`` features by mean |SHAP| for one block of rows; deterministic PNG.
 
-    Every row's contribution is a dot, coloured by the (winsorised) feature value rank,
+    Every row's contribution is a dot, coloured by the raw feature value rank,
     so the picture shows both how much a feature moves the log-odds and in which
     direction high values push. Rows are subsampled with a fixed seed when there are
     more than 4,000 so the file stays small.
@@ -385,16 +400,16 @@ def beeswarm(values: np.ndarray, clipped: np.ndarray, features: list[str], path,
 
     from bankcanary.evaluation.plots import _METADATA
 
-    values, clipped = np.asarray(values, dtype=float), np.asarray(clipped, dtype=float)
+    values, inputs = np.asarray(values, dtype=float), np.asarray(inputs, dtype=float)
     rng = np.random.default_rng(0)
     if len(values) > 4000:
         keep = np.sort(rng.choice(len(values), 4000, replace=False))
-        values, clipped = values[keep], clipped[keep]
+        values, inputs = values[keep], inputs[keep]
     order = np.argsort(-np.abs(values).mean(axis=0), kind="stable")[:top][::-1]
     fig, ax = plt.subplots(figsize=(7.0, 0.42 * len(order) + 1.2))
     for i, j in enumerate(order):
         x = values[:, j]
-        v = clipped[:, j]
+        v = inputs[:, j]
         rank = pd.Series(v).rank(pct=True).fillna(0.5).to_numpy()
         jitter = rng.uniform(-0.3, 0.3, size=len(x))
         ax.scatter(x, i + jitter, c=rank, cmap="coolwarm", s=4, alpha=0.6, linewidths=0)
@@ -431,8 +446,8 @@ def write_summary(frame: pd.DataFrame, settings: Settings, path=None, model: str
     latest = max(years)
     mask, model_year = select_rows(frame, int(latest), HORIZON)
     pipeline, features, _ = load_year(settings, model_year, model, HORIZON)
-    values, _, clipped = shap_matrix(pipeline, frame.loc[mask, list(features)])
-    fig = beeswarm(values, clipped, features, figure_path(settings))
+    values, _, inputs = shap_matrix(pipeline, frame.loc[mask, list(features)])
+    fig = beeswarm(values, inputs, features, figure_path(settings))
     compare_years = [y for y in ("2009", "2023") if y in by_year.columns]
     compare = summary[["feature", "mean_abs_shap", "share"]].head(20).copy()
     for y in compare_years:

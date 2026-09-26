@@ -1064,3 +1064,36 @@ open for the owner to revisit.
   ECharts as `aria.label.description`, which keeps the accessible name fixed on every chart.
   Deployment (acceptance criterion 4) remains the owner's action per `docs/RUNBOOK.md`
   section 7.
+- 2026-09-26 — **The boosters take raw features; the winsoriser is gone from the tree
+  pipelines.** `make_gbdt` built `Winsorizer(0.005, 0.995) -> estimator`, the logit front end
+  minus imputer and scaler. Evidence that this clipped away the signal it was meant to protect:
+  for Silicon Valley Bank at 2022-12-31 the `drivers` table showed `feature_value` 3.94 for
+  `adjusted_tier1_leverage` where the true value is −0.33 and −0.19 for `unrealized_loss_to_tier1`
+  where the true value is −1.04; 283 training rows before 2021Q3 have `unrealized_loss_to_tier1`
+  below −0.5 (minimum −7.07) and every one of them reached the trees as about −0.19, so no split
+  could isolate the banks whose securities losses exceeded their capital. Trees do not need the
+  clip (rank-order splits, leaves bounded by `min_samples_leaf`), so `make_gbdt` now returns the
+  bare `Pipeline([("model", estimator)])` for both backends; the logistic and hazard pipelines
+  are unchanged. `shap_drivers.shap_matrix` feeds the raw matrix to the explainer through the
+  new `model_inputs` helper, which applies `pipeline[:-1]` only when a loaded artefact still has
+  transformer steps, so older walk-forward files keep explaining consistently until they are
+  refit; `feature_value` is now the bank's own ratio (NaN when the ratio is missing, which the
+  trees split on). `scripts/tune_gbdt.py` tags booster configs with `inputs: raw`, so the 48
+  winsorised grid runs under `runs/tune_gbdt/` no longer satisfy a re-tune, and a re-tune keeps
+  the `monotone` flag already in `config/settings.yaml` (Decision Point 2 is the owner's ruling)
+  instead of re-deriving it from the inner slice. Not touched here: the walk-forward, calibration,
+  explain and production artefacts on disk, which still carry the winsorised booster until the
+  per-year commands are re-run. Consumers of the booster (`walkforward`, `calibration`,
+  `case_study_2023`, `sensitivity`, `publish.core.score_with_artefacts`, the rate-shock scorer)
+  only call `fit`/`predict_proba` on the pipeline and needed no change.
+- 2026-09-26 — **Raw-feature grid and fixed-split refit.** The 48-point grid re-scored on raw
+  inputs (inner slice, 37 positives) keeps `gbdt_mono` ahead: winner `learning_rate 0.03,
+  num_leaves 31, min_samples_leaf 50, n_estimators 200` with inner PR-AUC 0.2142 (`gbdt` at the
+  same point 0.1583; `logit_v2` 0.2589), against 0.1968 / 0.2299 for the winsorised pair at the
+  old point (`num_leaves 63, min_samples_leaf 200`). On the untouched fixed-split test years the
+  raw boosters score `gbdt_mono` PR-AUC 0.4250 (was 0.4755) and `gbdt` 0.3913 (was 0.4324), with
+  recall@2% 0.7959 / 0.7887 (was 0.8019 / 0.7791); every `learning_rate 0.1` point collapses on
+  the inner slice (PR-AUC below 0.05 for the unconstrained model), so the 37-positive inner slice
+  is a thin guide and the walk-forward years, once refit, are the evidence that counts. The
+  2010-2013 test split contains no interest-rate failures, so it cannot show the benefit the
+  SVB rows motivate; `reports/p2_gbdt.md` and `config/settings.yaml` carry the new numbers.

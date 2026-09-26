@@ -183,8 +183,16 @@ concatenates module lists in a fixed order and `build.py` calls the builders in 
   backend `lightgbm` (`LGBMClassifier`) when `import lightgbm` succeeds, else `sklearn`
   (`HistGradientBoostingClassifier`, same histogram algorithm, native NaN, `monotonic_cst`).
   The chosen backend is written to `config/settings.yaml` (`models.gbdt.backend`) by step D6 and
-  every later step reads it, so one run never mixes backends. Same preprocessing pipeline as the
-  logits minus imputer/scaler (Winsorizer only; trees take NaN natively). Hyper-parameters
+  every later step reads it, so one run never mixes backends. The boosters take the **raw**
+  registry features: no winsoriser, no imputer, no scaler (the pipeline is the bare
+  ``("model", estimator)`` step, kept as a `Pipeline` so callers treat it like the logits).
+  Trees split on rank order and a leaf's value is bounded by `min_samples_leaf` rows, so an
+  outlier cannot distort them the way it distorts a linear fit; the 0.5% clip the logits need
+  instead erased the tail that carries the interest-rate signal (Silicon Valley Bank at
+  2022-12-31: `unrealized_loss_to_tier1` −1.04 shown to the trees as −0.19, `adjusted_tier1_leverage`
+  −0.33 shown as 3.94). The logistic and hazard pipelines keep the winsoriser (section 8).
+  SHAP `feature_value` is therefore the bank's own ratio (`shap_drivers.model_inputs` applies
+  transformer steps only when a loaded artefact still has some). Hyper-parameters
   chosen on the inner validation slice (reports 2007Q1–2008Q4, inner train windows closed
   before 2007-05-30), never on test years. Two configs are always trained and logged:
   `gbdt` (unconstrained) and `gbdt_mono` (monotone constraints from the registry's
