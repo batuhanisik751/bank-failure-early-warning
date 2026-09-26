@@ -6,14 +6,16 @@ import { DataSources, HowToRead } from "@/components/methodology/Reading";
 import { DISCLAIMER } from "@/lib/disclaimer";
 import { formatDate } from "@/lib/format";
 import { methodology } from "@/lib/queries";
+import { pageMetadata } from "@/lib/seo";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return {
+  return pageMetadata({
     title: "Methodology",
     description:
       "How the model is trained, validated and calibrated, the walk-forward metrics with confidence " +
       "intervals, the leakage rules and the limitations. " + DISCLAIMER,
-  };
+    path: "/methodology",
+  });
 }
 
 function H2({ id, children }: { id: string; children: React.ReactNode }) {

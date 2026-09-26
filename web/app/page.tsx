@@ -8,16 +8,22 @@ import { DISCLAIMER } from "@/lib/disclaimer";
 import { formatCount, formatDate } from "@/lib/format";
 import { leaderboard, leaderboardDrivers, leaderboardStates } from "@/lib/queries/leaderboard";
 import { latestQuarter } from "@/lib/queries/quarters";
+import { pageMetadata } from "@/lib/seo";
 
 type Props = { searchParams: Promise<SearchParams> };
 
-export async function generateMetadata(): Promise<Metadata> {
-  const latest = await latestQuarter();
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  // A metadata failure blanks the page instead of reaching error.tsx, so the query falls back.
+  const latest = await latestQuarter().catch(() => null);
   const when = latest ? ` for ${latest.label}` : "";
-  return {
+  // Filtered, sorted or paged views are duplicates of the canonical ranking for crawlers.
+  const filtered = leaderboardHref(parseLeaderboardParams(await searchParams)) !== "/";
+  return pageMetadata({
     title: "Leaderboard",
     description: `Every FDIC-insured bank ranked by modelled 12-month failure probability${when}. ${DISCLAIMER}`,
-  };
+    path: "/",
+    index: !filtered,
+  });
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

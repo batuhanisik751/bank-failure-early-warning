@@ -11,6 +11,7 @@ import { DISCLAIMER } from "@/lib/disclaimer";
 import { formatProbability, formatSizeBucket, repdteToLabel } from "@/lib/format";
 import { bank, bankPeerStats, bankTimeline } from "@/lib/queries/bank";
 import { quarterByLabel } from "@/lib/queries/quarters";
+import { pageMetadata } from "@/lib/seo";
 
 type Props = { params: Promise<{ cert: string }> };
 
@@ -20,14 +21,18 @@ function parseCert(raw: string): number | null {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const cert = parseCert((await params).cert);
-  const profile = cert ? await bank(cert) : null;
-  if (!profile) return { title: "Bank not found" };
+  // A metadata failure blanks the page instead of reaching error.tsx, so the query falls back.
+  const profile = cert ? await bank(cert).catch(() => null) : null;
+  if (!profile) {
+    return pageMetadata({ title: "Bank not found", description: `No bank profile at this address. ${DISCLAIMER}`, path: `/bank/${cert ?? 0}`, index: false });
+  }
   const p = profile.latest?.gbdt?.probability;
   const when = profile.latest ? ` (${profile.latest.label}: ${formatProbability(p)} 12-month probability)` : "";
-  return {
+  return pageMetadata({
     title: `${profile.bank.name ?? `Cert ${cert}`}, ${profile.bank.state ?? ""}`.replace(/, $/, ""),
     description: `Probability timeline, CAMELS ratios against peers and model drivers for ${profile.bank.name ?? `certificate ${cert}`}${when}. ${DISCLAIMER}`,
-  };
+    path: `/bank/${cert}`,
+  });
 }
 
 export default async function BankPage({ params }: Props) {

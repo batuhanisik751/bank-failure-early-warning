@@ -4,16 +4,18 @@ import { FailureReplayMap } from "@/components/map/FailureReplayMap";
 import { pickQuarter } from "@/components/time-machine/helpers";
 import { DISCLAIMER } from "@/lib/disclaimer";
 import { mapQuarter, mapTimeline } from "@/lib/queries/map";
+import { pageMetadata } from "@/lib/seo";
 
 type Props = { searchParams: Promise<{ quarter?: string | string[] }> };
 
 export async function generateMetadata(): Promise<Metadata> {
-  return {
+  return pageMetadata({
     title: "Failure replay map",
     description:
       "Every scored bank's head office on a US map, shaped and coloured by risk band, with the " +
       `failures of each quarter marked, played quarter by quarter since 2008. ${DISCLAIMER}`,
-  };
+    path: "/map",
+  });
 }
 
 function Empty({ message }: { message: string }) {

@@ -994,3 +994,37 @@ open for the owner to revisit.
   still become hermetic (`monkeypatch.delenv("GITHUB_OUTPUT")`, help assertions on
   `_TYPER_FORCE_DISABLE_TERMINAL` set in `conftest.py`), which belongs to the steps that own
   those files.
+- 2026-09-26 — **E11 quality pass on the web app.** Axe over every route in both themes
+  found nothing new; the real accessibility gaps were the three tables (leaderboard,
+  time-machine ranking and failures, bank drivers) whose scroll containers were not in the
+  tab order, so a keyboard user could not reach the columns that overflow at 375 px. They
+  are now `role="region"` + unique `aria-label` + `tabIndex=0` like the others (the
+  time-machine table takes a `label` prop because it renders twice per page). Responsive
+  checks run at 375, 768 and 1280 px both during the streamed skeleton and once settled;
+  the skeletons are `min-h-screen` so the footer starts below the fold while a page streams
+  (that footer jump was a CLS of 0.18 on the time machine). SEO: `lib/seo.ts`
+  `pageMetadata()` gives every page an absolute title (`title.template` in the root layout
+  does not apply to `app/page.tsx`, which is the same segment), description, canonical,
+  Open Graph, Twitter card and robots; filtered, sorted or paged leaderboard views and the
+  bank not-found page are `noindex, follow`; `app/sitemap.ts` lists the six sections, one
+  time-machine URL per scored quarter and one profile per production-scored bank (about
+  8,900 URLs, cached queries, and it degrades to the six sections when the database is
+  unreachable); `app/robots.ts` disallows `/api/`. States: `generateMetadata` on the
+  leaderboard, bank, time-machine and rate-shock pages now catches its own query failure
+  and falls back to static metadata, because a metadata error leaves `<main>` empty instead
+  of reaching `error.tsx` (found by the new `e2e-dbdown/` suite, whose Playwright config
+  starts the built app on port 3101 with `DATABASE_URL` on a closed port after deleting
+  `.next/cache/fetch-cache`, without which `unstable_cache` answered from the previous run
+  and the outage was invisible). Performance: the leaderboard body moved into a client
+  component (`LeaderboardRows`) so its rows travel as JSON rather than one serialised
+  element tree per cell: home page HTML 206 KB → 150 KB, server payload 112 KB → 66 KB,
+  20 KB gzipped, largest script 229 KB (ECharts' 1 MB chunk loads only where a chart
+  renders, through the existing dynamic import in `EChart.tsx`). Lighthouse 13.5 via
+  `scripts/lighthouse.mjs` (starts `next start`, audits, stops; Playwright's Chromium,
+  headless): desktop preset `/` 100/100, `/bank/14` 100/100, `/time-machine` 100/100,
+  `/map` 99/100, `/case-study-2023` 100/100, `/rate-shock` 100/100, `/methodology` 100/100
+  (performance/accessibility); mobile preset `/` 98/100 (LCP 2.3 s, TBT 30 ms, CLS 0),
+  `/time-machine` 97/100, `/bank/14` 96/100. Suites: 114 vitest, 65 Playwright on the main
+  config, 6 on the database-down config. The "destination stream closed early" lines the
+  server logs during the Playwright run come from tests that measure the skeleton with
+  `waitUntil: "commit"`; they are noise, not failures.

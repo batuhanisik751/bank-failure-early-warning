@@ -13,7 +13,7 @@ export function DriverExplanations({ drivers, quarter }: Props) {
           <li key={d.rank}>{driverSentence(d)}</li>
         ))}
       </ol>
-      <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+      <div className="relative overflow-x-auto rounded-lg border border-border bg-surface" role="region" aria-label="Driver table, scrolls sideways" tabIndex={0}>
         <table className="data-table">
           <caption>
             SHAP contributions of the production gbdt_mono model for {quarter}, largest absolute value first.

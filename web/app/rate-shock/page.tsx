@@ -3,14 +3,17 @@ import Link from "next/link";
 import { RateShockTool } from "@/components/rate-shock/RateShockTool";
 import { DISCLAIMER } from "@/lib/disclaimer";
 import { rateShockScenarios } from "@/lib/queries";
+import { pageMetadata } from "@/lib/seo";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const data = await rateShockScenarios();
+  // A metadata failure blanks the page instead of reaching error.tsx, so the query falls back.
+  const data = await rateShockScenarios().catch(() => null);
   const when = data ? ` for ${data.quarter}` : "";
-  return {
+  return pageMetadata({
     title: "Rate shock",
     description: `Which banks move up the list under a parallel rate shock${when}, a simplified approximation. ${DISCLAIMER}`,
-  };
+    path: "/rate-shock",
+  });
 }
 
 export default async function Page() {

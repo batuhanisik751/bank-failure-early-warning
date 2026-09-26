@@ -8,7 +8,7 @@ test.describe("home page", () => {
   test("renders the latest quarter's top 10 with the disclaimer", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1, name: "Leaderboard" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: /Top 10 of/ })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: /banks, \d{4}Q[1-4]/ })).toBeVisible();
     await expect(page.getByRole("table")).toBeVisible();
     expect(await page.getByRole("row").count()).toBeGreaterThanOrEqual(11);
     await expect(page.getByTestId("disclaimer")).toContainText("Educational project");
@@ -29,6 +29,7 @@ test.describe("home page", () => {
   test("fits a 375 px viewport without horizontal scroll", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );

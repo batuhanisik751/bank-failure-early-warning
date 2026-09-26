@@ -30,10 +30,19 @@ certificate verification (`sslmode=verify-full` semantics) whatever the URL says
 ```bash
 npm run lint           # eslint (next/core-web-vitals + typescript)
 npm run typecheck      # tsc --noEmit
-npm test               # vitest: lib/format and the schema drift test
+npm test               # vitest: pure helpers, the schema drift test, route states and metadata
 npx playwright install chromium   # once
 npm run test:e2e       # builds nothing: run `npm run build` first; starts `npm run start` itself
+npm run test:e2e:dbdown   # same build, DATABASE_URL pointed at a closed port: every route must show error.tsx
+npm run lighthouse -- / /bank/14   # performance + accessibility scores (desktop preset; LH_MOBILE=1 for mobile)
 ```
+
+`e2e/quality.spec.ts` is the cross-route pass: axe in both themes, 375/768/1280 px without
+horizontal scroll (tables scroll inside a focusable region), keyboard operation of the skip
+link, theme toggle, tables, selects and the map slider, the not-found states, per-page
+metadata, the sitemap and the home page's size budget (document and server payload under
+200 KB). `e2e-dbdown/` runs against `playwright.dbdown.config.ts`, which clears the on-disk
+data cache and starts the app on port 3101 with an unreachable database.
 
 `tests/schema.test.ts` parses `../src/bankcanary/publish/schema.sql` and compares every
 table, column name and column type with `lib/db/schema.ts`, so a DDL change that is not

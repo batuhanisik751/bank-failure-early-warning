@@ -5,14 +5,16 @@ import { RankTable } from "@/components/case-study/RankTable";
 import { DISCLAIMER } from "@/lib/disclaimer";
 import { formatDate } from "@/lib/format";
 import { caseStudy } from "@/lib/queries";
+import { pageMetadata } from "@/lib/seo";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return {
+  return pageMetadata({
     title: "2023 case study",
     description:
       "Silicon Valley Bank, Signature and First Republic against their peers, and how a credit-only " +
       "and a rate-aware model ranked them before March 2023. " + DISCLAIMER,
-  };
+    path: "/case-study-2023",
+  });
 }
 
 const SHORT_NAMES: Record<number, string> = { 24735: "Silicon Valley Bank", 57053: "Signature Bank", 59017: "First Republic Bank" };

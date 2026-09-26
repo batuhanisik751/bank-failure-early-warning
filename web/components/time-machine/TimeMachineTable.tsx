@@ -12,6 +12,8 @@ type Props = {
   /** Head size of the ranking; rows past it are shaded as "below the top 2%". */
   k: number;
   testId?: string;
+  /** Accessible name of the scroll region around the table; unique per page. */
+  label: string;
 };
 
 function Outcome({ row }: { row: TimeMachineRow }) {
@@ -29,10 +31,10 @@ function Outcome({ row }: { row: TimeMachineRow }) {
 }
 
 /** The ranking as the model saw it, with the outcome column filled in by hindsight. */
-export function TimeMachineTable({ rows, quarter, caption, k, testId }: Props) {
+export function TimeMachineTable({ rows, quarter, caption, k, testId, label }: Props) {
   if (rows.length === 0) return <p className="text-muted">Nothing to list for {quarter}.</p>;
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+    <div className="relative overflow-x-auto rounded-lg border border-border bg-surface" role="region" aria-label={`${label}, scrolls sideways`} tabIndex={0}>
       <table className="data-table" data-testid={testId}>
         <caption>
           {caption} Ranks and 12-month probabilities are the gbdt_mono walk-forward scores of {quarter};

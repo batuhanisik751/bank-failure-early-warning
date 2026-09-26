@@ -8,6 +8,7 @@ import { formatCount, formatDate, formatPercent } from "@/lib/format";
 import { walkforwardMetrics } from "@/lib/queries/metrics";
 import { HORIZON_QUARTERS } from "@/lib/queries/types";
 import { TIME_MACHINE_MODEL, scoredQuarters, timeMachine } from "@/lib/queries/timeMachine";
+import { pageMetadata } from "@/lib/seo";
 
 type Props = { searchParams: Promise<{ quarter?: string | string[] }> };
 
@@ -20,13 +21,15 @@ async function resolveQuarter(searchParams: Props["searchParams"]) {
 }
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
-  const { current } = await resolveQuarter(searchParams);
-  return {
+  // A metadata failure blanks the page instead of reaching error.tsx, so the query falls back.
+  const { current } = await resolveQuarter(searchParams).catch(() => ({ current: null }));
+  return pageMetadata({
     title: current ? `Time machine ${current}` : "Time machine",
     description:
       `What the walk-forward model said ${current ? `at ${current}` : "at any past quarter"}, ` +
       `with hindsight about which banks failed. ${DISCLAIMER}`,
-  };
+    path: current ? `/time-machine?quarter=${current}` : "/time-machine",
+  });
 }
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -150,6 +153,7 @@ export default async function TimeMachinePage({ searchParams }: Props) {
           k={recall.k}
           caption={`The ${Math.min(TOP_ROWS, rows.length)} riskiest banks by the model's ranking.`}
           testId="ranking-table"
+          label="Ranking table"
         />
       </section>
       <section aria-labelledby="failures" className="space-y-3">
@@ -167,6 +171,7 @@ export default async function TimeMachinePage({ searchParams }: Props) {
             k={recall.k}
             caption={`All ${failures.length} banks that failed inside the label window, with the rank the model gave them.`}
             testId="failures-table"
+            label="Failures table"
           />
         )}
       </section>

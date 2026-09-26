@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div role="status" aria-live="polite" className="space-y-4">
+    <div role="status" aria-live="polite" className="min-h-screen space-y-4">
       <p className="sr-only">Loading</p>
       <div aria-hidden="true" className="h-8 w-56 animate-pulse rounded bg-surface" />
       <div aria-hidden="true" className="h-4 w-full max-w-2xl animate-pulse rounded bg-surface" />
