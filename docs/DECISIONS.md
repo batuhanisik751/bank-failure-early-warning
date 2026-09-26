@@ -1222,3 +1222,8 @@ open for the owner to revisit.
   autovacuum, over the 400 MB test limit) until `VACUUM FULL`, after which it is 381.2 MB,
   so the size check was run after the vacuum. `web/components/case-study/Narrative.tsx` still
   tells the rank-245 story of the unconstrained booster and belongs to a web step.
+- 2026-09-26 (post-booster-fix verification): the only finding was an uncommitted one-line
+  `.gitignore` addition that named a local editor-configuration directory. The line was
+  discarded rather than committed (the repository does not carry tool-specific entries);
+  the directory is excluded locally through `.git/info/exclude`, so the working tree is
+  clean and HEAD matches `origin/main`.
