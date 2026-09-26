@@ -35,12 +35,22 @@ from bankcanary.splits import assert_no_leakage, test_mask, training_mask
 
 log = logging.getLogger(__name__)
 
-#: Walk-forward models: the Texas-ratio ranking (no fit), the regularised logit at the P1
-#: ``LOGIT_C`` on every v2 feature, the tuned gradient booster and the converted hazard.
-MODELS: tuple[str, ...] = ("texas", "logit", "gbdt", "gbdt_mono", "hazard")
+#: Walk-forward models: the Texas-ratio ranking (no fit), the regularised logit on every
+#: v2 feature, the same learner on the Prototype 1 ``features_v1`` columns (``logit_v1``,
+#: the comparison of P2 checklist criterion 2, tuned per year exactly like ``logit``), the
+#: tuned gradient booster and the converted hazard.
+MODELS: tuple[str, ...] = ("texas", "logit", "logit_v1", "gbdt", "gbdt_mono", "hazard")
 #: The two booster configurations of Decision Point 2: unconstrained and registry-monotone.
 GBDT_MODELS: tuple[str, ...] = ("gbdt", "gbdt_mono")
-FIRST_TEST_YEAR = 2008
+#: The L2 logistic learners that tune ``C`` over :data:`C_GRID` (the hazard does too).
+LOGIT_MODELS: tuple[str, ...] = ("logit", "logit_v1")
+#: Feature table each logistic learner reads (``logit_v1`` is the P1 subset of ``v2``).
+LOGIT_FEATURE_VERSION: dict[str, str] = {"logit": "v2", "logit_v1": "v1"}
+#: First backtest year. 2006 and 2007 are label-complete and every model tunes on at
+#: least five validation failures from the 2001-2005 window (17 and 18 after widening;
+#: ``docs/DECISIONS.md``, step C3), so the backtest starts there; the published time
+#: machine still starts at ``publish.core.FIRST_SCORED_YEAR`` (2008, size budget).
+FIRST_TEST_YEAR = 2006
 PRIMARY_HORIZON = 4
 FEATURE_VERSION = "v2"
 TABLE = "walkforward_scores"
@@ -195,7 +205,7 @@ def candidate_grid(model: str, settings: Settings) -> list[dict]:
     """
     import itertools
 
-    if model in ("logit", "hazard"):
+    if model in LOGIT_MODELS or model == "hazard":
         return [{"C": float(c)} for c in C_GRID]
     if model in GBDT_MODELS:
         base = dict(settings.models.gbdt.params)
@@ -209,7 +219,7 @@ def candidate_grid(model: str, settings: Settings) -> list[dict]:
 def fallback_params(model: str, settings: Settings) -> dict:
     """The most regularised grid point: used only when a year has too few failures to tune."""
     grid = candidate_grid(model, settings)
-    if model in ("logit", "hazard"):
+    if model in LOGIT_MODELS or model == "hazard":
         return {"C": min(C_GRID)}
     if model in GBDT_MODELS:
         return {
@@ -227,7 +237,8 @@ def build_model(
     """``(unfitted pipeline, feature list, config)`` for one walk-forward model.
 
     ``texas`` ranks by the Texas ratio alone; ``logit`` is the Prototype 1 regularised
-    logit (no class weighting) on every v2 feature; ``gbdt`` takes its backend from
+    logit (no class weighting) on every v2 feature and ``logit_v1`` the same learner on
+    the 43 ``features_v1`` columns only (the fair P1 comparison); ``gbdt`` takes its backend from
     ``settings.models.gbdt`` and is unconstrained, ``gbdt_mono`` the same booster under
     the registry's monotone signs (the two sides of Decision Point 2, both walked
     forward; ``n_estimators`` overrides the iteration count when a year's training set
@@ -247,14 +258,16 @@ def build_model(
     if model == "texas":
         config.update({"features_version": "v1", "fit": "none (ranking by texas_ratio)"})
         return baselines.make_model("texas"), ["texas_ratio"], config
-    if model == "logit":
+    if model in LOGIT_MODELS:
         from sklearn.linear_model import LogisticRegression
 
         from bankcanary.models.preprocess import make_pipeline
 
+        version = LOGIT_FEATURE_VERSION[model]
+        features = feature_names(version=version)
         c = float(params.get("C", baselines.LOGIT_C))
         pipe = make_pipeline(LogisticRegression(C=c, max_iter=2000))
-        config.update({"C": c, "class_weight": None})
+        config.update({"features_version": version, "C": c, "class_weight": None})
         return pipe, features, config
     if model in GBDT_MODELS:
         cfg = settings.models.gbdt
@@ -646,6 +659,10 @@ def rebuild_scores_table(settings: Settings) -> pd.DataFrame:
         raise FileNotFoundError(f"no walk-forward score files under {scores_dir(settings)}")
     parts = [pd.read_parquet(f)[list(SCORE_COLUMNS)] for f in files]
     table = pd.concat(parts, ignore_index=True)
+    early = table["test_year"] < FIRST_TEST_YEAR
+    if early.any():
+        log.warning("walkforward_scores: %d rows before %d left out", early.sum(), FIRST_TEST_YEAR)
+        table = table.loc[~early]
     table = table.astype({"repdte": "datetime64[ns]", "model": "str"})
     write_table(table, TABLE, key=TABLE_KEY, settings=settings)
     replace_table(TABLE, table_path(settings, TABLE), settings)
@@ -886,3 +903,51 @@ def check_tuning_consistency(models_dir: Path, lag_days: int | None = None) -> l
             continue
         violations.append({"year": year, "model": model, "path": str(path), "reason": reason})
     return violations
+
+
+def saved_model_configs(models_dir: Path) -> list[Path]:
+    """Every ``walkforward/<Y>/<model>/config.json`` and ``production/<model>/config.json``."""
+    root = Path(models_dir)
+    return sorted(root.glob("walkforward/*/*/config.json")) + sorted(
+        root.glob("production/*/config.json")
+    )
+
+
+def referenced_run_ids(config_paths) -> set[str]:
+    """Run ids a saved model vouches for: its own record and its tuning candidates.
+
+    The record id is :func:`bankcanary.tracking.run_id` of the config as saved and, for
+    a model stamped after its record was written (``scripts/stamp_model_versions.py``), of
+    the config without the stamp. The tuning candidates are rebuilt from ``tuning.json``
+    beside the config the way :func:`tune_year` keys them (the frame's
+    :data:`FEATURE_VERSION`, the slice bounds, each grid point's ``params``), so
+    ``bankcanary runs prune`` keeps exactly the cache the next refit would read.
+    """
+    from bankcanary import tracking
+
+    ids: set[str] = set()
+    for path in config_paths:
+        path = Path(path)
+        config = json.loads(path.read_text(encoding="utf-8"))
+        if "horizon" not in config:
+            continue
+        ids.add(tracking.run_id("walkforward", config))
+        bare = {k: v for k, v in config.items() if k not in ("model_hash", "model_version")}
+        ids.add(tracking.run_id("walkforward", bare))
+        tuning_path = path.with_name("tuning.json")
+        if not tuning_path.exists():
+            continue
+        tuning = config.get("tuning") or {}
+        base = {
+            "model": config["model"],
+            "horizon": config["horizon"],
+            "fit_horizon": config.get("fit_horizon"),
+            "test_year": config.get("test_year"),
+            "features_version": FEATURE_VERSION,
+            "availability_lag_days": config.get("availability_lag_days"),
+            **{k: tuning.get(k) for k in ("validation_start", "validation_end", "n_inner_train")},
+        }
+        grid = json.loads(tuning_path.read_text(encoding="utf-8")).get("grid") or []
+        for row in grid:
+            ids.add(tracking.run_id(TUNING_RUN, {**base, "params": row["params"]}))
+    return ids

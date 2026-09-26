@@ -25,21 +25,27 @@ this file records the commands and numbers behind each tick.
   and calibrated, and a `low confidence` flag for years under 10 failures (2017, 2020, 2021,
   2024 at 4q; 2020 at 8q; 2021 has no 4q failure and undefined ranking metrics).
 
-- [x] **The best model beats P1's regularised logistic on pooled walk-forward PR-AUC and
-  recall@top-2%.** Met, and statistically separated, against the fair comparison: the P1
-  learner (L2 logit, no class weighting) walked forward on the 43 `features_v1` columns over
-  the same 426,019 4q rows, one fit per test year 2008-2024 with each year's `C` taken from
-  the same year's v2 logit selection (chosen inside that year's training period; run records
-  `runs/walkforward/` with `features_version = "v1"`, 17 records). It pools to PR-AUC 0.2194
-  [0.191, 0.246] and recall@2% 0.5625 [0.531, 0.589] (ROC-AUC 0.9441, Brier 0.0043). The
-  hazard pools to 0.3268 [0.294, 0.357] and 0.7038 [0.679, 0.730]; the intervals do not
-  overlap on either metric, and the v2 logit (0.3056 / 0.6833) and monotone booster (0.3131 /
-  0.7066) also sit above the v1 logit on both metrics; the unconstrained booster (0.2248 /
-  0.5787, PR-AUC interval [0.191, 0.249]) sits at or just above it. Among the P2 learners the hazard and the v2 logit are not
-  separated from each other (overlapping intervals); the Texas ratio keeps the best
-  recall@2% (0.7437) with the worst PR-AUC (0.2606). The P1 fixed-split figure (0.3867 /
-  0.7143, test 2010-2013) is a different test period and is not the comparison. At 8q the
-  hazard is best (0.4113 / 0.6598; logit 0.2566 / 0.5207, gbdt 0.1059 / 0.2585).
+- [ ] **The best model beats P1's regularised logistic on pooled walk-forward PR-AUC and
+  recall@top-2%.** Met on PR-AUC, level on recall@2%. The fair comparison is `logit_v1`:
+  the P1 learner (L2 logit, no class weighting) walked forward on the 43 `features_v1`
+  columns with its own `C` re-selected for every test year on that year's nested
+  validation slice, the recipe every other model gets (`models/walkforward/<Y>/logit_v1/`,
+  run records with `features_version = "v1"`). Over the 19 test years 2006-2024 (496,179
+  4q rows, 2,191 failures) it pools to PR-AUC 0.2801 [0.247, 0.315] and recall@2% 0.7047
+  [0.671, 0.736] (ROC-AUC 0.9475, Brier 0.0037 raw / 0.0047 calibrated). The hazard pools
+  to 0.3194 [0.286, 0.352] and 0.7033 [0.674, 0.733], the monotone booster to 0.3022
+  [0.275, 0.335] and 0.6992 [0.671, 0.724], the v2 logit to 0.2953 [0.264, 0.330] and
+  0.6787 [0.648, 0.710]: every P2 probability model except the unconstrained booster
+  (0.2160 / 0.5728) sits above the v1 logit on PR-AUC, but no interval is disjoint from
+  the v1 logit's, and on recall@2% the v1 logit is level with the hazard and above the v2
+  logit. Restricted to 2008-2024 (426,019 rows, 2,103 failures) it pools to 0.2901 /
+  0.6933 against the hazard's 0.3268 / 0.7038 and the monotone booster's 0.3131 / 0.7066;
+  the earlier comparison (0.2194 / 0.5625) borrowed each year's `C` from the v2 logit's
+  selection, which under-regularised the smaller feature set and overstated the gap. The
+  Texas ratio keeps the best recall@2% (0.7485) with a low PR-AUC (0.2534). The P1
+  fixed-split figure (0.3867 / 0.7143, test 2010-2013) is a different test period and is
+  not the comparison. At 8q (2008-2023) the hazard is best (0.4113 / 0.6598; logit 0.2566 /
+  0.5207, gbdt 0.1059 / 0.2585).
 
 - [x] **Median lead time for 2009-2012 failures is reported.** `reports/walkforward.md`,
   "Lead time" (`metrics.lead_time_summary`): of the 440 banks that failed in 2009-2012,
@@ -124,8 +130,8 @@ treat post-2021 scores as out of regime (model card, section 12).
 
 | check | command | result |
 |---|---|---|
-| walk-forward coverage | DuckDB: `walkforward_scores` grouped by `model` where `horizon = 4` | `texas, logit, gbdt, gbdt_mono, hazard`: 17 test years each, 2008-2024, 426,019 rows, 2,103 positives, `label_complete` on every row; `score_calibrated` filled except for `texas`; per-year positives 429, 679, 408, 231, 121, 73, 37, 24, 28, 5, 10, 18, 4, 0, 17, 10, 9; latest failure in `failures` 2026-07-17, so 2024 is the last 4q-complete year |
-| best model vs P1 logit | `features_v1` walk-forward logit, 17 fits (4-8 s each), pooled with `metrics.evaluate` and `cluster_bootstrap_ci` | see criterion 2: hazard 0.3268 / 0.7038 against 0.2194 / 0.5625, intervals disjoint |
+| walk-forward coverage | DuckDB: `walkforward_scores` grouped by `model` where `horizon = 4` | `texas, logit, logit_v1, gbdt, gbdt_mono, hazard`: 19 test years each, 2006-2024, 496,179 rows, 2,191 positives, `label_complete` on every row; `score_calibrated` filled except for `texas`; per-year positives 8, 80, 429, 679, 408, 231, 121, 73, 37, 24, 28, 5, 10, 18, 4, 0, 17, 10, 9; latest failure in `failures` 2026-07-17, so 2024 is the last 4q-complete year |
+| best model vs P1 logit | `logit_v1`: `features_v1` walk-forward logit tuned per year, 19 fits (about 9 s each), pooled by `metrics-report` with `cluster_bootstrap_ci` | see criterion 2: hazard 0.3194 / 0.7033 against 0.2801 / 0.7047; PR-AUC intervals overlap, recall level |
 | lead time 2009-2012 | `reports/walkforward.md`, "Lead time" | hazard median 5 quarters, 88.4% flagged >= 2 quarters ahead (logit 5, 87.7%) |
 | notebook 03 | `jupyter nbconvert --execute` to a scratch copy, 110 s cell timeout | 7 code cells, 0 error outputs; SVB 2022Q4 ranks 1677 / 2089 (credit-only logit / gbdt_mono) and 1854 / 2711 (rate-aware); section 5 gives the explanation |
 | calibration | `reports/walkforward.md`, pooled table and "Calibration" | Brier raw / calibrated: hazard 0.0041 / 0.0038, logit 0.0041 / 0.0038, gbdt 0.0046 / 0.0050, gbdt_mono 0.0046 / 0.0049; `reports/figures/reliability_{logit,gbdt,gbdt_mono,hazard}.png` committed |

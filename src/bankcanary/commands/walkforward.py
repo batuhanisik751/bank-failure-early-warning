@@ -10,11 +10,11 @@ import typer
 def register(app: typer.Typer) -> None:
     @app.command("walkforward")
     def walkforward_cmd(
-        year: int = typer.Option(..., "--year", help="Test year Y (2008 .. latest complete)."),
+        year: int = typer.Option(..., "--year", help="Test year Y (2006 .. latest complete)."),
         model: str = typer.Option(
             "all",
             "--model",
-            help="texas | logit | gbdt | gbdt_mono | hazard | all (comma lists allowed).",
+            help="texas | logit | logit_v1 | gbdt | gbdt_mono | hazard | all (comma lists).",
         ),
         horizon: int = typer.Option(4, "--horizon", help="Scoring horizon in quarters."),
         gbdt_iterations: int | None = typer.Option(

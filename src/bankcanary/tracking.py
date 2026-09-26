@@ -128,6 +128,96 @@ def rebuild_index(settings: Settings) -> int:
     return len(rows)
 
 
+#: Run names whose records live only while a saved model references them: the model's
+#: own ``walkforward`` record and its ``tune_walkforward`` candidates
+#: (:func:`bankcanary.evaluation.walkforward.referenced_run_ids`).
+REFERENCED_RUN_NAMES: tuple[str, ...] = ("walkforward", "tune_walkforward")
+#: Run names that keep one record per subject, the newest; an earlier generation of the
+#: same analysis (a recalibration, a re-run explanation) is pruned.
+DEDUPED_RUN_NAMES: tuple[str, ...] = (
+    "sensitivity",
+    "case_study_2023",
+    "explain",
+    "calibrate",
+    "metrics",
+)
+#: Config keys that say what a deduplicated run is about. The rest of a config (fitted
+#: hyper-parameters, slice dates, row and failure counts, wall-clock stamps) is derived
+#: from one generation's data and would keep every generation alive.
+SUBJECT_KEYS: tuple[str, ...] = (
+    "model",
+    "horizon",
+    "fit_horizon",
+    "test_year",
+    "year",
+    "model_year",
+    "analysis",
+    "variant",
+    "view",
+    "features_version",
+    "method",
+    "cut_repdte",
+    "lead_time_years",
+    "top_frac",
+    "n_draws",
+    "seed",
+)
+
+
+def run_subject(name: str, config: dict) -> str:
+    """Canonical JSON of the :data:`SUBJECT_KEYS` present in ``config``, with the run name."""
+    return canonical_json({"name": name, **{k: config[k] for k in SUBJECT_KEYS if k in config}})
+
+
+def _record_mtime(run_dir: Path) -> float:
+    files = (run_dir / "metrics.json", run_dir / "config.json")
+    stamps = [p.stat().st_mtime for p in files if p.exists()]
+    return max(stamps) if stamps else 0.0
+
+
+def prune_plan(settings: Settings, referenced: set[str]) -> list[Path]:
+    """The run directories :func:`prune` would delete, in path order.
+
+    A :data:`REFERENCED_RUN_NAMES` record goes unless its id is in ``referenced``; a
+    :data:`DEDUPED_RUN_NAMES` record goes when a newer record (by metrics/config mtime,
+    then run id) shares its :func:`run_subject`. Every other name is left alone, and so
+    is any directory without a ``config.json``.
+    """
+    root = runs_dir(settings)
+    doomed: list[Path] = []
+    for name_dir in sorted(p for p in root.iterdir() if p.is_dir()) if root.exists() else []:
+        name = name_dir.name
+        records = sorted(d for d in name_dir.iterdir() if (d / "config.json").exists())
+        if name in REFERENCED_RUN_NAMES:
+            doomed += [d for d in records if d.name not in referenced]
+        elif name in DEDUPED_RUN_NAMES:
+            newest: dict[str, tuple[tuple[float, str], Path]] = {}
+            for d in records:
+                config = json.loads((d / "config.json").read_text(encoding="utf-8"))
+                subject, key = run_subject(name, config), (_record_mtime(d), d.name)
+                if subject not in newest or key > newest[subject][0]:
+                    newest[subject] = (key, d)
+            keep = {d for _, d in newest.values()}
+            doomed += [d for d in records if d not in keep]
+    return doomed
+
+
+def prune(settings: Settings, referenced: set[str], dry_run: bool = False) -> dict:
+    """Delete the :func:`prune_plan` directories and rebuild the index (``dry_run``: plan only).
+
+    Returns ``{"deleted": [paths relative to the runs root], "index_rows": n or None}``.
+    """
+    import shutil
+
+    root = runs_dir(settings)
+    plan = prune_plan(settings, referenced)
+    if not dry_run:
+        for run_dir in plan:
+            shutil.rmtree(run_dir)
+    rows = None if dry_run else rebuild_index(settings)
+    return {"deleted": [str(d.relative_to(root)) for d in plan], "index_rows": rows}
+
+
 def _append_index(path: Path, row: dict) -> None:
     """Append one line with a single ``O_APPEND`` write, so concurrent finishes never
     overwrite each other's rows; readers deduplicate by id (:func:`read_index`) and

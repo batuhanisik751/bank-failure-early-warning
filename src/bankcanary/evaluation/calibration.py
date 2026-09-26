@@ -62,7 +62,7 @@ from bankcanary.splits import assert_no_leakage, prediction_date, training_mask
 log = logging.getLogger(__name__)
 
 #: Models whose output is a probability; the Texas ratio is a ranking and is not calibrated.
-MODELS: tuple[str, ...] = ("logit", "gbdt", "gbdt_mono", "hazard")
+MODELS: tuple[str, ...] = ("logit", "logit_v1", "gbdt", "gbdt_mono", "hazard")
 RUN_NAME = "calibrate"
 METHOD = "isotonic"
 #: A slice with fewer failures than this cannot pin down a monotone map; widen it.
@@ -77,7 +77,12 @@ MIN_BIN = 50
 #: Who scores the slice when too few trailing years exist (module docstring), per model:
 #: the L2 logits score their own slice, the boosters need an inner model because their
 #: in-sample scores separate the slice perfectly (slice Brier 0, a handful of thresholds).
-FALLBACK_SCORER_BY_MODEL: dict[str, str] = {"logit": "full", "hazard": "full", "gbdt": "inner"}
+FALLBACK_SCORER_BY_MODEL: dict[str, str] = {
+    "logit": "full",
+    "logit_v1": "full",
+    "hazard": "full",
+    "gbdt": "inner",
+}
 SLICE_SCORER_BY_MODEL = FALLBACK_SCORER_BY_MODEL
 
 

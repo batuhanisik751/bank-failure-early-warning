@@ -8,6 +8,9 @@ import time
 
 import typer
 
+#: CONTRACT 16: the published database stays under this (Neon free tier headroom).
+SIZE_BUDGET_BYTES = 400_000_000
+
 
 def register(app: typer.Typer) -> None:
     @app.command("publish")
@@ -93,8 +96,15 @@ def register(app: typer.Typer) -> None:
                 latest_repdte=None if latest is None else latest.date(),
             )
             writer.write_table(conn, "pipeline_runs", row, mode="upsert")
+        with db.connect(autocommit=True) as conn:
+            writer.vacuum_analyze(conn)
             size = db.database_size_bytes(conn)
         run.log_metrics({**{f"rows_{k}": v for k, v in written.items()}, "db_bytes": size})
         run.finish()
-        typer.echo(f"database size: {size / 1e6:.1f} MB; run {run.run_id}")
+        typer.echo(f"database size after VACUUM ANALYZE: {size / 1e6:.1f} MB; run {run.run_id}")
+        if size > SIZE_BUDGET_BYTES:
+            typer.echo(
+                f"WARNING: over the {SIZE_BUDGET_BYTES / 1e6:.0f} MB budget (CONTRACT 16); "
+                "apply the next size lever listed in docs/DECISIONS.md"
+            )
         typer.echo(DISCLAIMER)

@@ -1,0 +1,38 @@
+{
+  "C": 0.01,
+  "availability_lag_days": 60,
+  "class_weight": null,
+  "conversion": "1 - (1 - h)^H",
+  "features_version": "v2",
+  "first_test_prediction_date": "2006-05-30",
+  "fit_horizon": 1,
+  "fit_label": "y_1q",
+  "horizon": 4,
+  "model": "hazard",
+  "model_hash": "e8e5225582a8fe552bef52e601745faaffaec020",
+  "model_version": "hazard-2005-09-30-e8e5225",
+  "n_features": 83,
+  "n_test": 35407,
+  "n_train": 178607,
+  "positives_test": 8,
+  "positives_train": 19,
+  "test_year": 2006,
+  "train_repdte_max": "2005-09-30",
+  "train_repdte_min": "2001-03-31",
+  "tuning": {
+    "fallback": null,
+    "inner_train_repdte_max": "2002-09-30",
+    "metric": "pr_auc",
+    "n_inner_train": 68086,
+    "n_validation": 74081,
+    "positives_inner_train": 13,
+    "positives_validation": 17,
+    "selected": {
+      "C": 0.01
+    },
+    "sufficient": true,
+    "validation_end": "2004-12-31",
+    "validation_quarters": 8,
+    "validation_start": "2003-03-31"
+  }
+}

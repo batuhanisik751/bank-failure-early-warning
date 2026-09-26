@@ -127,3 +127,79 @@ def test_runs_list_cli_prints_id_name_horizon_and_headline(tmp_path):
     assert rebuilt.output.strip() == "index rebuilt: 2 runs"
     empty = CliRunner().invoke(app, ["runs", "list", "--runs-dir", str(tmp_path / "none")])
     assert empty.output.strip() == "no runs logged"
+
+
+def test_prune_drops_unreferenced_and_older_generations_then_rebuilds_the_index(tmp_path):
+    import os
+
+    settings = make_settings(tmp_path)
+    root = tracking.runs_dir(settings)
+
+    def run(name, config):
+        r = tracking.start_run(name, config, settings)
+        r.log_metrics({"pr_auc": 0.1})
+        r.finish()
+        return r
+
+    kept_wf = run("walkforward", {"model": "logit", "horizon": 4, "test_year": 2010})
+    gone_wf = run("walkforward", {"model": "logit", "horizon": 4, "test_year": 2010, "C": 0.1})
+    tune = run("tune_walkforward", {"model": "logit", "horizon": 4, "params": {"C": 1.0}})
+    old = run("calibrate", {"model": "logit", "horizon": 4, "test_year": 2010, "n_rows": 10})
+    os.utime(old.dir / "metrics.json", (1, 1))
+    os.utime(old.dir / "config.json", (1, 1))
+    new = run("calibrate", {"model": "logit", "horizon": 4, "test_year": 2010, "min_bin": 50})
+    other = run("calibrate", {"model": "hazard", "horizon": 4, "test_year": 2010})
+    train = run("train", {"model": "gbdt", "horizon": 4})
+    (root / "explain" / "stray").mkdir(parents=True)
+    # the subject ignores derived fields and wall-clock stamps, not the run's identity
+    assert tracking.run_subject("calibrate", old.config) == tracking.run_subject(
+        "calibrate", {**new.config, "started_at": "2026-01-01T00:00:00"}
+    )
+    assert tracking.run_subject("calibrate", old.config) != tracking.run_subject(
+        "calibrate", other.config
+    )
+    referenced = {kept_wf.run_id}
+    plan = tracking.prune_plan(settings, referenced)
+    assert plan == [old.dir, tune.dir, gone_wf.dir]
+    dry = tracking.prune(settings, referenced, dry_run=True)
+    assert dry["index_rows"] is None and gone_wf.dir.exists() and old.dir.exists()
+    assert dry["deleted"] == [str(p.relative_to(root)) for p in plan]
+    result = tracking.prune(settings, referenced)
+    assert result["deleted"] == dry["deleted"] and result["index_rows"] == 4
+    assert not any(p.exists() for p in plan)
+    assert all(r.dir.exists() for r in (kept_wf, new, other, train))
+    assert (root / "explain" / "stray").exists()
+    ids = {r["run_id"] for r in tracking.read_index(settings)}
+    assert ids == {kept_wf.run_id, new.run_id, other.run_id, train.run_id}
+    assert tracking.prune(settings, referenced)["deleted"] == []
+
+
+def test_runs_prune_cli_reads_the_saved_models_and_honours_dry_run(tmp_path):
+    from typer.testing import CliRunner
+
+    from bankcanary.cli import app
+
+    settings = make_settings(tmp_path)
+    config = {"model": "logit", "horizon": 4, "test_year": 2010, "C": 0.1}
+    kept = tracking.start_run("walkforward", config, settings)
+    kept.finish()
+    gone = tracking.start_run("walkforward", {**config, "C": 1.0}, settings)
+    gone.finish()
+    model_dir = tmp_path / "models" / "walkforward" / "2010" / "logit"
+    model_dir.mkdir(parents=True)
+    stamped = {**config, "model_hash": "0" * 40, "model_version": "logit-2008-12-31-0000000"}
+    (model_dir / "config.json").write_text(json.dumps(stamped), encoding="utf-8")
+    args = ["--runs-dir", str(settings.runs_dir), "--models-dir", str(tmp_path / "models")]
+    dry = CliRunner().invoke(app, ["runs", "prune", "--dry-run", *args])
+    assert dry.exit_code == 0, dry.output
+    assert dry.output.splitlines() == [
+        f"would delete walkforward/{gone.run_id}",
+        "1 run(s) would delete; 2 referenced run ids",
+    ]
+    assert gone.dir.exists()
+    real = CliRunner().invoke(app, ["runs", "prune", *args])
+    assert real.exit_code == 0, real.output
+    last = real.output.splitlines()[-1]
+    assert last == "1 run(s) deleted; 2 referenced run ids; index rebuilt: 1 runs"
+    assert kept.dir.exists() and not gone.dir.exists()
+    assert [r["run_id"] for r in tracking.read_index(settings)] == [kept.run_id]

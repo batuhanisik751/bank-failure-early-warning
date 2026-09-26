@@ -1,0 +1,12 @@
+{
+  "brier": 0.00022494148491851012,
+  "n": 35407,
+  "n_failures": 8,
+  "pr_auc": 0.024955828080635806,
+  "recall_at_1pct": 0.375,
+  "recall_at_2pct": 0.75,
+  "recall_at_5pct": 0.75,
+  "recall_at_top100": 0.25,
+  "recall_at_top50": 0.125,
+  "roc_auc": 0.8988212943868471
+}

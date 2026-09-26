@@ -76,4 +76,37 @@ def register(app: typer.Typer) -> None:
 
         typer.echo(f"index rebuilt: {tracking.rebuild_index(_settings(runs_dir))} runs")
 
+    @runs_app.command("prune")
+    def prune_cmd(
+        dry_run: bool = typer.Option(False, "--dry-run", help="Only list what would go."),
+        runs_dir: str | None = typer.Option(None, "--runs-dir", help=RUNS_DIR_HELP),
+        models_dir: str | None = typer.Option(
+            None, "--models-dir", help="Models root (default: settings.models_dir)."
+        ),
+    ) -> None:
+        """Delete records no saved model references and older generations of the analyses.
+
+        ``walkforward`` and ``tune_walkforward`` records stay only while a
+        ``models/walkforward/<Y>/<model>/config.json`` or
+        ``models/production/<model>/config.json`` names them (its own record id and its
+        tuning candidates); ``sensitivity``, ``case_study_2023``, ``explain``,
+        ``calibrate`` and ``metrics`` keep the newest record per subject (model, horizon,
+        year, analysis, variant, view). Other names are untouched. Rebuilds
+        ``runs/index.jsonl`` afterwards; ``--dry-run`` only prints the plan.
+        """
+        from bankcanary import tracking
+        from bankcanary.evaluation import walkforward as w
+
+        settings = _settings(runs_dir)
+        root = Path(models_dir) if models_dir else Path(settings.models_dir)
+        referenced = w.referenced_run_ids(w.saved_model_configs(root))
+        result = tracking.prune(settings, referenced, dry_run=dry_run)
+        verb = "would delete" if dry_run else "deleted"
+        for path in result["deleted"]:
+            typer.echo(f"{verb} {path}")
+        typer.echo(
+            f"{len(result['deleted'])} run(s) {verb}; {len(referenced)} referenced run ids"
+            + ("" if dry_run else f"; index rebuilt: {result['index_rows']} runs")
+        )
+
     app.add_typer(runs_app, name="runs")

@@ -1,0 +1,33 @@
+{
+  "C": 0.0003,
+  "availability_lag_days": 60,
+  "calibration_end": "2009-12-31",
+  "calibration_prediction_date": "2011-05-30",
+  "calibration_start": "2008-03-31",
+  "calibration_years": [
+    2008,
+    2009
+  ],
+  "class_weight": null,
+  "effective_scorer": "trailing",
+  "fallback": false,
+  "features_version": "v1",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "inner_train_repdte_max": null,
+  "method": "isotonic",
+  "min_bin": 50,
+  "model": "logit_v1",
+  "n_calibration": 66783,
+  "n_inner_train": 0,
+  "n_rows": 66783,
+  "params": {
+    "C": 0.0003
+  },
+  "positives_calibration": 1108,
+  "positives_inner_train": 0,
+  "slice_scorer": "trailing",
+  "sufficient": true,
+  "test_year": 2011
+}

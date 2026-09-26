@@ -95,3 +95,14 @@ def test_published_scores_rank_each_quarter_from_one():
         ).fetchone()[0]
         assert bad == 0
         assert set(CORE_TABLES) <= _tables(conn, "public")
+
+
+def test_vacuum_analyze_needs_autocommit_and_then_runs(scratch):
+    conn, _ = scratch
+    assert conn.autocommit
+    writer.vacuum_analyze(conn)
+    assert db.database_size_bytes(conn) > 0
+    with db.connect(URL) as plain:
+        assert not plain.autocommit
+        with pytest.raises(ValueError, match="autocommit"):
+            writer.vacuum_analyze(plain)

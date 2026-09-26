@@ -184,3 +184,47 @@ def test_build_scores_refuses_rows_without_a_known_version():
     versions = {("gbdt_mono", 2008): "gm-2008"}
     with pytest.raises(ValueError, match=r"\('hazard', 2008\)"):
         core.build_scores(_walkforward(), None, versions)
+
+
+def test_scored_quarters_and_build_quarters_keep_only_quarters_with_scores():
+    from bankcanary.publish import core
+
+    quarters = pd.date_range("2007-03-31", "2009-12-31", freq="QE-DEC")
+    labels = pd.DataFrame(
+        {
+            "cert": 1,
+            "repdte": quarters,
+            "y_4q": 0,
+            "label_complete_4q": quarters.year <= 2008,
+            "dropped_failed_before_avail": False,
+        }
+    )
+    panel = pd.DataFrame({"cert": 1, "repdte": quarters, "avail_date": quarters})
+    walkforward = pd.DataFrame(
+        {
+            "repdte": list(quarters[quarters.year == 2008]) + [pd.Timestamp("2007-12-31")],
+            "horizon": [4, 4, 4, 8, 4],
+            "model": ["gbdt_mono", "hazard", "gbdt_mono", "gbdt_mono", "gbdt_mono"],
+        }
+    )
+    scored = core.scored_quarters(walkforward, labels)
+    # 2007Q4 is before FIRST_SCORED_YEAR, 2008Q4 has only an 8q row, 2009 is production
+    assert scored == set(pd.to_datetime(["2008-03-31", "2008-06-30", "2008-09-30"])) | set(
+        quarters[quarters.year == 2009]
+    )
+    assert core.scored_quarters(pd.DataFrame(), pd.DataFrame()) == set()
+    versions = {2008: "gbdt_mono-2006-12-31-abc1234", "production": "gbdt_mono-2008-12-31-def5678"}
+    table = core.build_quarters(panel, labels, versions, scored)
+    assert [str(d) for d in table["repdte"]] == [
+        "2008-03-31",
+        "2008-06-30",
+        "2008-09-30",
+        "2009-03-31",
+        "2009-06-30",
+        "2009-09-30",
+        "2009-12-31",
+    ]
+    assert table["model_year"].tolist()[:3] == [2008, 2008, 2008]
+    assert table["model_year"].isna().tolist()[3:] == [True] * 4
+    assert set(table["model_version"][3:]) == {"gbdt_mono-2008-12-31-def5678"}
+    assert len(core.build_quarters(panel, labels, versions)) == len(quarters)

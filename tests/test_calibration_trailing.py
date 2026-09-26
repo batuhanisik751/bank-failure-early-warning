@@ -101,19 +101,21 @@ def test_trailing_years_follow_the_horizon_and_the_first_prediction_date(frame):
     end4, end8 = frame[horizon_columns(4)[1]], frame[horizon_columns(8)[1]]
     assert (end4[years == 2010] < cutoff).all() and not (end4[years == 2011] < cutoff).all()
     assert (end8[years == 2009] < cutoff).all() and not (end8[years == 2010] < cutoff).all()
-    # the early years cannot muster two closed test years: 2008-2010 at 4q, 2008-2011 at 8q
+    # with the backtest starting in 2006 only the first year cannot muster two closed
+    # test years at 4q (2006 alone), and 2009 at 8q; a test year is never its own trailing year
     assert [c.trailing_years(frame, 4, y, LAG) for y in (2008, 2009, 2010, 2011)] == [
-        [],
-        [],
-        [2008],
+        [2006],
+        [2006, 2007],
+        [2007, 2008],
         [2008, 2009],
     ]
     assert [c.trailing_years(frame, 8, y, LAG) for y in (2009, 2010, 2011, 2012)] == [
-        [],
-        [],
-        [2008],
+        [2006],
+        [2006, 2007],
+        [2007, 2008],
         [2008, 2009],
     ]
+    assert c.trailing_years(frame, 4, 2007, LAG) == [] and w.FIRST_TEST_YEAR == 2006
 
 
 def test_trailing_rows_join_window_end_and_refuse_leaky_rows(tmp_path, frame):

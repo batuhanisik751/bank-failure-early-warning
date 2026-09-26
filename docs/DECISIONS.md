@@ -1331,3 +1331,64 @@ open for the owner to revisit.
   reload, change under a different window or tree count, every estimator family, the
   promotion guard for unstamped configs and for an existing production map, the publish
   fallback order). `README.md` line 191 still describes the suffix as a git sha.
+- 2026-09-26, step C3 (Prototype 1 comparison refit, 2006-2007, run pruning, publish size).
+  `logit_v1` is now a walk-forward model in its own right (`walkforward.MODELS`,
+  `LOGIT_MODELS`, `LOGIT_FEATURE_VERSION`): the P1 learner on the 43 `features_v1` columns
+  with `C` re-selected per year on the nested slice, calibrated with the trailing recipe
+  (`full` fallback for 2006-2010) and pooled by `metrics-report`. Its earlier stand-in had
+  borrowed each year's `C` from the v2 logit's selection and pooled to 0.2194 / 0.5625 on
+  2008-2024; tuned on its own features it pools to 0.2901 / 0.6933 there and to 0.2801
+  [0.247, 0.315] / 0.7047 [0.671, 0.736] over 2006-2024, so criterion 2 of
+  `docs/P2_CHECKLIST.md` is met on PR-AUC only (hazard 0.3194 / 0.7033, intervals
+  overlapping) and its box is unticked. 2006 and 2007 are usable: every model tunes on 17
+  (2006, eight quarters 2003-2004) or 18 (2007, twelve quarters 2003-2005) validation
+  failures against 34 inner-training failures (13 at the hazard's 1q label), and the lowest
+  test ROC-AUC is the 2006 Texas ranking at 0.643 (2007 `gbdt` 0.769; the 2006 test year has
+  eight failures, 2007 eighty). `FIRST_TEST_YEAR` is therefore 2006 (19 test years, 496,179
+  4q rows, 2,191 failures; the 8q table still starts at 2008 because no 8q model was fitted
+  for the two years) and `rebuild_scores_table` drops any per-year file dated before it.
+  The published time machine keeps `publish.core.FIRST_SCORED_YEAR = 2008`: the two years
+  would add about 53 MB (scores 25, ratios 13, drivers 8, map 7) to a database measured at
+  383.0 MB after `VACUUM ANALYZE`, past the 400 MB budget even after the next lever, so the
+  extension is a C4 decision taken with the levers. `model_versions` gains the four
+  2006-2007 `gbdt_mono`/`hazard` rows (38) and `quarters` now lists only quarters with
+  `scores` rows (`core.scored_quarters`: the backtest quarters of the published models plus
+  the production quarters; 74 rows, 2008Q1 onward, was 102). `publish` runs
+  `writer.vacuum_analyze` on a second autocommit connection after the loads and reports the
+  post-vacuum size with a warning above 400 MB; the smallint `scores.model_version` lever
+  stays unapplied at 383.0 MB. `bankcanary runs prune [--dry-run]` (`tracking.prune`,
+  `prune_plan`, `run_subject`; `walkforward.referenced_run_ids`, `saved_model_configs`):
+  `walkforward` and `tune_walkforward` records survive only when a saved config names them
+  (the record id with or without the version stamp, and the tuning candidates rebuilt from
+  `tuning.json`, so no cached candidate is lost: all 862 pre-existing candidates were
+  referenced); `calibrate`, `explain`, `metrics`, `sensitivity` and `case_study_2023` keep
+  the newest record per subject, where "config without timestamps" is read as the
+  `SUBJECT_KEYS` (model, horizon, year, analysis, variant, view, seed...) because the
+  derived fields (slice dates, counts, fitted `C`) change with every generation and would
+  keep all of them; `train`, `tune_gbdt`, `tune_hazard`, `publish` and `refresh` are left
+  alone. The prune removed 306 of 1,856 records (112 walk-forward, 189 calibrate, 5
+  metrics; index 1,550 rows). Not done: CONTRACT sections 13/15 and `README.md` still say
+  the backtest starts in 2008; the `tune_walkforward` records of `logit_v1` are keyed with
+  the frame's `features_version = "v2"` like every other model's (the model config says
+  `v1`); `writer.py` and `commands/publish.py` were touched for the vacuum although the
+  step listed `publish/core.py`; the 8q `walkforward_metrics` pooled row and the 4q one now
+  cover different year ranges.
+- 2026-09-26, step C3 addendum (the 2009 and 2010 maps under the wider backtest).
+  `calibration.trailing_years` searches from `FIRST_TEST_YEAR`, so once 2006 and 2007
+  had score files the 4q maps of 2009 (trailing 2006-2007, 70,160 rows) and 2010 (trailing
+  2007-2008, 68,725 rows) stopped falling back and every probability model was
+  recalibrated for 2008-2010 (2008 still falls back: 2006 alone qualifies, 2007's windows
+  close after its first prediction date). 2009 improves for four of the five models
+  (`hazard` raw 0.01892 -> calibrated 0.01616, `gbdt_mono` 0.02063 -> 0.01853; `gbdt`
+  worsens to 0.02665) but 2010 is hurt by a map learned across the regime break: the
+  2007-2008 scores map ordinary 2010 scores to crisis rates (`logit` 0.00908 -> 0.02866,
+  `logit_v1` 0.00930 -> 0.02144, `gbdt_mono` 0.01100 -> 0.02093, `hazard` 0.00914 ->
+  0.01243; only `gbdt` improves, 0.01546 -> 0.01086). Pooled 4q calibrated Brier over
+  2006-2024 is now `hazard` 0.0038, `gbdt_mono` 0.0044, `logit_v1` 0.0047, `gbdt` 0.0049,
+  `logit` 0.0050 against raw 0.0037 / 0.0041 / 0.0037 / 0.0042 / 0.0037; `reports/walkforward.md`
+  and the reliability and lead-time figures were regenerated (lead-time figures use raw
+  ranks and only gained `logit_v1`). The recipe was left as the CONTRACT states it; a
+  regime-aware guard (skip a trailing year whose failure rate differs from the test year's
+  training-window rate by more than an order of magnitude, or cap the map at the training
+  window's rate) is the open question for the calibration step that follows, together
+  with the 8q scale drift already recorded.

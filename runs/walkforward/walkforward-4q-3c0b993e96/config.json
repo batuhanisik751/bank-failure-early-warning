@@ -1,0 +1,47 @@
+{
+  "availability_lag_days": 60,
+  "backend": "lightgbm",
+  "features_version": "v2",
+  "first_test_prediction_date": "2006-05-30",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "iterations_capped": false,
+  "model": "gbdt_mono",
+  "model_hash": "e3bc8c6ebeb64f6c6844be53cc803da6f8d3665c",
+  "model_version": "gbdt_mono-2004-12-31-e3bc8c6",
+  "monotone": true,
+  "n_features": 83,
+  "n_test": 35407,
+  "n_train": 151630,
+  "params": {
+    "learning_rate": 0.03,
+    "min_samples_leaf": 200,
+    "n_estimators": 200,
+    "num_leaves": 15
+  },
+  "positives_test": 8,
+  "positives_train": 70,
+  "test_year": 2006,
+  "train_repdte_max": "2004-12-31",
+  "train_repdte_min": "2001-03-31",
+  "tuning": {
+    "fallback": null,
+    "inner_train_repdte_max": "2001-12-31",
+    "metric": "pr_auc",
+    "n_inner_train": 39347,
+    "n_validation": 74081,
+    "positives_inner_train": 34,
+    "positives_validation": 17,
+    "selected": {
+      "learning_rate": 0.03,
+      "min_samples_leaf": 200,
+      "n_estimators": 200,
+      "num_leaves": 15
+    },
+    "sufficient": true,
+    "validation_end": "2004-12-31",
+    "validation_quarters": 8,
+    "validation_start": "2003-03-31"
+  }
+}

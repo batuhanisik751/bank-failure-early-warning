@@ -144,3 +144,16 @@ def analyze(conn: psycopg.Connection, tables, schema: str = "public") -> None:
     with conn.transaction():
         for table in tables:
             conn.execute(sql.SQL("ANALYZE {}").format(_qualified(schema, table)))
+
+
+def vacuum_analyze(conn: psycopg.Connection) -> None:
+    """``VACUUM ANALYZE`` the whole database after a publish.
+
+    A publish truncates and refills every table, so the size the owner reads afterwards
+    (``pg_database_size``, CONTRACT 16's 400 MB budget) must be the one a vacuumed
+    database settles at. Postgres refuses ``VACUUM`` inside a transaction block, so
+    ``conn`` must be in autocommit mode (``db.connect(autocommit=True)``).
+    """
+    if not conn.autocommit:
+        raise ValueError("VACUUM needs an autocommit connection: db.connect(autocommit=True)")
+    conn.execute("VACUUM ANALYZE")

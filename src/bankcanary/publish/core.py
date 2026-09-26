@@ -142,14 +142,41 @@ def build_banks(institutions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFrame
     return out[columns].sort_values("cert").reset_index(drop=True)
 
 
+def scored_quarters(
+    walkforward: pd.DataFrame, labels: pd.DataFrame, horizon: int = HORIZON
+) -> set[pd.Timestamp]:
+    """Report dates a ``scores`` row exists for (CONTRACT 16).
+
+    The backtest quarters of :data:`MODELS` at ``horizon`` from :data:`FIRST_SCORED_YEAR`
+    on, plus every production quarter (:func:`production_mask`), which the production
+    boosters score on the fly at publish time.
+    """
+    dates: set[pd.Timestamp] = set()
+    if len(walkforward):
+        wf = walkforward[(walkforward["horizon"] == horizon) & walkforward["model"].isin(MODELS)]
+        dates |= set(pd.to_datetime(wf["repdte"]).unique())
+    if len(labels):
+        rows = labels.loc[production_mask(labels, horizon), "repdte"]
+        dates |= set(pd.to_datetime(rows).unique())
+    return {pd.Timestamp(d) for d in dates if pd.Timestamp(d).year >= FIRST_SCORED_YEAR}
+
+
 def build_quarters(
-    panel: pd.DataFrame, labels: pd.DataFrame, versions: dict[int | str, str]
+    panel: pd.DataFrame,
+    labels: pd.DataFrame,
+    versions: dict[int | str, str],
+    scored: set[pd.Timestamp] | None = None,
 ) -> pd.DataFrame:
-    """One row per report quarter with its label state and the ``gbdt_mono`` that scored it.
+    """One row per scored report quarter with its label state and the ``gbdt_mono`` behind it.
 
     ``versions`` maps a walk-forward test year (int) or ``'production'`` to a
-    ``model_version``; quarters before :data:`FIRST_SCORED_YEAR` have neither.
+    ``model_version``. ``scored`` (:func:`scored_quarters`) keeps only the quarters that
+    have ``scores`` rows, so the time machine never lists a quarter it cannot show;
+    without it every panel quarter is returned (quarters before
+    :data:`FIRST_SCORED_YEAR` with neither a model year nor a version).
     """
+    if scored is not None:
+        panel = panel[pd.to_datetime(panel["repdte"]).isin(list(scored))]
     counts = panel.groupby("repdte").agg(n_banks=("cert", "size"), avail_date=("avail_date", "min"))
     lab = labels.groupby("repdte").agg(
         n_failures_next_4q=("y_4q", "sum"), label_complete_4q=("label_complete_4q", "min")
@@ -620,7 +647,8 @@ def build_all(wh: Warehouse, settings, tables=None) -> dict[str, pd.DataFrame]:
         out["banks"] = build_banks(wh.institutions, wh.panel)
     if "quarters" in want:
         by_year = {y: v for (m, y), v in lookup.items() if m == "gbdt_mono"}
-        out["quarters"] = build_quarters(wh.panel, wh.labels, by_year)
+        scored = scored_quarters(wh.walkforward, wh.labels)
+        out["quarters"] = build_quarters(wh.panel, wh.labels, by_year, scored)
     if "scores" in want:
         production = wh.production
         if production is None and len(wh.features):

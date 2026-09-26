@@ -28,7 +28,8 @@ def test_latest_complete_year_stops_before_an_incomplete_quarter(frame):
     complete_col = horizon_columns(4)[3]
     partial.loc[partial["repdte"] == pd.Timestamp("2015-12-31"), complete_col] = False
     assert w.latest_complete_year(partial, 4) == 2014
-    assert w.test_years(partial, 4) == list(range(2008, 2015))
+    assert w.test_years(partial, 4) == list(range(2006, 2015))
+    assert w.FIRST_TEST_YEAR == 2006
     with pytest.raises(ValueError):
         w.latest_complete_year(partial.assign(**{complete_col: False}), 4)
 
@@ -274,3 +275,20 @@ def test_model_fingerprint_covers_every_estimator_family():
     deeper = HistGradientBoostingClassifier(max_iter=4, min_samples_leaf=2).fit(X, y)
     assert w.model_hash(hgb) != w.model_hash(deeper)
     assert w.model_version("gbdt", "2020-12-31", "abcdef0123") == "gbdt-2020-12-31-abcdef0"
+
+
+def test_referenced_run_ids_name_the_fit_record_and_its_tuning_candidates(tmp_path, frame):
+    from pathlib import Path
+
+    settings = make_settings(tmp_path)
+    result = w.fit_year(frame, settings, YEAR, "logit", 4)
+    configs = w.saved_model_configs(Path(settings.models_dir))
+    assert configs == [w.model_dir(settings, YEAR, "logit") / "config.json"]
+    ids = w.referenced_run_ids(configs)
+    logged = {p.name for p in Path(settings.runs_dir).glob("*/*") if p.is_dir()}
+    assert len(logged) == 1 + len(result.tuning["grid"]) and logged <= ids
+    assert tracking.run_id("walkforward", result.config) in ids
+    bare = {k: v for k, v in result.config.items() if k not in ("model_hash", "model_version")}
+    assert tracking.run_id("walkforward", bare) in ids
+    assert w.referenced_run_ids([]) == set()
+    assert w.saved_model_configs(tmp_path / "nowhere") == []

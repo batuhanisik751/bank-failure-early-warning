@@ -1,0 +1,25 @@
+{
+  "availability_lag_days": 60,
+  "features_version": "v1",
+  "first_test_prediction_date": "2007-05-30",
+  "fit": "none (ranking by texas_ratio)",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "model": "texas",
+  "model_hash": "63dd8b79775b48fce7d2ab598e54897a6c5933ec",
+  "model_version": "texas-2005-12-31-63dd8b7",
+  "n_features": 1,
+  "n_test": 34753,
+  "n_train": 187545,
+  "positives_test": 80,
+  "positives_train": 71,
+  "test_year": 2007,
+  "train_repdte_max": "2005-12-31",
+  "train_repdte_min": "2001-03-31",
+  "tuning": {
+    "fallback": "nothing to tune",
+    "metric": null,
+    "selected": {}
+  }
+}

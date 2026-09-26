@@ -28,10 +28,13 @@ uv run bankcanary publish --tables case_study_2023,case_study_series        # ab
 
 What it does (CONTRACT 16-17): applies `src/bankcanary/publish/schema.sql` idempotently,
 builds one frame per table from `data/parquet/*.parquet`, `runs/` and `models/production/`,
-loads each table inside one transaction (truncate + COPY), runs `ANALYZE`, appends a
-`pipeline_runs` row and a `runs/publish/<run_id>/` tracking record, and prints the
-database size. The label-incomplete quarters (after the last complete walk-forward year)
-are scored on the fly with `models/production/{gbdt_mono,hazard}/`.
+loads each table inside one transaction (truncate + COPY), runs `ANALYZE` per table,
+appends a `pipeline_runs` row and a `runs/publish/<run_id>/` tracking record, then runs
+`VACUUM ANALYZE` on a second, autocommit connection and prints the database size after it
+(a `WARNING` line names the next size lever when it exceeds 400 MB). The label-incomplete
+quarters (after the last complete walk-forward year) are scored on the fly with
+`models/production/{gbdt_mono,hazard}/`. `quarters` holds one row per quarter that has
+`scores` rows (2008Q1 onward), never the earlier panel quarters.
 
 The page tables (`src/bankcanary/publish/pages.py`) come after the core ones: `drivers`
 filters the warehouse `drivers` table (`bankcanary explain --all` must have run) to the
@@ -67,10 +70,15 @@ scenario ranks 1..n. Both files skip when `DATABASE_URL` is unset or unreachable
 Expected after a full publish: `scores` about 905 k rows (two models x every quarter
 2008Q1 onward), `drivers` about 288 k, `map_quarters` about 448 k, `ratios` about 453 k
 (2008Q1 onward), `rate_shock_scores` 86,260 (20 scenarios x the latest quarter's banks),
-`peer_stats` about 29 k, `banks` about 28 k, `failures` about 4 k, `quarters` about 100,
-`walkforward_metrics` 36, `model_versions` 34, `case_study_2023` 28, `case_study_series`
-37. The database must stay under 400 MB (Neon free tier); it is 399.6 MB, so see the
-levers in `docs/DECISIONS.md` before the next quarter lands.
+`peer_stats` about 29 k, `banks` about 28 k, `failures` about 4 k, `quarters` 74 (one per
+scored quarter, 2008Q1 onward), `walkforward_metrics` 40 (two models x 19 test years plus
+the pooled rows), `model_versions` 38, `case_study_2023` 28, `case_study_series` 37. The
+database must stay under 400 MB (Neon free tier): 383.0 MB after `VACUUM ANALYZE` on
+2026-09-26 (scores 161, ratios 85, drivers 61, map_quarters 45, rate_shock_scores 10). The
+next lever, `scores.model_version` as a smallint code joined to `model_versions` (about
+26 MB), is applied only when the post-vacuum size printed by `publish` exceeds 400 MB;
+extending the time machine to 2006 would add about 53 MB (scores 25, ratios 13, map 7,
+drivers 8) and needs that lever plus one more from `docs/DECISIONS.md`.
 
 ## 4. Troubleshooting
 
@@ -159,8 +167,8 @@ first scheduled refresh finds a filled database and a live revalidate route.
 1. **Create the Neon database through the Vercel marketplace.** Vercel dashboard →
    Storage → Create → Neon (free tier) → connect it to the project created in step 2 (or
    create the project first with root directory `web`). Neon's free tier caps the
-   project at 0.5 GB and the database is 399.6 MB after a full publish, so do not add
-   anything else to it. In the Neon console create a second role for the web app that
+   project at 0.5 GB and the database is 383 MB after a full publish and `VACUUM ANALYZE`,
+   so do not add anything else to it. In the Neon console create a second role for the web app that
    may only read (`GRANT SELECT ON ALL TABLES IN SCHEMA public TO <reader>` plus
    `ALTER DEFAULT PRIVILEGES ... GRANT SELECT` for tables published later); the owner
    role that Neon created is the writer for `publish` and `refresh`.
@@ -209,3 +217,24 @@ first scheduled refresh finds a filled database and a live revalidate route.
   cold start. A local `DATABASE_URL` (localhost, 127.0.0.1, ::1) stays plain.
 - Neon's pooled host (`-pooler` in the host name) is required for the web app because
   serverless functions open many short connections; the writer may use either host.
+
+## 8. Run records (`runs/`)
+
+`runs/` is committed and every fit, tuning candidate, calibration and report adds a
+directory. `uv run bankcanary runs prune --dry-run` lists what would go and
+`uv run bankcanary runs prune` deletes it and rebuilds `runs/index.jsonl`:
+
+- `walkforward` and `tune_walkforward` records that no
+  `models/walkforward/<Y>/<model>/config.json` or `models/production/<model>/config.json`
+  references (a saved model vouches for its own record id, with or without the
+  `model_version` stamp, and for the tuning candidates listed in its `tuning.json`, so the
+  cache a refit reads is kept);
+- every generation but the newest of a `calibrate`, `explain`, `metrics`, `sensitivity`
+  or `case_study_2023` subject (same model, horizon, year, analysis, variant or view;
+  newest by the record's file time, then by run id).
+
+`train`, `tune_gbdt`, `tune_hazard`, `publish` and `refresh` records are never pruned, nor
+is a directory without a `config.json`. The 2026-09-26 prune removed 306 of 1,856 records
+(112 walk-forward, 189 calibrate, 5 metrics); commit the removals with
+`git add runs && git commit -- runs`. `--runs-dir` and `--models-dir` point the command at
+another tree (tests use a temporary one).

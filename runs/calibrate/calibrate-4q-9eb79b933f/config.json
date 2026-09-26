@@ -1,0 +1,37 @@
+{
+  "availability_lag_days": 60,
+  "backend": "lightgbm",
+  "calibration_end": "2004-12-31",
+  "calibration_prediction_date": "2003-05-30",
+  "calibration_start": "2003-03-31",
+  "calibration_years": [
+    2003,
+    2004
+  ],
+  "effective_scorer": "inner",
+  "fallback": true,
+  "features_version": "v2",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "inner_train_repdte_max": "2001-12-31",
+  "iterations_capped": false,
+  "method": "isotonic",
+  "min_bin": 50,
+  "model": "gbdt",
+  "monotone": false,
+  "n_calibration": 74081,
+  "n_inner_train": 39347,
+  "n_rows": 74081,
+  "params": {
+    "learning_rate": 0.1,
+    "min_samples_leaf": 200,
+    "n_estimators": 200,
+    "num_leaves": 63
+  },
+  "positives_calibration": 17,
+  "positives_inner_train": 34,
+  "slice_scorer": "trailing",
+  "sufficient": true,
+  "test_year": 2006
+}
