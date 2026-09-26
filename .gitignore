@@ -1,7 +1,7 @@
 # Data, models and secrets never enter git
 data/
-/models/
-!models/production/
+/models/*
+!/models/production/
 !models/production/**
 .env
 *.duckdb

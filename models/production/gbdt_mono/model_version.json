@@ -1,0 +1,13 @@
+{
+  "model_version": "gbdt_mono-2022-12-31-bbc0230",
+  "model": "gbdt_mono",
+  "train_end_repdte": "2022-12-31",
+  "git_sha": "bbc0230",
+  "trained_at": "2026-09-25T22:11:35-04:00",
+  "features_version": "v2",
+  "horizon": 4,
+  "walkforward_year": 2024,
+  "source": "models/walkforward/2024/gbdt_mono",
+  "provenance": "run-record",
+  "notes": "Walk-forward gbdt_mono for test year 2024, trained on reports 2001-03-31..2022-12-31 (646,530 rows, 2,243 failures); calibration.joblib is that year's isotonic map."
+}

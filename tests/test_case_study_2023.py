@@ -89,9 +89,9 @@ def test_fits_use_their_view_columns_and_log_deterministic_runs(fits):
     settings, out = fits
     assert [(f.view, f.model) for f in out] == [
         ("credit_only", "logit"),
-        ("credit_only", "gbdt"),
+        ("credit_only", "gbdt_mono"),
         ("rate_aware", "logit"),
-        ("rate_aware", "gbdt"),
+        ("rate_aware", "gbdt_mono"),
     ]
     for fit in out:
         assert fit.features == cs.view_features(fit.view)
@@ -167,7 +167,7 @@ def test_run_case_study_writes_the_report(frame, tmp_path):
     path = cs.write_report(study, settings)
     text = path.read_text()
     assert path == settings.reports_dir / "svb_2023_case_study.md"
-    assert "Bank Eight" in text and "## rate_aware / gbdt" in text
+    assert "Bank Eight" in text and "## rate_aware / gbdt_mono" in text
     assert "## Drivers, credit_only / logit" in text
     assert "2013-09-30" in text
     missing = cs.run_case_study(frame, settings, CUT, QUARTERS, BANKS, driver_cert=999)

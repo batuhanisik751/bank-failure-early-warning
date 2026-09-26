@@ -1,0 +1,36 @@
+{
+  "model": "hazard",
+  "features_version": "v2",
+  "C": 1.0,
+  "class_weight": null,
+  "conversion": "1 - (1 - h)^H",
+  "horizon": 4,
+  "fit_horizon": 1,
+  "fit_label": "y_1q",
+  "test_year": 2024,
+  "availability_lag_days": 60,
+  "first_test_prediction_date": "2024-05-30",
+  "train_repdte_min": "2001-03-31",
+  "train_repdte_max": "2023-12-31",
+  "n_train": 665326,
+  "positives_train": 565,
+  "n_test": 18398,
+  "positives_test": 9,
+  "n_features": 83,
+  "tuning": {
+    "validation_start": "2021-03-31",
+    "validation_end": "2022-12-31",
+    "validation_quarters": 8,
+    "inner_train_repdte_max": "2020-09-30",
+    "n_inner_train": 602236,
+    "positives_inner_train": 559,
+    "n_validation": 39227,
+    "positives_validation": 17,
+    "sufficient": true,
+    "selected": {
+      "C": 1.0
+    },
+    "metric": "pr_auc",
+    "fallback": null
+  }
+}

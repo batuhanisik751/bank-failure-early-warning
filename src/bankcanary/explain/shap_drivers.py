@@ -2,8 +2,9 @@
 
 A score alone does not tell a supervisor *why* a bank sits near the top of the list.
 For every walk-forward test year ``Y`` this module runs ``shap.TreeExplainer`` over the
-year-``Y`` booster (``models/walkforward/<Y>/gbdt/``) on that year's test rows, and the
-most recent booster, the "production" model, over every report quarter that lies past
+year-``Y`` booster (``models/walkforward/<Y>/<model>/``, ``gbdt_mono`` since Decision
+Point 2 made the monotone booster the production model) on that year's test rows, and
+the most recent booster, the "production" model, over every report quarter that lies past
 the last complete test year (those quarters are scored but never evaluated, because
 their outcome windows are still open). The SHAP values are in the booster's log-odds
 units: they add up, with the explainer's expected value, to the raw score, so the ten
@@ -14,7 +15,10 @@ The winsoriser is applied before the explainer so the feature values stored next
 contribution are the ones the trees saw. Per-year files land in ``data/drivers/`` and
 :func:`rebuild_drivers_table` folds them into the ``drivers`` table (Parquet + DuckDB).
 Every year logs an ``explain`` run whose metrics carry the mean absolute SHAP of each
-feature; :func:`write_summary` reads those back to write ``reports/shap_summary.md``.
+feature; :func:`write_summary` reads those back to write ``reports/shap_summary.md``,
+pooling them as the average over years of each year's *share* of the total (so a year
+whose booster runs on a larger log-odds scale, such as the four-failure 2020 fit, weighs
+the same as every other year).
 """
 
 from __future__ import annotations
@@ -39,9 +43,9 @@ COLUMNS: tuple[str, ...] = TABLE_KEY + (
     "direction",
     "model_year",
 )
-MODEL = "gbdt"
+MODEL = "gbdt_mono"
 #: ``model`` value of the rows scored by the most recent booster past the backtest years.
-PRODUCTION_MODEL = "gbdt_production"
+PRODUCTION_MODEL = "gbdt_mono_production"
 PRODUCTION = "production"
 HORIZON = 4
 TOP_N = 5
@@ -160,9 +164,14 @@ def drivers_dir(settings: Settings) -> Path:
     return Path(settings.data_dir) / "drivers"
 
 
-def drivers_path(settings: Settings, year: int | str) -> Path:
-    """``data/drivers/<Y>_gbdt.parquet``, or ``production_gbdt.parquet`` for the latest rows."""
-    return drivers_dir(settings) / f"{year}_{MODEL}.parquet"
+def production_model(model: str = MODEL) -> str:
+    """``model`` label of the rows the latest ``model`` booster scores past the backtest."""
+    return f"{model}_production"
+
+
+def drivers_path(settings: Settings, year: int | str, model: str = MODEL) -> Path:
+    """``data/drivers/<Y>_<model>.parquet`` (``production_<model>.parquet`` for the latest rows)."""
+    return drivers_dir(settings) / f"{year}_{model}.parquet"
 
 
 def production_rows(frame: pd.DataFrame, horizon: int = HORIZON) -> pd.Series:
@@ -198,13 +207,16 @@ def select_rows(
     return test, int(year)
 
 
-def explain_year(frame: pd.DataFrame, settings: Settings, year: int | str, save: bool = True):
+def explain_year(
+    frame: pd.DataFrame, settings: Settings, year: int | str, save: bool = True, model: str = MODEL
+):
     """SHAP drivers of one test year (or ``'production'``) and the run record that logs it.
 
     Returns ``(drivers, mean_abs)`` where ``mean_abs`` is the mean |SHAP| per feature over
-    the explained rows (a ``Series`` indexed by feature, descending). The run config is
+    the explained rows (a ``Series`` indexed by feature, descending). ``model`` names the
+    walk-forward booster family (``gbdt_mono`` or ``gbdt``). The run config is
     ``{model, horizon, year, model_year, features_version}`` so a re-run of the same year
-    overwrites the same ``runs/explain/`` record.
+    and model overwrites the same ``runs/explain/`` record.
     """
     from bankcanary import tracking
     from bankcanary.evaluation.walkforward import FEATURE_VERSION, load_year
@@ -212,23 +224,23 @@ def explain_year(frame: pd.DataFrame, settings: Settings, year: int | str, save:
     mask, model_year = select_rows(frame, year, HORIZON)
     if not mask.any():
         raise ValueError(f"no rows to explain for {year}")
-    pipeline, features, _ = load_year(settings, model_year, MODEL, HORIZON)
+    pipeline, features, _ = load_year(settings, model_year, model, HORIZON)
     rows = frame.loc[mask]
     values, expected, clipped = shap_matrix(pipeline, rows[list(features)])
-    model = PRODUCTION_MODEL if year == PRODUCTION else MODEL
-    drivers = drivers_table(rows[["cert", "repdte"]], values, clipped, features, model, model_year)
+    label = production_model(model) if year == PRODUCTION else model
+    drivers = drivers_table(rows[["cert", "repdte"]], values, clipped, features, label, model_year)
     mean_abs = pd.Series(np.abs(values).mean(axis=0), index=features, name="mean_abs_shap")
     mean_abs = mean_abs.sort_values(ascending=False, kind="mergesort")
     share = float(mean_abs.iloc[0] / mean_abs.sum()) if mean_abs.sum() > 0 else 0.0
     config = {
-        "model": MODEL,
+        "model": model,
         "horizon": HORIZON,
         "year": str(year),
         "model_year": int(model_year),
         "features_version": FEATURE_VERSION,
     }
     if save:
-        path = drivers_path(settings, year)
+        path = drivers_path(settings, year, model)
         path.parent.mkdir(parents=True, exist_ok=True)
         drivers.loc[:, list(COLUMNS)].to_parquet(path, index=False)
         run = tracking.start_run(RUN_NAME, config, settings)
@@ -252,19 +264,21 @@ def explain_year(frame: pd.DataFrame, settings: Settings, year: int | str, save:
     return drivers, mean_abs
 
 
-def rebuild_drivers_table(settings: Settings) -> pd.DataFrame:
-    """Fold every ``data/drivers/*.parquet`` into the ``drivers`` table (Parquet + DuckDB).
+def rebuild_drivers_table(settings: Settings, models: tuple[str, ...] = (MODEL,)) -> pd.DataFrame:
+    """Fold the ``data/drivers/*_<model>.parquet`` files into the ``drivers`` table.
 
-    Files are read in sorted name order and :func:`write_table` sorts by the table key,
-    so the table is a deterministic function of the per-year files; a re-explained year
-    replaces its earlier rows, nothing is ever appended in place.
+    Only the files of ``models`` (the production booster by default: CONTRACT section 16
+    keeps ``gbdt_mono`` rows only, and a second family would double the table past five
+    million rows) are read, in sorted name order; :func:`write_table` sorts by the table
+    key, so the table is a deterministic function of the per-year files and a re-explained
+    year replaces its earlier rows, nothing is ever appended in place.
     """
     from bankcanary.storage.duckdb import replace_table
     from bankcanary.storage.parquet import read_table, table_path, write_table
 
-    files = sorted(drivers_dir(settings).glob("*.parquet"))
+    files = sorted(f for m in models for f in drivers_dir(settings).glob(f"*_{m}.parquet"))
     if not files:
-        raise FileNotFoundError(f"no driver files under {drivers_dir(settings)}")
+        raise FileNotFoundError(f"no {models} driver files under {drivers_dir(settings)}")
     table = pd.concat([pd.read_parquet(f)[list(COLUMNS)] for f in files], ignore_index=True)
     table = table.astype({"repdte": "datetime64[ns]", "model": "str", "feature": "str"})
     write_table(table, TABLE, key=TABLE_KEY, settings=settings)
@@ -273,28 +287,29 @@ def rebuild_drivers_table(settings: Settings) -> pd.DataFrame:
     return read_table(TABLE, settings)
 
 
-def explained_years(settings: Settings) -> list[str]:
-    """Years (and ``'production'``) with a driver file, test years first in order."""
+def explained_years(settings: Settings, model: str = MODEL) -> list[str]:
+    """Years (and ``'production'``) with a ``model`` driver file, test years first in order."""
     stems = [
-        p.name.removesuffix(f"_{MODEL}.parquet") for p in drivers_dir(settings).glob("*.parquet")
+        p.name.removesuffix(f"_{model}.parquet")
+        for p in drivers_dir(settings).glob(f"*_{model}.parquet")
     ]
     years = sorted(s for s in stems if s.isdigit())
     return years + [s for s in stems if s == PRODUCTION]
 
 
-def mean_abs_by_year(settings: Settings) -> pd.DataFrame:
+def mean_abs_by_year(settings: Settings, model: str = MODEL) -> pd.DataFrame:
     """``DataFrame[feature x year]`` of mean |SHAP| read back from the ``explain`` run records."""
     from bankcanary import tracking
     from bankcanary.evaluation.walkforward import FEATURE_VERSION
 
     columns: dict[str, pd.Series] = {}
-    for year in explained_years(settings):
+    for year in explained_years(settings, model):
         model_year = int(year) if year != PRODUCTION else None
         if model_year is None:
-            frame = pd.read_parquet(drivers_path(settings, year), columns=["model_year"])
+            frame = pd.read_parquet(drivers_path(settings, year, model), columns=["model_year"])
             model_year = int(frame["model_year"].iloc[0]) if len(frame) else 0
         config = {
-            "model": MODEL,
+            "model": model,
             "horizon": HORIZON,
             "year": str(year),
             "model_year": model_year,
@@ -310,22 +325,35 @@ def mean_abs_by_year(settings: Settings) -> pd.DataFrame:
     return pd.DataFrame(columns).fillna(0.0)
 
 
-def pooled_summary(by_year: pd.DataFrame, weights: dict[str, int] | None = None) -> pd.DataFrame:
-    """Mean |SHAP| per feature pooled over the test years (row-weighted when given) plus share.
+def pooled_summary(
+    by_year: pd.DataFrame, weights: dict[str, int] | None = None, normalise: bool = True
+) -> pd.DataFrame:
+    """Per-feature importance pooled over the test years (weighted when given) plus share.
 
-    Columns: ``feature, mean_abs_shap, share, rank``; sorted descending, ties by feature
-    name. ``share`` is the feature's part of the total mean |SHAP|, the quantity spec
-    rule 6.6 asks to watch for a suspiciously dominant feature.
+    Columns: ``feature, mean_abs_shap, share, rank``. ``mean_abs_shap`` is the plain
+    (weighted) average of the yearly mean |SHAP| values. ``share`` is the pooled
+    importance normalised per year: each year's mean |SHAP| is first divided by that
+    year's total, so every year contributes one unit whatever the log-odds scale of its
+    booster (the four-failure 2020 fit otherwise outweighs the other sixteen years
+    together), and the shares are then averaged over years; ``normalise=False`` derives
+    ``share`` from ``mean_abs_shap`` instead. Rows are sorted by ``share`` descending,
+    ties by feature name; ``share`` is the quantity spec rule 6.6 asks to watch for a
+    suspiciously dominant feature.
     """
     years = [c for c in by_year.columns if c != PRODUCTION]
     w = pd.Series({y: float((weights or {}).get(y, 1)) for y in years})
-    pooled = (by_year[years] * w).sum(axis=1) / w.sum()
-    table = pooled.rename("mean_abs_shap").rename_axis("feature").reset_index()
-    table = table.sort_values(
-        ["mean_abs_shap", "feature"], ascending=[False, True], kind="mergesort"
+    block = by_year[years].astype(float)
+    pooled = (block * w).sum(axis=1) / w.sum()
+    if normalise:
+        totals = block.sum(axis=0).replace(0.0, np.nan)
+        share = ((block / totals).fillna(0.0) * w).sum(axis=1) / w.sum()
+    else:
+        total = float(pooled.sum())
+        share = pooled / total if total > 0 else pooled * 0.0
+    table = pd.DataFrame({"mean_abs_shap": pooled, "share": share}).rename_axis("feature")
+    table = table.reset_index().sort_values(
+        ["share", "mean_abs_shap", "feature"], ascending=[False, False, True], kind="mergesort"
     )
-    total = float(table["mean_abs_shap"].sum())
-    table = table.assign(share=table["mean_abs_shap"] / total if total > 0 else 0.0)
     return table.assign(rank=np.arange(1, len(table) + 1)).reset_index(drop=True)
 
 
@@ -383,7 +411,7 @@ def beeswarm(values: np.ndarray, clipped: np.ndarray, features: list[str], path,
     return path
 
 
-def write_summary(frame: pd.DataFrame, settings: Settings, path=None) -> Path:
+def write_summary(frame: pd.DataFrame, settings: Settings, path=None, model: str = MODEL) -> Path:
     """Write ``reports/shap_summary.md`` and the latest beeswarm from the stored run records.
 
     The tables are the mean |SHAP| per feature pooled over every explained test year and
@@ -396,13 +424,13 @@ def write_summary(frame: pd.DataFrame, settings: Settings, path=None) -> Path:
     from bankcanary.models.train import _md_table
 
     path = Path(path) if path is not None else report_path(settings)
-    by_year = mean_abs_by_year(settings)
+    by_year = mean_abs_by_year(settings, model)
     years = [c for c in by_year.columns if c != PRODUCTION]
     summary = pooled_summary(by_year)
     flagged = dominance_check(summary)
     latest = max(years)
     mask, model_year = select_rows(frame, int(latest), HORIZON)
-    pipeline, features, _ = load_year(settings, model_year, MODEL, HORIZON)
+    pipeline, features, _ = load_year(settings, model_year, model, HORIZON)
     values, _, clipped = shap_matrix(pipeline, frame.loc[mask, list(features)])
     fig = beeswarm(values, clipped, features, figure_path(settings))
     compare_years = [y for y in ("2009", "2023") if y in by_year.columns]
@@ -413,11 +441,14 @@ def write_summary(frame: pd.DataFrame, settings: Settings, path=None) -> Path:
     lines = [
         "# SHAP driver summary (walk-forward gradient boosters)",
         "",
-        f"`shap.TreeExplainer` on the per-year `gbdt` walk-forward models ({years[0]}-{latest}, "
-        "each explaining its own test rows) and on the production model "
-        f"(the {model_year} booster scoring every quarter after {latest}). Values are "
+        f"`shap.TreeExplainer` on the per-year `{model}` walk-forward models "
+        f"({years[0]}-{latest}, each explaining its own test rows) and on the production "
+        f"model (the {model_year} booster scoring every quarter after {latest}). Values are "
         "log-odds contributions; `mean_abs_shap` is the mean |SHAP| over a year's rows, "
-        "pooled as the plain average over test years. The `drivers` table keeps the five "
+        "pooled as the plain average over test years, and `share` is the per-year "
+        "normalised importance: each year's mean |SHAP| divided by that year's total, then "
+        "averaged over years, so a booster on a larger log-odds scale (the four-failure "
+        "2020 fit) counts as one year like every other. The `drivers` table keeps the five "
         "largest positive and five largest negative contributions per bank-quarter.",
         "",
         "## Mean |SHAP| per feature, pooled and 2009 versus 2023 (top 20)",
@@ -427,7 +458,7 @@ def write_summary(frame: pd.DataFrame, settings: Settings, path=None) -> Path:
         *_shift_lines(by_year, compare_years),
         "## Feature-importance smoke test (spec rule 6.6)",
         "",
-        f"Largest share of the total mean |SHAP|: `{top3.iloc[0]['feature']}` at "
+        f"Largest per-year normalised share: `{top3.iloc[0]['feature']}` at "
         f"{top3.iloc[0]['share']:.1%}; the top three together carry "
         f"{top3['share'].sum():.1%}. Threshold {DOMINANCE_SHARE:.0%}: "
         + (

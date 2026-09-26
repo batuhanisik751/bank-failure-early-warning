@@ -23,18 +23,22 @@ def register(app: typer.Typer) -> None:
             False, "--report", help="Only rebuild the table and write reports/shap_summary.md."
         ),
         no_rebuild: bool = typer.Option(False, "--no-rebuild", help="Skip rebuilding the table."),
+        model: str = typer.Option(
+            "gbdt_mono", "--model", help="Walk-forward booster family: gbdt_mono or gbdt."
+        ),
     ) -> None:
         """Run ``shap.TreeExplainer`` over a walk-forward booster and store the top drivers.
 
-        ``--year Y`` explains Y's test rows with Y's own ``gbdt``; ``--latest`` explains
+        ``--year Y`` explains Y's test rows with Y's own booster (``--model``, the
+        production ``gbdt_mono`` by default); ``--latest`` explains
         every report quarter after the last complete test year with the most recent
         booster (the production model); ``--all`` loops over both (about 10 s a year,
         so a full loop takes about three minutes: batch years with ``--year`` when a
         call must stay under two minutes).
-        Each call writes ``data/drivers/<Y>_gbdt.parquet``, logs a ``runs/explain/``
+        Each call writes ``data/drivers/<Y>_<model>.parquet``, logs a ``runs/explain/``
         record holding the mean |SHAP| per feature, and rebuilds the ``drivers`` table
-        (Parquet + DuckDB). ``--report`` writes ``reports/shap_summary.md`` and the
-        beeswarm figure from the stored records.
+        (Parquet + DuckDB) from that model's files. ``--report`` writes
+        ``reports/shap_summary.md`` and the beeswarm figure from the stored records.
         """
         from bankcanary.config import load_settings
         from bankcanary.evaluation import walkforward as w
@@ -56,14 +60,14 @@ def register(app: typer.Typer) -> None:
         if all_years:
             targets = [*w.test_years(frame, sd.HORIZON), sd.PRODUCTION]
         for target in targets:
-            drivers, mean_abs = sd.explain_year(frame, settings, target)
+            drivers, mean_abs = sd.explain_year(frame, settings, target, model=model)
             head = ", ".join(f"{f} {v:.3f}" for f, v in mean_abs.head(3).items())
             typer.echo(f"{target}: {len(drivers)} driver rows; top mean |SHAP|: {head}")
         if targets and not no_rebuild:
-            table = sd.rebuild_drivers_table(settings)
+            table = sd.rebuild_drivers_table(settings, (model,))
             typer.echo(f"drivers: {len(table)} rows")
         if report:
             if not no_rebuild:
-                sd.rebuild_drivers_table(settings)
-            path = sd.write_summary(frame, settings)
+                sd.rebuild_drivers_table(settings, (model,))
+            path = sd.write_summary(frame, settings, model=model)
             typer.echo(f"wrote {path}")

@@ -90,9 +90,13 @@ ahead. Every learner beats the Texas ratio on PR-AUC while the Texas ratio still
 the most failures in its top 2%. The unconstrained gradient booster is competitive year by
 year from 2010 on and weakest pooled, because its early years are starved of failures and
 its score scale drifts between years; the same booster under the feature registry's
-monotone signs keeps its scale and pools second (the open Decision Point 2: the inner
-validation slice preferred the unconstrained booster, the backtest prefers the constrained
-one, and the unconstrained configuration stays in production until the owner decides).
+monotone signs keeps its scale, pools second and is the production model (Decision Point 2,
+taken 2026-09-26: the inner validation slice preferred the unconstrained booster, the backtest
+prefers the constrained one with disjoint recall intervals, so `settings.models.gbdt.monotone
+= true`). `models/production/` holds the promoted 2024 walk-forward `gbdt_mono` and `hazard`
+fits with a `model_version.json` each (`scripts/promote_production_models.py`); the SHAP
+drivers and the 2023 case study use the monotone booster, which puts Silicon Valley Bank at
+the median in 2022Q4 where the unconstrained fit had reached the 95th percentile.
 Calibrated probabilities track the observed failure rate for the logit and hazard (pooled
 Brier 0.0041 raw, 0.0038 calibrated; top decile 0.042 predicted against 0.045 observed for
 the logit). Per-year tables with failure counts, Brier scores and reliability curves are in
@@ -150,7 +154,8 @@ for Y in $(seq 2008 2024); do uv run bankcanary walkforward --year $Y --model al
 for Y in $(seq 2008 2023); do uv run bankcanary walkforward --year $Y --model logit,gbdt,hazard --horizon 8; done
 uv run bankcanary calibrate --all-years  # isotonic maps, score_calibrated (also --horizon 8)
 uv run bankcanary metrics-report         # reports/walkforward.md (CIs, Brier, lead time)
-uv run bankcanary explain --all          # SHAP drivers table, reports/shap_summary.md
+uv run bankcanary explain --all          # SHAP drivers (gbdt_mono), reports/shap_summary.md
+uv run python scripts/promote_production_models.py   # models/production/ + model_version.json
 uv run bankcanary sensitivity            # reports/sensitivity.md
 for N in 02 03 04 05; do uv run python scripts/make_notebook_$N.py; done
 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/0[2-5]_*.ipynb

@@ -1,0 +1,13 @@
+{
+  "model_version": "hazard-2023-12-31-6740dae",
+  "model": "hazard",
+  "train_end_repdte": "2023-12-31",
+  "git_sha": "6740dae",
+  "trained_at": "2026-09-25T22:32:42-04:00",
+  "features_version": "v2",
+  "horizon": 4,
+  "walkforward_year": 2024,
+  "source": "models/walkforward/2024/hazard",
+  "provenance": "run-record",
+  "notes": "Walk-forward hazard for test year 2024, trained on reports 2001-03-31..2023-12-31 (665,326 rows, 565 failures); calibration.joblib is that year's isotonic map."
+}

@@ -46,7 +46,7 @@ fred:
 models:
   gbdt:
     backend: lightgbm
-    monotone: false
+    monotone: true
     params:
       learning_rate: 0.03
       min_samples_leaf: 200

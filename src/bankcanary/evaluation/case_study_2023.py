@@ -34,7 +34,8 @@ BANKS: dict[int, str] = {
     59017: "First Republic Bank",
 }
 VIEWS: dict[str, str] = {"credit_only": "v1", "rate_aware": "v2"}
-MODELS: tuple[str, ...] = ("logit", "gbdt")
+MODELS: tuple[str, ...] = ("logit", "gbdt_mono")
+BOOSTERS: tuple[str, ...] = ("gbdt", "gbdt_mono")
 HORIZON = 4
 CUT_REPDTE = "2022-12-31"
 SCORE_QUARTERS: tuple[str, ...] = ("2022-09-30", "2022-12-31", "2023-03-31")
@@ -77,9 +78,11 @@ def build_model(model: str, view: str, settings: Settings) -> tuple[Pipeline, li
     """``(unfitted pipeline, features, config)`` for one learner on one view.
 
     ``logit`` is the Prototype 1 regularised logit at ``LOGIT_C`` (no class weighting);
-    ``gbdt`` takes backend, constraints and tuned parameters from ``settings.models.gbdt``.
-    Both were chosen inside the 2002-2008 training period (rule 6.7); nothing is re-tuned
-    on the 2022-2023 rows.
+    ``gbdt_mono`` (the production booster since Decision Point 2) takes backend and tuned
+    parameters from ``settings.models.gbdt`` under the registry's monotone signs, and
+    ``gbdt`` is the same booster unconstrained (kept for comparison, not fitted by
+    default). The parameters were chosen inside the 2002-2008 training period (rule
+    6.7); nothing is re-tuned on the 2022-2023 rows.
     """
     from sklearn.linear_model import LogisticRegression
 
@@ -94,18 +97,19 @@ def build_model(model: str, view: str, settings: Settings) -> tuple[Pipeline, li
         pipe = make_pipeline(LogisticRegression(C=LOGIT_C, max_iter=2000))
         config.update({"C": LOGIT_C, "class_weight": None})
         return pipe, features, config
-    if model == "gbdt":
+    if model in BOOSTERS:
         cfg = settings.models.gbdt
-        pipe = gbdt.make_gbdt(cfg.backend, cfg.monotone, features, **cfg.params)
+        monotone = model == "gbdt_mono"
+        pipe = gbdt.make_gbdt(cfg.backend, monotone, features, **cfg.params)
         config.update(
             {
                 "backend": gbdt.resolve_backend(cfg.backend),
-                "monotone": bool(cfg.monotone),
+                "monotone": monotone,
                 "params": dict(cfg.params),
             }
         )
         return pipe, features, config
-    raise ValueError(f"unknown model {model!r}; choose one of {MODELS}")
+    raise ValueError(f"unknown model {model!r}; choose one of {MODELS + BOOSTERS}")
 
 
 def training_rows(
@@ -302,7 +306,7 @@ def bank_table(fits: list[CaseStudyFit], banks: dict[int, str] | None = None) ->
 def drivers(fit: CaseStudyFit, frame: pd.DataFrame, cert: int, repdte, top: int = TOP_DRIVERS):
     """Per-feature contributions to one bank-quarter's log-odds under ``fit``.
 
-    For ``gbdt`` these are SHAP values from the tree explainer (winsorised inputs); for
+    For the boosters these are SHAP values from the tree explainer (winsorised inputs); for
     ``logit`` they are coefficient x standardised value on the pipeline's own
     winsorise-impute-scale output, so both sum to ``log-odds - baseline`` and read the same
     way: positive pushes the bank towards failure. Columns ``feature, value,
@@ -313,7 +317,7 @@ def drivers(fit: CaseStudyFit, frame: pd.DataFrame, cert: int, repdte, top: int 
     if len(row) != 1:
         raise ValueError(f"cert {cert} at {_fmt(repdte)}: {len(row)} row(s), expected one")
     X = row[fit.features]
-    if fit.model == "gbdt":
+    if fit.model in BOOSTERS:
         from bankcanary.explain.shap_drivers import shap_matrix
 
         values, baseline, _ = shap_matrix(fit.pipeline, X)
@@ -413,7 +417,8 @@ def write_report(study: CaseStudy, settings: Settings, path: Path | None = None)
         f"{', '.join(first['score_quarters'])} (every bank). Views: `credit_only` = the "
         f"{len(view_features('credit_only'))} `features_v1` columns, `rate_aware` = the "
         f"{len(view_features('rate_aware'))} `features_v2` columns. Learners: `logit` at the P1 "
-        "`LOGIT_C`, `gbdt` at `settings.models.gbdt`. Rank 1 is the riskiest bank of the "
+        "`LOGIT_C`, `gbdt_mono` at the `settings.models.gbdt` parameters under the registry's "
+        "monotone signs (the production booster). Rank 1 is the riskiest bank of the "
         "quarter; percentile is the share of scored banks ranked below it. Run records: "
         f"`runs/{RUN_NAME}/`.",
         "",

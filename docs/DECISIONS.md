@@ -745,3 +745,36 @@ open for the owner to revisit.
 - 2026-09-26 — **Production model artefacts are committed** under `models/production/` (a few MB:
   the latest walk-forward `gbdt_mono` and `hazard` pipelines, their calibrators and feature lists)
   so the scheduled refresh job can score a new quarter without retraining.
+- 2026-09-26 — **Decision Point 2 applied: `settings.models.gbdt.monotone = true` and the
+  monotone booster promoted.** `scripts/promote_production_models.py` copies the latest
+  walk-forward `gbdt_mono` and `hazard` (year 2024, horizon 4: `pipeline.joblib`,
+  `calibration.joblib`, `features.json`, `config.json`) into `models/production/<model>/` and
+  writes `model_version.json` (`<model>-<train_end_repdte>-<git sha>`: `gbdt_mono-2022-12-31-bbc0230`,
+  `hazard-2023-12-31-6740dae`). `train_end_repdte` is the config's `train_repdte_max`; `git_sha`
+  and `trained_at` are the commit that first added the model's `runs/walkforward/<run_id>/`
+  record (the run id is a hash of the same config), never the clock, with `HEAD` plus the
+  artefact's mtime as the fallback for an uncommitted retrain. The `.gitignore` rule `/models/`
+  had to become `/models/*` so the `!/models/production/` exception can take effect (git does
+  not descend into an ignored directory); the committed artefacts total about 0.4 MB.
+- 2026-09-26 — **SHAP drivers are `gbdt_mono` only and the pooled summary is per-year
+  normalised.** `explain --model` (default `gbdt_mono`) writes `data/drivers/<Y>_<model>.parquet`
+  and `rebuild_drivers_table` folds one model family, because keeping the `gbdt` rows beside
+  the `gbdt_mono` rows would have doubled the table to 9.05 million rows (CONTRACT 16 keeps
+  `gbdt_mono` only; the old `gbdt` driver files were deleted, their run records stay). The
+  latest-quarter rows carry `model = 'gbdt_mono_production'`. `pooled_summary` now divides each
+  year's mean |SHAP| by that year's total before averaging: under the old plain average the
+  four-failure 2020 `gbdt` fit, on a log-odds scale far larger than any other year's, put
+  `large_time_deposit_share` first at 24 percent; normalised, the top feature is `texas_ratio`
+  at 7.0 percent and the top three carry 18.3 percent. `mean_abs_shap` (plain average) is still
+  reported beside the normalised `share`.
+- 2026-09-26 — **The 2023 case study under the monotone booster misses SVB.** With
+  `gbdt_mono` as the rate-aware booster (the credit-only view kept), SVB's 2022Q4 rank is 2,368
+  of 4,773 (50th percentile) against 245 (94.9th) for the unconstrained fit: the constrained
+  trees give `adjusted_tier1_leverage` = -0.33 a +0.51 contribution instead of +2.1, and the
+  healthy credit and capital ratios outweigh it. Signature (88th percentile) and First
+  Republic (81st, then 94.6th in 2023Q1) rank higher than before and the fit pools best
+  (PR-AUC 0.068 on 13 failures). The notebook, the report and the model card say so plainly;
+  the unconstrained `gbdt` remains available through `case_study_2023.build_model` for the
+  comparison but is not fitted by default. Also recorded: the 2024 `gbdt_mono` fit that is
+  now the production model is the weakest of its series (PR-AUC 0.11, ROC-AUC 0.55 on 9
+  failures) and its SHAP leans on `share_consumer`, `nim_q` and `share_residential`.

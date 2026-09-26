@@ -25,7 +25,7 @@ def fitted(tmp_path_factory, frame):
     """Settings with a fitted walk-forward booster for the last two complete years."""
     settings = make_settings(tmp_path_factory.mktemp("explain"))
     for year in (YEAR, YEAR + 1):
-        w.fit_year(frame, settings, year, "gbdt", 4)
+        w.fit_year(frame, settings, year, sd.MODEL, 4)
     return settings
 
 
@@ -47,7 +47,7 @@ def test_drivers_table_ranks_positive_then_negative_and_skips_zeros():
 
 
 def test_shap_values_reconcile_with_the_raw_score(fitted, frame):
-    pipeline, features, _ = w.load_year(fitted, YEAR, "gbdt")
+    pipeline, features, _ = w.load_year(fitted, YEAR, sd.MODEL)
     _, test = w.year_masks(frame, 4, YEAR, lag_days=60)
     X = frame.loc[test, features]
     values, expected, clipped = sd.shap_matrix(pipeline, X)
@@ -60,14 +60,14 @@ def test_shap_values_reconcile_with_the_raw_score(fitted, frame):
 
 def test_explain_year_saves_file_logs_run_and_rebuilds_deterministically(fitted, frame):
     drivers, mean_abs = sd.explain_year(frame, fitted, YEAR)
-    assert (drivers["model"] == "gbdt").all() and (drivers["model_year"] == YEAR).all()
+    assert (drivers["model"] == sd.MODEL).all() and (drivers["model_year"] == YEAR).all()
     assert set(drivers["repdte"].dt.year) == {YEAR}
     assert drivers.groupby(["cert", "repdte"])["rank"].max().le(2 * sd.TOP_N).all()
     assert sd.drivers_path(fitted, YEAR).exists()
     assert list(mean_abs.index[:3]) and mean_abs.is_monotonic_decreasing
     assert mean_abs.index[0] in ("noncurrent_ratio", "tier1_leverage", "texas_ratio")
     config = {
-        "model": "gbdt",
+        "model": sd.MODEL,
         "horizon": 4,
         "year": str(YEAR),
         "model_year": YEAR,
@@ -87,6 +87,9 @@ def test_explain_year_saves_file_logs_run_and_rebuilds_deterministically(fitted,
     assert list(first.columns[:4]) == list(sd.TABLE_KEY)
     assert not first.duplicated(list(sd.TABLE_KEY)).any()
     assert read_table("drivers", fitted).equals(first)
+    assert sd.explained_years(fitted) == [str(YEAR)] and sd.explained_years(fitted, "gbdt") == []
+    with pytest.raises(FileNotFoundError, match="gbdt"):
+        sd.rebuild_drivers_table(fitted, ("gbdt",))
 
 
 def test_production_rows_use_the_latest_booster_past_the_backtest(fitted, frame):
@@ -117,11 +120,35 @@ def test_pooled_summary_and_dominance_check():
     summary = sd.pooled_summary(by_year)
     assert summary["feature"].tolist() == ["a", "b", "c"]
     assert summary["mean_abs_shap"].tolist() == [3.0, 1.0, 0.0]
-    assert summary["share"].sum() == pytest.approx(1.0)
+    # per-year shares (5/6, 1/6, 0) and (1/2, 1/2, 0), averaged
+    assert summary["share"].tolist() == pytest.approx([2 / 3, 1 / 3, 0.0])
+    assert summary["rank"].tolist() == [1, 2, 3]
     assert sd.dominance_check(summary) == ["a"]
     assert sd.dominance_check(summary, threshold=0.9) == []
     weighted = sd.pooled_summary(by_year, weights={"2009": 1, "2010": 3})
     assert weighted.loc[0, "mean_abs_shap"] == pytest.approx(2.0)
+    assert weighted.loc[0, "share"] == pytest.approx((5 / 6 + 3 * 0.5) / 4)
+    plain = sd.pooled_summary(by_year, normalise=False)
+    assert plain["share"].tolist() == pytest.approx([0.75, 0.25, 0.0])
+
+
+def test_normalised_pooling_stops_one_large_scale_year_from_dominating():
+    # sixteen calm years rank "a" first at a modest scale; one degenerate year puts "z"
+    # first on a log-odds scale a hundred times larger
+    calm = {str(y): [0.30, 0.20, 0.05] for y in range(2008, 2025) if y != 2020}
+    by_year = pd.DataFrame({**calm, "2020": [1.0, 2.0, 60.0]}, index=["a", "b", "z"])
+    plain = sd.pooled_summary(by_year, normalise=False)
+    assert plain["feature"].iloc[0] == "z" and sd.dominance_check(plain) == ["z"]
+    normalised = sd.pooled_summary(by_year)
+    assert normalised["feature"].tolist() == ["a", "b", "z"]
+    assert normalised["share"].sum() == pytest.approx(1.0)
+    assert sd.dominance_check(normalised) == ["a"]
+    assert normalised.set_index("feature").loc["z", "share"] == pytest.approx(
+        (16 * (0.05 / 0.55) + 60 / 63) / 17
+    )
+    # a year with no signal at all contributes nothing rather than NaN
+    with_empty = sd.pooled_summary(by_year.assign(**{"2025": [0.0, 0.0, 0.0]}))
+    assert with_empty["share"].sum() == pytest.approx(17 / 18)
 
 
 def test_write_summary_reads_the_run_records_and_writes_the_figure(fitted, frame):

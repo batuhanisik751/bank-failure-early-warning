@@ -48,8 +48,9 @@ ranked these three banks near the top? Two *views* are fitted with the same two 
   blocks and the macro rates.
 
 The learners are the Prototype 1 regularised logit (`LOGIT_C`, chosen on a validation
-slice inside 2002-2008) and the tuned gradient booster (`settings.models.gbdt`). Nothing
-is re-tuned on 2022-2023 data.
+slice inside 2002-2008) and the production booster `gbdt_mono`: the tuned
+`settings.models.gbdt` parameters under the feature registry's monotone signs, which
+Decision Point 2 made the production model. Nothing is re-tuned on 2022-2023 data.
 
 ## 1. Training rows: windows closed before 1 March 2023
 
@@ -93,7 +94,7 @@ frame.loc[frame["cert"].isin(cs.BANKS) & scored, ["cert", "repdte", "name", "ass
 md("""
 ## 2. Four fits, three banks, three quarters
 
-`run_case_study` fits `logit` and `gbdt` on each view (about 30 seconds in total, no
+`run_case_study` fits `logit` and `gbdt_mono` on each view (about 30 seconds in total, no
 subsampling needed) and ranks every scored bank within its quarter: rank 1 is the
 riskiest bank, the percentile is the share of scored banks ranked below it. Each fit is
 logged as a run record under `runs/case_study_2023/` with the split facts and the three
@@ -129,7 +130,7 @@ code("""
 fig, axes = plt.subplots(1, 3, figsize=(13, 3.6), sharey=True)
 order = [(view, model) for view in cs.VIEWS for model in cs.MODELS]
 colors = {"credit_only": "#8B4513", "rate_aware": "#1f4e79"}
-hatch = {"logit": "", "gbdt": "//"}
+hatch = {"logit": "", "gbdt_mono": "//"}
 for ax, (cert, name) in zip(axes, cs.BANKS.items()):
     sub = study.table.loc[study.table["cert"].eq(cert)]
     quarters = sorted(sub["quarter"].unique())
@@ -179,7 +180,7 @@ for ax, ((view, model), table) in zip(axes.ravel(), study.drivers.items()):
 fig.suptitle("Silicon Valley Bank, 2022Q4: top ten log-odds contributions", x=0.01, ha="left")
 plt.tight_layout()
 plt.show()
-study.drivers[("rate_aware", "gbdt")].round(4)
+study.drivers[("rate_aware", "gbdt_mono")].round(4)
 """)
 
 code("""
@@ -232,12 +233,12 @@ noncurrent ratio a few tenths of a percent, both well inside the healthy range, 
 equity-to-assets 7.4 percent and its liquid-assets ratio 0.62. Every large credit-only
 driver pushes it *towards* safety (`texas_ratio`, `liquid_assets_ratio`, `log_assets`);
 the small positive contributions come from nonfarm-nonresidential and multifamily loan
-shares. The credit-only models place it at the 65th-70th percentile: an ordinary bank.
-First Republic reads the same way (67th-76th). Signature is the one exception, and for
+shares. The credit-only models place it at the 55th-65th percentile: an ordinary bank.
+First Republic reads the same way (67th-75th). Signature is the one exception, and for
 a reason that has nothing to do with 2023: the credit-only logit ranks it 113th of
 4,773 (97.6th percentile) on its C&I loan share, CRE at three times capital and its
 multifamily book, which is the 2008-style concentration profile the model was trained
-to fear. The booster does not share that view (65th percentile).
+to fear. The monotone booster does not share that view (73rd percentile).
 
 **What the rate-aware view adds, and where it falls short.** The `features_v2` columns
 show what the credit ratios cannot: SVB's unrealised securities losses reached 104
@@ -245,26 +246,33 @@ percent of Tier 1 capital by 2022Q4 (`unrealized_loss_to_tier1` = -1.04, against
 median of -0.24 and a 5th percentile of -0.61 among banks above $10 billion), its
 capital net of those losses was negative (`adjusted_tier1_leverage` = -0.33, where the
 same peers sat between 2.9 and 11.1) and 86 percent of its deposits were uninsured. The
-rate-aware booster reacts to exactly that: `adjusted_tier1_leverage` alone contributes
-+2.1 to SVB's log-odds, the unrealised-loss level and its four-quarter change add another
-+0.5, and SVB moves from rank 1,412 to rank 245 of 4,773 (94.9th percentile, fourth of
-the 34 banks above $100 billion). In the training years, negative capital net of
-securities losses was rare (116 bank-quarters) and 55 of those banks failed, so the trees
-learned it as a decisive split. The logit cannot: its coefficients are averages over
-2001-2021, when a high uninsured share marked large, well-run banks (failed banks
-averaged 13 percent uninsured deposits, survivors 20 percent) and rising policy rates
-marked calm years, so `uninsured_share` and `macro_fedfunds_change_4q` enter with
-*safer* signs and offset the loss terms; the rate-aware logit leaves SVB at the 61st
-percentile. Signature and First Republic gain nothing from the new columns under either
-learner: their unrealised securities losses (-0.32 and -0.30 of Tier 1) sat inside the
-large-bank band (First Republic's problem was the fair value of its long fixed-rate
-mortgages, which the Call Report does not mark), their adjusted leverage stayed positive
-(6.2 and 5.8), and their uninsured shares (90 and 68 percent), while at or above the
-peer 95th percentile, carried no risk signal in the training years for the reason above.
-The honest summary is that the rate-aware features
-let the booster flag SVB as a top-5 percent bank two quarters before it failed, on the
-mechanism that actually failed it, and that the deposit-run side of the story is
-something no model trained on 2001-2021 outcomes could have learned.
+production booster sees the first of these: `adjusted_tier1_leverage` is SVB's largest
+driver at +0.51 log-odds. But that is all it sees, and the rest of the balance sheet
+pulls the other way (`total_rbc_ratio` 16.1, `securities_to_assets` 0.56, the Texas
+ratio, a tiny large-time-deposit share, the liquid-assets ratio and eight quarters
+without a loss together contribute -1.06), so SVB stays at rank 2,368 of 4,773 (50th
+percentile, 23rd of the 39
+banks above $100 billion). In the training years, negative capital net of securities
+losses was rare (116 bank-quarters) and 55 of those banks failed. The unconstrained
+booster of the earlier version of this notebook carved that pocket into a single leaf
+worth +2.1 and lifted SVB to rank 245 (94.9th percentile); the monotone fit spreads the
+effect of `adjusted_tier1_leverage` over its whole range instead, and the extreme value
+at SVB earns a fifth of that. The logit cannot use it either: its coefficients are
+averages over 2001-2021, when a high uninsured share marked large, well-run banks
+(failed banks averaged 13 percent uninsured deposits, survivors 20 percent) and rising
+policy rates marked calm years, so `uninsured_share` and `macro_fedfunds_change_4q`
+enter with *safer* signs and offset the loss terms; the rate-aware logit leaves SVB at
+the 61st percentile. The rate-aware booster does more for the other two banks:
+Signature moves to rank 564 (88th percentile, second of the 39 banks above $100
+billion, on its C&I share and the four-quarter change in unrealised losses) and First
+Republic to rank 901 (81st; 258th, the 94.6th percentile, on its 2023Q1 report), and
+over every scored report with a complete label it pools better than the other three
+fits (PR-AUC 0.068 against 0.015-0.023, 13 failures). The honest summary is that the
+rate-aware features move the production booster in the right direction for all three
+banks but put none of them in the top 2 percent before they failed, that the one model
+which did flag SVB on the mechanism that failed it was the unconstrained booster the
+backtest rejected, and that the deposit-run side of the story is something no model
+trained on 2001-2021 outcomes could have learned.
 
 ## 6. Caveats
 
@@ -276,10 +284,12 @@ something no model trained on 2001-2021 outcomes could have learned.
   three banks and the features to look at were chosen knowing what happened. The
   walk-forward backtest of notebook 02 is the out-of-sample evidence.
 - **The hyper-parameters are the 2002-2008 ones.** `LOGIT_C` and the booster settings
-  were tuned on the P1 fixed split (rule 6.7) and reused unchanged; the unconstrained
-  booster (`settings.models.gbdt.monotone = false`) is the one shown. The registry's
-  `+1` sign on `uninsured_share` would force the monotone config to read it as risk.
-- **Probabilities stay small.** Even SVB's rate-aware booster score is 0.0003: the
+  were tuned on the P1 fixed split (rule 6.7) and reused unchanged. The booster shown is
+  the production configuration (`settings.models.gbdt.monotone = true`, Decision Point
+  2); the unconstrained `gbdt` stays available through `cs.build_model` for comparison,
+  and its rank 245 for SVB against the monotone fit's 2,368 is the clearest example of
+  what the constraints give up in exchange for a stable score scale across years.
+- **Probabilities stay small.** Even SVB's rate-aware booster score is 0.0001: the
   models rank, they do not sound an alarm, and the value of the case study is the rank.
 - **The labels' 2023Q1 gap.** SVB and Signature never filed a 2023Q1 report; First
   Republic's is a post-failure filing and is scored but was never in any training set.
