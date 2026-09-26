@@ -1392,3 +1392,47 @@ open for the owner to revisit.
   training-window rate by more than an order of magnitude, or cap the map at the training
   window's rate) is the open question for the calibration step that follows, together
   with the 8q scale drift already recorded.
+- 2026-09-26, step C4 (contract, docs, notebooks, checklists, publish and web after the
+  calibration fix). `docs/CONTRACT.md` now states what was built: section 13 starts the
+  backtest at `FIRST_TEST_YEAR` 2006 and lists the 4q fallback years as 2006-2008; section
+  14 adds `calibrate --all-years/--scorer/--min-bin/--no-rebuild`, `runs prune` and the
+  six-model `walkforward.MODELS`; section 16 makes the five-row `drivers`, the 2008Q1 start
+  of `scores`/`ratios` (`publish.core.FIRST_SCORED_YEAR`), the scored-quarters-only
+  `quarters` (74 rows) and the null `model_versions.git_sha` the standing contract, records
+  that `scores` joined to `quarters.model_year` is the published form of the spec's
+  `walkforward_scores`, and describes the published `probability` as the section 13 recipe
+  (walk-forward trailing maps for backtest quarters, the 2023-2024 production map for
+  label-incomplete ones); section 17 adds the closing `VACUUM ANALYZE` and the 400 MB check.
+  `docs/model_card.md` gained the `logit_v1` row, the model-version definition (hash of the
+  fitted estimator, stamped into `config.json`), the 2006-2024 pooled and per-year tables
+  (six models, 496,179 rows, 2,191 failures; the 8q tables were unchanged in PR-AUC and
+  recall), a Prototype 1 comparison paragraph, a rewritten calibration section (trailing
+  binned maps, fallback years, the production map's 0.0319 / 0.0155 top steps, pooled Brier
+  raw / calibrated hazard 0.0037 / 0.0038, gbdt_mono 0.0041 / 0.0044, logit_v1 0.0037 /
+  0.0047, gbdt 0.0042 / 0.0049, logit 0.0037 / 0.0050, the 2010-2012 crisis-rate carry-over
+  and the 8q booster scale drift) and the new lead-time table (hazard 403 of 440, median 6,
+  89.8% two or more quarters ahead). `README.md`, `docs/P2_CHECKLIST.md` and
+  `docs/RUNBOOK.md` carry the same numbers and the content-addressed version string;
+  notebook 02 was rebuilt from `scripts/make_notebook_02.py` with `logit_v1` in every table
+  and figure (22 cells, 12 code, no error output, 2006-2024 prose) and re-executed in place;
+  notebooks 04 and 05 quote no calibrated probability and were left alone, as was `web/`
+  (no schema column changed in C3; the Drizzle mirror test still passes). `uv run
+  bankcanary publish` refilled all 13 tables (run `publish-4q-43f4bc5620`; scores 905,152,
+  drivers 287,675, ratios 452,975, map_quarters 447,975, quarters 74, model_versions 38,
+  walkforward_metrics 40) and the psql checks pass: no `gbdt_mono` probability reaches 1.0
+  in any quarter (largest 0.5968), the 2026Q2 rank 1 (Tioga-Franklin Savings Bank, cert
+  33802) shows 0.0319, exactly the production map's top step, the hazard's maximum is
+  0.0155, no `scores.model_version` ends in `bbc0230` (2022Q4 `gbdt_mono` rows are
+  `gbdt_mono-2020-12-31-43c9385`, 2009Q2 `gbdt_mono-2007-12-31-bacf2e0`), `quarters` starts
+  at 2008-03-31, and 2009Q2 has no bank at exactly 0.5 (top step 0.1, 165 high-band rows).
+  Finding: the size printed after the publish's own `VACUUM ANALYZE` was 399.3 MB
+  (399,432,727 bytes), 16 MB above the 383.0 MB of C3, because replace-in-place loads leave
+  dead space that a plain vacuum does not return; `VACUUM FULL` on the same content gives
+  380.9 MB (380,854,799 bytes), so the runbook now names `VACUUM FULL` as the first lever
+  and the smallint `model_version` code stays unapplied. `uv run pytest`: 467 passed in 24 s;
+  the hygiene greps over commit messages and sources print nothing. Not done: the prose of
+  `reports/walkforward.md` (written by `metrics-report`) still describes the one-year
+  in-window recipe in its header and calibration preamble because the generator lives in
+  `evaluation/metrics_report.py`, outside this step's files; the P3 checklist's UI evidence
+  rows still show the pre-fix probabilities (1.0 and 0.4) because the built app was not
+  re-rendered here.

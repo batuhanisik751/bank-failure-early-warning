@@ -205,8 +205,8 @@ concatenates module lists in a fixed order and `build.py` calls the builders in 
   bank-quarter rows with event "fails within the next quarter" (`y_1q`, built by
   `labels.build` for horizon 1); 4q/8q probabilities by `1 − (1 − h)^H` assuming persistence
   of covariates (documented approximation); the optional Cox model is deferred (see DECISIONS: lifelines pins pandas < 3).
-- `bankcanary.evaluation.walkforward`: for each test year Y from 2008 to the latest
-  label-complete year, training rows = `training_mask(labels, H, first repdte of Y)`, test
+- `bankcanary.evaluation.walkforward`: for each test year Y from 2006
+  (`FIRST_TEST_YEAR`; 8q models start in 2008) to the latest label-complete year, training rows = `training_mask(labels, H, first repdte of Y)`, test
   rows = report quarters in Y (label-complete, not dropped). Saves
   `models/walkforward/<Y>/<model>/` and appends to `walkforward_scores`. Runs one year per
   CLI call (`bankcanary walkforward --year Y [--model …]`) so no command exceeds two minutes.
@@ -221,7 +221,7 @@ concatenates module lists in a fixed order and `build.py` calls the builders in 
   two most recent earlier test years whose every row has `window_end_Hq` before Y's first
   prediction date (4q: Y−2 and Y−3; 8q: Y−3 and Y−4; `calibration.trailing_years` computes
   it from the labels and `assert_no_leakage` re-checks each row), out of sample and on the
-  score scale the map is applied to. Where fewer than two such years exist (2008–2010 at
+  score scale the map is applied to. Where fewer than two such years exist (2006–2008 at
   4q, 2008–2011 at 8q) the fit falls back to the last complete year inside the training
   window (`calibration_masks`) scored by the year's own model for `logit` and `hazard`
   (`full`) or by an inner model trained on the earlier years for `gbdt` and `gbdt_mono`
@@ -244,9 +244,11 @@ concatenates module lists in a fixed order and `build.py` calls the builders in 
 
 `build-crosswalk`, `build-macro`, `build-features-v2`, `train-gbdt`, `train-hazard`,
 `walkforward --year Y [--model M] [--horizon H]`, `walkforward-report`,
-`calibrate --year Y [--model M] [--horizon H]`, `metrics-report`, `sensitivity`,
-`explain {--year Y | --latest | --all | --report}`, `runs list [--name NAME] [--limit N]`
-and `runs rebuild-index`. All idempotent. The fitting, scoring and explaining commands
+`calibrate {--year Y | --all-years} [--model M[,M…]] [--horizon H] [--scorer trailing|full|inner]
+[--min-bin N] [--no-rebuild]`, `metrics-report`, `sensitivity`,
+`explain {--year Y | --latest | --all | --report}`, `runs list [--name NAME] [--limit N]`,
+`runs rebuild-index` and `runs prune [--dry-run]`. All idempotent. `walkforward.MODELS` is
+`texas, logit, logit_v1, gbdt, gbdt_mono, hazard` (`--model all`). The fitting, scoring and explaining commands
 (`train-gbdt`, `train-hazard`, `walkforward`, `calibrate`, `metrics-report`, `sensitivity`,
 `explain`) log a run record; the table builders, the report rebuild and `runs` do not.
 `runs list` prints run id, name, horizon and the headline metric (`pr_auc`, else the
@@ -284,9 +286,9 @@ readers keep the latest line per id).
 | table | key | columns |
 |---|---|---|
 | `banks` | `cert` | `name, city, state, bkclass, charter_class_label, estymd, endefymd, active, fed_rssd, rssdhcr, holding_company_name, latitude, longitude, latest_assets, size_bucket, exit_reason, fail_date` |
-| `quarters` | `repdte` | `label (e.g. 2023Q1), avail_date, n_banks, n_failures_next_4q, label_complete_4q, model_year (walk-forward year that scored it, null = production), model_version` |
-| `scores` | `cert, repdte, model` | `horizon, score, probability (calibrated), rank, percentile, band, delta_prob_prior_q, model_version` — models `gbdt_mono` and `hazard`, every scored quarter 2008Q1 → latest |
-| `drivers` | `cert, repdte, model, rank` | `feature, feature_label, shap_value, feature_value, direction` — 10 rows per bank-quarter for: the latest 4 quarters of every bank, every quarter of every failed bank, and every bank-quarter in the top 5% of its quarter; `gbdt_mono` only |
+| `quarters` | `repdte` | `label (e.g. 2023Q1), avail_date, n_banks, n_failures_next_4q, label_complete_4q, model_year (walk-forward year that scored it, null = production), model_version` — the scored quarters only (`core.scored_quarters`: every quarter with `scores` rows, 2008Q1 onward) |
+| `scores` | `cert, repdte, model` | `horizon, score, probability (calibrated), rank, percentile, band, delta_prob_prior_q, model_version` — models `gbdt_mono` and `hazard`, every scored quarter from `publish.core.FIRST_SCORED_YEAR` (2008Q1) to the latest; `scores` joined to `quarters.model_year` is the published form of the spec's `walkforward_scores` table (the warehouse keeps the full one, 2006 onward and every model) |
+| `drivers` | `cert, repdte, model, rank` | `feature, feature_label, shap_value, feature_value, direction` — 5 rows per bank-quarter (the five largest `|shap_value|`, re-ranked 1-5) for: the latest 4 quarters of every bank, every quarter of every failed bank, and every bank-quarter in the top 5% of its quarter; `gbdt_mono` only |
 | `ratios` | `cert, repdte` | `total_assets` + the 12 key ratios (`equity_to_assets, tier1_leverage, noncurrent_ratio, npa_to_assets, texas_ratio, roa_q, nim_q, efficiency_ratio, brokered_share, uninsured_share, unrealized_loss_to_tier1, construction_to_capital`) each with a `<ratio>_pct` peer percentile (peer = size bucket × Census region, same quarter); every bank-quarter |
 | `peer_stats` | `repdte, size_bucket, region, ratio` | `p10, p50, p90, n` |
 | `failures` | `cert, fail_date` | `name, city, state, restype1, cost, qbfasset, qbfdep` |
@@ -313,11 +315,29 @@ percentiles and `peer_stats` still use every quarter); `scores.probability`, `pe
 `feature_value`, and `map_quarters.latitude`, `longitude` and `probability` are `real`; and
 `map_quarters` has no `cert` index (the map reads by `repdte`; the primary key leads with it).
 Result: 399.6 MB. A new quarter adds about 2 MB, so the next lever is due soon.
+Deviation (2026-09-26, step C4, standing): the five-row `drivers` and the 2008Q1 start of
+`scores` and `ratios` are the contract, not a stopgap; `quarters` lists scored quarters only
+(74 rows, was 102 with the unscored 2001-2007 panel quarters); `publish` ends with
+`VACUUM ANALYZE` on a second autocommit connection and prints the post-vacuum
+`pg_database_size` against `SIZE_BUDGET_BYTES` (400,000,000, a warning above it); the
+2006-2007 backtest years stay unpublished because they would add about 53 MB, past the budget
+even with the next lever (`scores.model_version` as a smallint code, about 26 MB).
+`model_versions.git_sha` is kept in the schema and published as null. Calibrated
+`probability` is the section 13 recipe: the walk-forward year's trailing binned map for
+backtest quarters and the production map (2023-2024 scores, top step 0.0319 for `gbdt_mono`)
+for label-incomplete quarters, so no published probability is 1.0 and none rests on fewer
+than 50 banks.
 
 ### 17. Publish and refresh (`src/bankcanary/publish/`)
 
 - `bankcanary publish [--tables …] [--dry-run]` reads the warehouse + `models/production/` and
-  writes every table above; logs a `pipeline_runs` row and a tracking run.
+  writes every table above; logs a `pipeline_runs` row and a tracking run; a full publish ends
+  with `writer.vacuum_analyze` and the size check of section 16. `model_version` is read from
+  the stamped `config.json` of each walk-forward and production artefact (section 15).
+- `bankcanary runs prune [--dry-run]` (`tracking.prune`) deletes `walkforward` and
+  `tune_walkforward` records no saved config references and keeps the newest `calibrate`,
+  `explain`, `metrics`, `sensitivity` and `case_study_2023` record per subject; `train`,
+  `tune_gbdt`, `tune_hazard`, `publish` and `refresh` records are never pruned.
 - `bankcanary refresh` = probe the latest `REPDTE`; if newer than `quarters.max(repdte)`: ingest
   that quarter → rebuild panel, labels, features_v2 → score with `models/production/` → SHAP →
   publish. Idempotent; a re-run with no new quarter writes only a `pipeline_runs` row.

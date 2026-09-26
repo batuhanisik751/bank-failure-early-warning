@@ -32,6 +32,26 @@ refit reproduced the same run ids, so only the production row says `8b3078e`; an
 above the 400 MB target after the raw-feature `drivers` rows. Neither was changed in this pass;
 the UI evidence rows below were rendered before the fix and are kept as measured.
 
+**Re-measured on 2026-09-26 after the calibration and model-version fixes** (steps C1-C4:
+binned isotonic maps on trailing out-of-sample years, content-addressed model versions, the
+`logit_v1` refit and the 2006-2007 test years, run pruning; `uv run bankcanary publish`
+refilled every table, run `publish-4q-43f4bc5620`, `walkforward_metrics` 40, `model_versions`
+38, `quarters` 74 rows from 2008-03-31 to 2026-06-30, no pre-2008 row). Both caveats above
+are closed: `scores.model_version` is content-addressed everywhere (2009Q2 rows
+`gbdt_mono-2007-12-31-bacf2e0`, 2022Q4 rows `gbdt_mono-2020-12-31-43c9385`, the 2025-2026
+quarters `gbdt_mono-2022-12-31-9e7bab6` and `hazard-2023-12-31-0cc72ac`; zero rows end in
+`bbc0230`; `model_versions.git_sha` is null on all 38 rows), and `pg_database_size` is
+399,432,727 bytes after the publish's own `VACUUM ANALYZE` (399.4 MB, under the 400 MB
+budget, with the tables rewritten in place; see `docs/RUNBOOK.md` section 3 for the size
+after `VACUUM FULL`). The 2026Q2 rank 1 is still Tioga-Franklin Savings Bank (cert 33802)
+but at a calibrated probability of 0.0319, the top step of the production map fitted on the
+2023-2024 walk-forward scores (37,194 rows, 19 failures, a step observed on at least 50
+banks) instead of 1.0; the hazard's 2026Q2 maximum is 0.0155; the high band still holds 87
+of 4,313 banks. No `gbdt_mono` probability in any quarter reaches 1.0 (the largest is
+0.5968), and 2009Q2 has no bank at exactly 0.5 (its top step is 0.1, 165 banks in the high
+band, recall@2% for the 2009 year unchanged because ranks use the raw score). `uv run
+pytest`: 467 passed in 24 s.
+
 ## 1. A new quarter is picked up and published end-to-end without manual steps
 
 - [x] **Dry run against the latest quarter (2026Q2, `repdte = 2026-06-30`).** In one

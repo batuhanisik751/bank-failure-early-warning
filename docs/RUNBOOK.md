@@ -47,7 +47,9 @@ request builds the core frames a page table needs in memory without writing them
 Prerequisites: the warehouse tables `institutions`, `panel`, `labels`, `features_v2`,
 `failures`, `walkforward_scores`, `drivers`, plus `models/walkforward/<year>/<model>/config.json`
 for every test year (the `model_version` of a backtest year is
-`<model>-<train_end_repdte>-<sha of the commit that added its run record>`).
+`<model>-<train_end_repdte>-<first 7 hex of the fitted estimator's hash>`, read from the
+stamped `config.json` or, failing that, from the run record; `scripts/stamp_model_versions.py`
+back-fills the stamp into older artefacts without refitting).
 
 ## 3. Verify
 
@@ -73,8 +75,13 @@ Expected after a full publish: `scores` about 905 k rows (two models x every qua
 `peer_stats` about 29 k, `banks` about 28 k, `failures` about 4 k, `quarters` 74 (one per
 scored quarter, 2008Q1 onward), `walkforward_metrics` 40 (two models x 19 test years plus
 the pooled rows), `model_versions` 38, `case_study_2023` 28, `case_study_series` 37. The
-database must stay under 400 MB (Neon free tier): 383.0 MB after `VACUUM ANALYZE` on
-2026-09-26 (scores 161, ratios 85, drivers 61, map_quarters 45, rate_shock_scores 10). The
+database must stay under 400 MB (Neon free tier): the C4 publish of 2026-09-26 printed
+399.3 MB (399,432,727 bytes) after its own `VACUUM ANALYZE` because the replace-in-place
+loads leave dead space behind (scores 168, ratios 81, drivers 58, map_quarters 43,
+rate_shock_scores 11 MB), and `VACUUM FULL` brought the same content down to 380.9 MB
+(380,854,799 bytes). A `VACUUM FULL` after a full publish is therefore the first lever
+(run it by hand: `docker exec bankcanary-postgres psql -U bankcanary -d bankcanary -c
+'vacuum full'`, on Neon through its SQL editor; it takes a full lock for about a minute). The
 next lever, `scores.model_version` as a smallint code joined to `model_versions` (about
 26 MB), is applied only when the post-vacuum size printed by `publish` exceeds 400 MB;
 extending the time machine to 2006 would add about 53 MB (scores 25, ratios 13, map 7,

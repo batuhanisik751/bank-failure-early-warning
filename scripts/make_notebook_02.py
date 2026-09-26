@@ -36,7 +36,8 @@ Prototype 1 ended with one fixed out-of-time split (train through 2008, test 201
 and a regularised logistic regression that beat the Texas ratio by a small margin. This
 notebook tells the Prototype 2 story: a wider feature set (`features_v2`), four model
 families compared on that same fixed split, and then the test that matters, a
-**walk-forward backtest** with one model per year from 2008 to 2024, bootstrap
+**walk-forward backtest** with one model per year from 2006 to 2024 (the Prototype 1
+logit walked forward on its own features beside them), bootstrap
 confidence intervals, calibration, lead time, and the question of what the numbers mean
 in the quiet years after 2014. Everything here is read from `data/parquet/`, `models/`,
 `runs/` and `reports/`; nothing is retrained.
@@ -76,8 +77,9 @@ COLORS = {
     "gbdt": "#1baf7a",
     "hazard": "#eda100",
     "gbdt_mono": "#e87ba4",
+    "logit_v1": "#8c6fd6",
 }
-MODELS_4Q = ["texas", "logit", "gbdt", "gbdt_mono", "hazard"]
+MODELS_4Q = ["texas", "logit", "logit_v1", "gbdt", "gbdt_mono", "hazard"]
 print("models_dir:", settings.models_dir)
 """)
 
@@ -150,12 +152,16 @@ one draw: the training window ends in 2008 and the test window is the heart of t
 crisis, so these numbers say how well a 2008-vintage model would have ranked 2010-2013.
 The walk-forward asks the harder question.
 
-## 3. The walk-forward backtest, 2008-2024
+## 3. The walk-forward backtest, 2006-2024
 
 For every test year Y a fresh model is trained on every earlier bank-quarter whose
 outcome window closed before Y's first prediction date (`training_mask`, rule 6.2), the
 hyper-parameters are re-selected on a validation slice inside that training period (rule
-6.7), and the label-complete reports dated in Y are scored. `walkforward_scores` holds
+6.7), and the label-complete reports dated in Y are scored. The series starts in 2006,
+the first year whose training window holds enough failures to tune on (17 validation
+failures against 34 in the inner training rows). `logit_v1` is the Prototype 1 learner
+walked forward on its own 43 features with its own `C` per year, the like-for-like
+answer to "does Prototype 2 beat Prototype 1". `walkforward_scores` holds
 one row per bank-quarter, model and test year; the tables below recompute the metrics
 from those rows, with **cluster-bootstrap** intervals that resample banks (200 draws,
 seed 20080101) so that the consecutive quarters of one bank move together.
@@ -207,28 +213,30 @@ plt.tight_layout()
 """)
 
 md("""
-Read the chart with the failure counts underneath it. Through 2016 every model has enough
-failures for the intervals to mean something, and in 2011-2014 all three fitted models
-rank the failures well (PR-AUC around 0.4-0.55, recall@2% above 0.8). In 2008, the first
-test year, the training data hold only the pre-crisis failures and the booster in
-particular has almost nothing to learn from (PR-AUC 0.12 against 0.30-0.35 for the
-logit, the hazard and the Texas ratio). From 2017 on the bars shrink to single digits
-and the intervals span most of the unit interval; section 7 comes back to that.
+Read the chart with the failure counts underneath it. From 2008 to 2016 every model has
+enough failures for the intervals to mean something, and in 2011-2014 all the fitted
+models rank the failures well (PR-AUC around 0.4-0.55, recall@2% above 0.8). 2006 holds
+eight failures and 2007 eighty, so their intervals are wide and the 2006 row is flagged
+low confidence. In 2008 the training data hold only the pre-crisis failures and the
+unconstrained booster has almost nothing to learn from (PR-AUC 0.12 against 0.30-0.35
+for the logit, the hazard and the Texas ratio). From 2017 on the bars shrink to single
+digits and the intervals span most of the unit interval; section 7 comes back to that.
 
-## 4. Reliability: raw scores against the isotonic calibration
+## 4. Reliability: raw scores against the calibration maps
 
-Ranking is one thing, probability another. For each test year an isotonic map was fitted
-on the last complete label year inside the training window, using an *inner* model
-trained on the years before that slice, and then applied to the full-window model's
-scores (`score_calibrated`). The curves below bin the pooled test rows by raw-score
-decile and compare the mean raw score, the mean calibrated score and the observed
-failure rate in each bin.
+Ranking is one thing, probability another. For each test year a binned isotonic map is
+fitted on the same model's out-of-sample scores from the two preceding complete test
+years (Y-2 and Y-3 at 4q; the first years fall back to a slice inside the training
+window), with every step of the map a failure rate observed on at least 50 banks, and
+then applied to the full-window model's test scores (`score_calibrated`). The curves
+below bin the pooled test rows by raw-score decile and compare the mean raw score, the
+mean calibrated score and the observed failure rate in each bin.
 """)
 
 code("""
-PROB_MODELS = ["logit", "gbdt", "hazard"]
+PROB_MODELS = ["logit", "logit_v1", "gbdt", "gbdt_mono", "hazard"]
 rel = {m: reliability_table(wf4[wf4["model"] == m]) for m in PROB_MODELS}
-fig, axes = plt.subplots(1, 3, figsize=(13, 4))
+fig, axes = plt.subplots(1, len(PROB_MODELS), figsize=(20, 4))
 for ax, m in zip(axes, PROB_MODELS):
     r = rel[m]
     ax.plot(r["decile"], r["observed_rate"], color="#444", lw=2, marker="o", ms=4, label="observed rate")
@@ -254,23 +262,26 @@ pd.DataFrame(brier_rows).set_index("model").round(4)
 
 md("""
 The raw scores of every learner already sit close to the observed rate below the top
-decile and under-predict the top decile by about a factor of two. The isotonic map closes
-that gap for the logit and the hazard (pooled Brier 0.0041 raw against 0.0038 calibrated;
-top decile 0.042 predicted against 0.045 observed for the logit): their slice is scored by
-the year's own model, so the map is learned on the scale it is applied to. The boosters
-need an inner model to score the slice (their in-sample scores separate it perfectly), and
-their maps over-predict the top decile while leaving the pooled Brier score about where
-the raw scores had it. The decile tables are in `reports/walkforward.md`; the earlier
-inner-model recipe for the linear models and why it failed in 2009-2010 is in
-`docs/DECISIONS.md`.
+decile and under-predict the top decile by about a factor of two. The maps close most of
+that gap for the hazard and the monotone booster (top decile 0.054 and 0.067 predicted
+against 0.039 and 0.037 observed; pooled Brier 0.0037 raw against 0.0038 calibrated for
+the hazard, 0.0041 against 0.0044 for the booster) and over-shoot it for the logits, and
+no pooled Brier score falls under calibration: the maps of the first recovery years are
+learned on 2007-2009 scores and carry the crisis failure rate into 2010-2012 (the 2010
+logit map predicts a mean of 0.094 against a rate of 0.013), which costs more than the
+quiet years gain. Every step of a map is a rate observed on at least 50 banks, so no
+calibrated probability reaches 1.0 (the largest is 0.60). The decile tables are in
+`reports/walkforward.md`; the two earlier recipes (one in-window year, inner-model
+scoring) and why they failed are in `docs/DECISIONS.md`.
 
 ## 5. Lead time: how many quarters ahead was a failure flagged?
 
 For every bank that failed, the number of calendar quarters between the first report at
 which it entered the top 2 percent of that quarter's ranking and its failure. The
-2009-2012 cohort is the headline: 2008 failures can only be flagged inside 2008, and
+2009-2012 cohort is the headline: 2006 failures can only be flagged inside 2006, and
 failures after 2024 are scored only through 2024, so both ends are shortened by
-construction.
+construction. With 2006 and 2007 scored, a 2009 failure's first flag can now sit in
+2007, which lengthens the cohort's lead times against the 2008-start backtest.
 """)
 
 code("""
@@ -283,7 +294,7 @@ pd.DataFrame(lead_summary).set_index("model").round(3)
 """)
 
 code("""
-fig, axes = plt.subplots(1, 4, figsize=(14, 3.6), sharey=True)
+fig, axes = plt.subplots(1, len(MODELS_4Q), figsize=(20, 3.6), sharey=True)
 bins = np.arange(-0.5, 20.5, 1)
 for ax, m in zip(axes, MODELS_4Q):
     d = lead[m]
@@ -338,8 +349,8 @@ evidence a rule-6.7 selection may use; the test columns are what a reviewer woul
 afterwards. With winsorised inputs the two orderings had disagreed (the inner slice
 preferred the free fit), so the choice was a policy call; on the raw inputs both point
 the same way. The walk-forward, which fits both configurations with their own per-year
-tuning, agrees: `gbdt_mono` pools to PR-AUC 0.31 [0.28, 0.34] and recall@2% 0.71
-[0.68, 0.73] against 0.22 [0.19, 0.25] and 0.58 [0.55, 0.61] for `gbdt` (section 3
+tuning, agrees: `gbdt_mono` pools to PR-AUC 0.30 [0.28, 0.34] and recall@2% 0.70
+[0.67, 0.72] against 0.22 [0.19, 0.24] and 0.57 [0.55, 0.60] for `gbdt` (section 3
 above, both intervals disjoint), because the constraints hold the booster's score scale
 together across years. The production booster, the SHAP drivers and the case study
 (notebook 03) are the monotone one.
@@ -351,8 +362,8 @@ failed within four quarters) in ten years, against 1,439 in 2009-2012 alone, and
 those years (2017 and 2021) hold five or fewer. A PR-AUC on
 nine failures among 18,000 banks is a statement about nine banks: the 2024 logit reads
 0.11 with a bootstrap interval of [0.00, 0.63], and 2021 has no failure at all, so its
-ranking metrics are undefined. The pooled rows are dominated by the crisis cohort (1,868
-of the 2,103 positive rows fall in 2008-2012), so a pooled PR-AUC says how the models rank a
+ranking metrics are undefined. The pooled rows are dominated by the crisis cohort (1,956
+of the 2,191 positive rows fall in 2006-2012), so a pooled PR-AUC says how the models rank a
 crisis and almost nothing about a quiet decade. Two honest readings follow. First, the
 models keep working when they are given failures to find: in 2019, with 18 failures,
 every fitted model has PR-AUC above 0.45 and recall@2% of 0.94. Second, the 2022-2024
@@ -397,17 +408,19 @@ pooled8[["n", "n_failures", "pr_auc", "pr_auc_low", "pr_auc_high", "recall_at_2p
 md("""
 ## 9. Where this leaves Prototype 2
 
-- The walk-forward is the number to quote: pooled 4q PR-AUC of 0.33 (hazard), 0.31
-  (monotone booster), 0.31 (logit) and 0.22 (unconstrained booster), against 0.26 for
-  the Texas ratio, the first three with overlapping intervals; recall@2% between 0.58
-  and 0.74. At 8q the
-  hazard leads clearly (0.41). The fixed-split figures are higher because 2010-2013 is the
-  easiest period to rank.
-- The flagged failures are flagged early: median lead of 4.5-5 quarters, 82-88 percent of
+- The walk-forward is the number to quote: pooled 4q PR-AUC of 0.32 (hazard), 0.30
+  (monotone booster), 0.30 (logit), 0.28 (the Prototype 1 logit on its own features) and
+  0.22 (unconstrained booster), against 0.25 for the Texas ratio, the first four with
+  overlapping intervals; recall@2% between 0.57 and 0.75. Prototype 2 beats Prototype 1
+  on PR-AUC but not with disjoint intervals, and not on recall@2%. At 8q the hazard leads
+  clearly (0.41). The fixed-split figures are higher because 2010-2013 is the easiest
+  period to rank.
+- The flagged failures are flagged early: median lead of 5-6 quarters, 82-90 percent of
   the 2009-2012 failures at least two quarters ahead.
-- Calibrated probabilities track the observed rate for the logit and the hazard once the
-  map is learned on the calibrated model's own scale; the boosters' maps over-predict the
-  top decile, and every post-2013 map rests on a handful of failures.
+- Calibrated probabilities are learned out of sample on trailing years with a 50-bank
+  floor under every step, so no probability is 1.0; the hazard and the monotone booster
+  track the observed top-decile rate within a factor of 1.5-1.8, the recovery-year maps
+  inherit the crisis rate, and every post-2016 map rests on a handful of failures.
 - Post-2014 metrics are noise-dominated; the model's value in a quiet decade is what it
   says about individual banks, which notebooks 03 (SVB, 2023) and 04 (false positives)
   examine one bank at a time.

@@ -131,23 +131,24 @@ schemas, naming, storage paths) that every component follows.
 Prototype 2 is complete: FDIC data from 2001Q1 to 2026Q2 is ingested and cached, the
 bank-quarter panel (710,691 rows, 11,243 banks) carries leakage-safe labels at 1, 4 and 8
 quarters, 83 CAMELS, interest-rate, deposit-run, trend and macro features are computed
-([`docs/FEATURES.md`](docs/FEATURES.md)), and four models are backtested walk-forward: one
-model per test year from 2008 to 2024, trained only on outcomes known before that year's
+([`docs/FEATURES.md`](docs/FEATURES.md)), and five learners plus the Texas ratio are backtested walk-forward: one
+model per test year from 2006 to 2024, trained only on outcomes known before that year's
 first prediction date, hyper-parameters re-selected inside each year's training window. Everything a
 reader needs is in the model card ([`docs/model_card.md`](docs/model_card.md)) and the
 acceptance checklist ([`docs/P2_CHECKLIST.md`](docs/P2_CHECKLIST.md)).
 
-**Walk-forward backtest, 4-quarter horizon** (test years 2008-2024 pooled, 426,019
-bank-quarters, 2,103 failures; 95% intervals from 200 cluster-bootstrap draws by bank; from
+**Walk-forward backtest, 4-quarter horizon** (test years 2006-2024 pooled, 496,179
+bank-quarters, 2,191 failures; 95% intervals from 200 cluster-bootstrap draws by bank; from
 [`reports/walkforward.md`](reports/walkforward.md)):
 
 | model | PR-AUC | 95% CI | recall @ top 2% | 95% CI | ROC-AUC |
 |---|---|---|---|---|---|
-| hazard (discrete-time, Shumway 2001) | 0.3268 | [0.294, 0.357] | 0.7038 | [0.679, 0.730] | 0.9575 |
-| gbdt_mono (LightGBM, registry monotone signs, raw features) | 0.3131 | [0.284, 0.342] | 0.7066 | [0.678, 0.733] | 0.9119 |
-| logit (all 83 features, L2, per-year C) | 0.3056 | [0.275, 0.334] | 0.6833 | [0.657, 0.713] | 0.9601 |
-| gbdt (LightGBM, unconstrained, raw features, per-year tuning) | 0.2248 | [0.191, 0.249] | 0.5787 | [0.547, 0.605] | 0.7805 |
-| texas (rank by Texas ratio) | 0.2606 | [0.226, 0.298] | 0.7437 | [0.716, 0.771] | 0.9599 |
+| hazard (discrete-time, Shumway 2001) | 0.3194 | [0.286, 0.352] | 0.7033 | [0.674, 0.733] | 0.9568 |
+| gbdt_mono (LightGBM, registry monotone signs, raw features) | 0.3022 | [0.275, 0.335] | 0.6992 | [0.671, 0.724] | 0.9057 |
+| logit (all 83 features, L2, per-year C) | 0.2953 | [0.264, 0.330] | 0.6787 | [0.648, 0.710] | 0.9527 |
+| logit_v1 (the Prototype 1 logit on its 43 features, per-year C) | 0.2801 | [0.247, 0.315] | 0.7047 | [0.671, 0.736] | 0.9475 |
+| texas (rank by Texas ratio) | 0.2534 | [0.219, 0.297] | 0.7485 | [0.719, 0.776] | 0.9570 |
+| gbdt (LightGBM, unconstrained, raw features, per-year tuning) | 0.2160 | [0.191, 0.240] | 0.5728 | [0.545, 0.600] | 0.7786 |
 
 **8-quarter horizon** (2008-2023 pooled, 407,621 bank-quarters, 3,768 failures): hazard
 PR-AUC 0.4113 [0.382, 0.442], recall@2% 0.6598; logit 0.2566 [0.225, 0.288], 0.5207; gbdt
@@ -156,7 +157,9 @@ PR-AUC 0.4113 [0.382, 0.442], recall@2% 0.6598; logit 0.2566 [0.225, 0.288], 0.5
 The honest reading: the hazard model pools best at both horizons; at 4q its interval
 overlaps the logit's, so the backtest does not separate them, while at 8q it is clearly
 ahead. Every learner beats the Texas ratio on PR-AUC while the Texas ratio still captures
-the most failures in its top 2%. The unconstrained gradient booster is competitive year by
+the most failures in its top 2%. Against the Prototype 1 logit walked forward on its own
+features (`logit_v1`) the Prototype 2 models win on PR-AUC but not with disjoint intervals,
+and on recall@2% the old model is level with the best. The unconstrained gradient booster is competitive year by
 year from 2010 on and weakest pooled, because its early years are starved of failures and
 its score scale drifts between years; the same booster under the feature registry's
 monotone signs keeps its scale, pools second and is the production model (Decision Point 2,
@@ -168,13 +171,16 @@ adjusted leverage of -0.33 reached the trees as 3.94). `models/production/` hold
 2024 walk-forward `gbdt_mono` and `hazard` fits with a `model_version.json` each
 (`scripts/promote_production_models.py`); the SHAP drivers and the 2023 case study use the
 monotone booster.
-Calibrated probabilities track the observed failure rate for the logit and hazard (pooled
-Brier 0.0041 raw, 0.0038 calibrated; top decile 0.042 predicted against 0.045 observed for
-the logit). Per-year tables with failure counts, Brier scores and reliability curves are in
+Calibrated probabilities come from binned isotonic maps learned on each model's own
+out-of-sample scores from the two preceding complete test years, every step a rate observed
+on at least 50 banks (pooled 4q Brier raw / calibrated: hazard 0.0037 / 0.0038, gbdt_mono
+0.0041 / 0.0044; top decile 0.054 and 0.067 predicted against 0.039 and 0.037 observed); the
+maps of the first recovery years inherit the crisis rate, so the pooled score is not lower
+than raw. Per-year tables with failure counts, Brier scores and reliability curves are in
 the report; years with fewer than ten failures are flagged low confidence. Lead time: of
 the 440 banks that
-failed in 2009-2012, the logit had put 89.8% in some quarter's top 2% before they failed,
-median 5 quarters ahead, 87.7% at least two quarters ahead (hazard 90.5% / 5 / 88.4%).
+failed in 2009-2012, the hazard had put 91.6% in some quarter's top 2% before they failed,
+median 6 quarters ahead, 89.8% at least two quarters ahead (logit 90.5% / 5 / 88.4%).
 
 **The 2023 question.** A credit-only model trained through 2021 put Silicon Valley Bank at
 the 56th-65th percentile of all banks on its last report before failure. Adding the
@@ -188,7 +194,7 @@ in its top 2%, Signature was flagged only by the credit-only logit on its concen
 profile, and First Republic by nothing.
 
 **Prototype 3** promotes the 2024 walk-forward `gbdt_mono` fit to the production model
-(`model_version = <model>-<train end>-<git sha>` on every published row; `hazard` is the
+(`model_version = <model>-<train end>-<hash of the fitted estimator>` on every published row; `hazard` is the
 secondary score), scores every label-incomplete quarter with it, ranks banks into risk bands
 by percentile (`high` top 2%, `elevated` top 2-10%, `low`, always shown with the calibrated
 probability), and publishes 13 tables that stay under Neon's 400 MB free tier
@@ -240,9 +246,9 @@ uv run bankcanary build-macro            # FRED series, point-in-time macro_stat
 uv run bankcanary build-features-v2      # features_v2 (83 features); docs/FEATURES.md
 uv run bankcanary train-gbdt             # fixed-split booster, reports/p2_gbdt.md
 uv run bankcanary train-hazard           # fixed-split hazard, reports/p2_hazard.md
-for Y in $(seq 2008 2024); do uv run bankcanary walkforward --year $Y --model all; done
+for Y in $(seq 2006 2024); do uv run bankcanary walkforward --year $Y --model all; done
 for Y in $(seq 2008 2023); do uv run bankcanary walkforward --year $Y --model logit,gbdt,hazard --horizon 8; done
-uv run bankcanary calibrate --all-years  # isotonic maps, score_calibrated (also --horizon 8)
+uv run bankcanary calibrate --all-years  # binned isotonic maps on trailing years, score_calibrated (also --horizon 8)
 uv run bankcanary metrics-report         # reports/walkforward.md (CIs, Brier, lead time)
 uv run bankcanary explain --all          # SHAP drivers (gbdt_mono), reports/shap_summary.md
 uv run python scripts/promote_production_models.py   # models/production/ + model_version.json
