@@ -948,3 +948,22 @@ open for the owner to revisit.
   only from `labels`, and `build_scores` raises when any row's version is unknown, so a
   publish from a fresh clone fails loudly or names the right version instead of writing
   NULL provenance. `model_versions.notes` now says which source named the version.
+- 2026-09-26 — **Fix web_queries (adversarial review).** Three confirmed defects.
+  (1) CSV formula injection: `csvCell` now prefixes a text cell that starts with `=`, `+`,
+  `-`, `@`, tab or carriage return with an apostrophe and quotes it (numbers and numeric
+  strings such as "-0.5" are left alone), so an FDIC bank name like `=HYPERLINK(...)` opens as
+  literal text in Excel and Sheets; the leaderboard export's driver chips read
+  `raises: feature` / `lowers: feature` instead of `+ feature` / `- feature`, which had made
+  every driver cell a formula. The adversarial test's one assertion on the raw name now
+  expects the apostrophe. (2) TLS to the database: `pg` merges the parsed connection string
+  over the explicit config, so `sslmode=disable`, `sslmode=no-verify`, `ssl=false` or
+  `uselibpqcompat=true&sslmode=require` in a remote `DATABASE_URL` silently switched off
+  verification. `stripTlsParams()` in `web/lib/db/client.ts` removes `ssl`, `sslmode`,
+  `sslcert`, `sslkey`, `sslrootcert`, `sslnegotiation` and `uselibpqcompat` from a
+  non-local URL (a warning names the dropped keys, never values) and the pool always gets
+  `ssl: { rejectUnauthorized: true }`; the local container stays plain. (3) The CSV routes
+  answered with `s-maxage=3600`, which a CDN keeps for an hour after `POST /api/revalidate`
+  has already expired the page data; `csvHeaders()` now sends `cache-control: no-store`
+  (the routes are `force-dynamic` and read the same `unstable_cache` data as the pages, so
+  the download is cheap and always the published quarter). `web/components/leaderboard/csv.ts`
+  sits outside the step's nominal file list but is the root cause named by the review.

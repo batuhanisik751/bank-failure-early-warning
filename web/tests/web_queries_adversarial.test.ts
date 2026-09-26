@@ -7,7 +7,7 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type Call = { text: string; values: unknown[] };
 
@@ -375,7 +375,8 @@ describe("CSV downloads", () => {
     expect(text).toContain('"New\nYork"');
     expect(rows[1][0]).toBe("quarter");
     expect(rows).toHaveLength(5); // note, header, three banks
-    expect(rows[2].slice(0, 4)).toEqual(["2025Q2", "1", "1", '=HYPERLINK("http://evil.example","click")']);
+    // The formula-shaped bank name survives verbatim behind the neutralising apostrophe.
+    expect(rows[2].slice(0, 4)).toEqual(["2025Q2", "1", "1", '\'=HYPERLINK("http://evil.example","click")']);
     expect(rows[4][12]).toBe(""); // null change -> empty cell, not "null"
   });
 
@@ -386,7 +387,7 @@ describe("CSV downloads", () => {
     for (const c of calls()) expect(c.text).not.toContain("drop table");
   });
 
-  test.fails("BUG: CSV cells are not protected against spreadsheet formula injection (leading = + - @)", async () => {
+  it("neutralises spreadsheet formula injection (leading = + - @) in every text cell", async () => {
     const { csvCell } = await import("@/components/leaderboard/csv");
     // Expected: a text cell that a spreadsheet would evaluate is neutralised (for example prefixed with an apostrophe and quoted).
     expect(csvCell("=1+1")).not.toBe("=1+1");
@@ -414,7 +415,7 @@ describe("Cache tags", () => {
     }
   });
 
-  test.fails("BUG: the leaderboard CSV is cached by shared caches for an hour, which revalidateTag does not expire", async () => {
+  it("does not let a shared cache keep the leaderboard CSV past a revalidation", async () => {
     const { csvHeaders } = await import("@/components/leaderboard/csv");
     const cc = new Headers(csvHeaders("x.csv")).get("cache-control") ?? "";
     // Expected: after POST /api/revalidate the next download is the fresh quarter, so no s-maxage on a CDN.
@@ -450,7 +451,7 @@ describe("TLS to the database (CONTRACT 18: Neon over sslmode=verify-full only)"
     expect(await sslFor("postgresql://u:p@localhost.evil.example/db")).toEqual({ rejectUnauthorized: true });
   });
 
-  test.fails("BUG: sslmode in a remote DATABASE_URL overrides the verified-TLS setting (disable, no-verify, libpq require)", async () => {
+  it("keeps verified TLS for a remote host whatever sslmode the URL carries (disable, no-verify, libpq require)", async () => {
     // Expected from client.ts' own contract: full verification "whatever the URL says".
     for (const qs of ["sslmode=disable", "sslmode=no-verify", "uselibpqcompat=true&sslmode=require", "ssl=false"]) {
       const ssl = await sslFor(`postgresql://u:p@ep-x.us-east-2.aws.neon.tech/db?${qs}`);

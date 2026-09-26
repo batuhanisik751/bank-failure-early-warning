@@ -21,7 +21,13 @@ export async function GET(request: Request): Promise<Response> {
   const drivers = await leaderboardDrivers(latest.label, rows.map((r) => r.cert));
   const body = rows.map((r) => {
     const top = drivers[r.cert] ?? [];
-    const chip = (i: number) => (top[i] ? `${top[i].direction === "raises" ? "+" : "-"} ${top[i].feature ?? ""}` : "");
+    // "raises: feature" rather than "+ feature": a leading + or - would open the cell as a formula in a spreadsheet.
+    const chip = (i: number) => {
+      const d = top[i];
+      if (!d) return "";
+      const direction = d.direction ?? ((d.shapValue ?? 0) > 0 ? "raises" : "lowers");
+      return `${direction}: ${d.feature ?? ""}`;
+    };
     return [
       latest.label, r.rank, r.cert, r.name, r.city, r.state, r.sizeBucket, r.bkclass, r.totalAssets,
       r.probability, r.band, r.percentile, r.deltaProbPriorQ, r.hazardProbability,
