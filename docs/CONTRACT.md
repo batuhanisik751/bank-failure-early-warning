@@ -266,6 +266,10 @@ Rules: every table is rebuilt idempotently by `bankcanary publish` (truncate + i
 transaction per table, or `INSERT … ON CONFLICT DO UPDATE`); numeric columns `double precision`,
 money in thousands of dollars as in the warehouse; indexes on every foreign-key-like column and on
 `(repdte, rank)`; the web app's role is read-only. Neon free tier budget: total < 400 MB.
+Deviation (2026-09-26, step E1a): the 12 ratio columns and their 12 `_pct` peer percentiles in
+`ratios` are `real`, not `double precision` (`total_assets` stays double). With doubles the
+table alone was 194 MB and the database 426 MB before `drivers` and `map_quarters` existed;
+seven significant digits are more than any ratio display uses. `scores` keeps doubles.
 
 ### 17. Publish and refresh (`src/bankcanary/publish/`)
 

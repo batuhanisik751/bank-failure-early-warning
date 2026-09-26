@@ -778,3 +778,27 @@ open for the owner to revisit.
   comparison but is not fitted by default. Also recorded: the 2024 `gbdt_mono` fit that is
   now the production model is the weakest of its series (PR-AUC 0.11, ROC-AUC 0.55 on 9
   failures) and its SHAP leans on `share_consumer`, `nim_q` and `share_residential`.
+- 2026-09-26 — **Publish job core (`bankcanary publish`, step E1a).** `src/bankcanary/publish/`
+  holds the schema (`schema.sql`, every CONTRACT 16 table with a disclaimer comment), pure
+  builders (`core.py`: one DataFrame per table from the Parquet warehouse, `runs/` and
+  `models/production/`), the loader (`writer.py`: truncate + COPY inside one transaction per
+  table, or COPY into a temp table + `ON CONFLICT DO UPDATE` for partial writes) and the
+  psycopg 3 connection (`db.py`, URL from `Secrets.database_url`). Scores = the horizon-4
+  `walkforward_scores` rows of `gbdt_mono` and `hazard` (each quarter by its own test-year
+  model) plus the quarters past the last complete year (2025Q1-2026Q2, 26,557 bank-quarters)
+  scored on the fly with the production pipelines and isotonic maps. Rank is by raw score
+  (ties by cert) so it stays defined where the calibrated map is flat; `percentile` =
+  share of the quarter's banks ranked below; bands `high` = top `ceil(2%)`, `elevated` =
+  top `ceil(10%)`. A backtest year's `model_version` is `<model>-<train_repdte_max>-<sha of
+  the commit that added its run record>`, the same rule as the production promotion.
+- 2026-09-26 — **`ratios` stores the ratio and peer-percentile columns as `real`.** With
+  doubles the first full publish was 426 MB (ratios 194 MB, scores 192 MB); `real` for the 24
+  ratio/percentile columns, fixed-width-first column order in `scores` and dropping a
+  non-required `(model, repdte)` index bring it to 342 MB (scores 180 MB, ratios 127 MB).
+  The deviation is written into CONTRACT 16. About 58 MB remain for `drivers` and
+  `map_quarters`; the next levers, if needed, are the pre-2008 `ratios` rows (about 40 MB)
+  and five drivers per bank-quarter instead of ten.
+- 2026-09-26 — **Failures without a `cert` are not published.** 488 pre-1970 rows of the FDIC
+  failures list carry no certificate number, so they cannot be keyed by `(cert, fail_date)`;
+  3,629 rows remain. `banks.holding_company_name` is null for now: the institutions table
+  carries `rssdhcr` but no holding-company name, which a later step can fetch.

@@ -26,6 +26,7 @@ dependencies = [
     "lightgbm>=4.7.0",
     "shap>=0.52.0",
     "statsmodels>=0.15.0",
+    "psycopg[binary]>=3.3.6",
 ]
 
 [project.scripts]

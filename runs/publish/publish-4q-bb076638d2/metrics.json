@@ -1,0 +1,11 @@
+{
+  "db_bytes": 425729047,
+  "rows_banks": 27834,
+  "rows_failures": 3629,
+  "rows_model_versions": 34,
+  "rows_peer_stats": 28616,
+  "rows_quarters": 102,
+  "rows_ratios": 710691,
+  "rows_scores": 905152,
+  "rows_walkforward_metrics": 36
+}
