@@ -793,3 +793,38 @@ def write_walkforward_report(
     out.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     log.info("wrote %s", out)
     return out
+
+
+def check_tuning_consistency(models_dir: Path, lag_days: int | None = None) -> list[dict]:
+    """Every ``<models_dir>/<Y>/<model>/config.json`` whose tuning could have seen year Y.
+
+    A fitted model's config must carry ``tuning`` (rule 6.7) whose ``validation_end`` lies
+    before the year's first prediction date (``03-31`` of Y plus ``lag_days``). Configs that
+    record no fit (``fit`` starting with ``none``, the Texas ranking) are skipped. Returns one
+    ``{"year", "model", "path", "reason"}`` per violation; an empty list means consistent.
+    """
+    from bankcanary.splits import prediction_date
+    from bankcanary.splits.time_split import DEFAULT_LAG_DAYS
+
+    lag = DEFAULT_LAG_DAYS if lag_days is None else int(lag_days)
+    violations: list[dict] = []
+    for path in sorted(Path(models_dir).glob("*/*/config.json")):
+        year_dir = path.parent.parent
+        if not year_dir.name.isdigit():
+            continue
+        year, model = int(year_dir.name), path.parent.name
+        config = json.loads(path.read_text(encoding="utf-8"))
+        if str(config.get("fit", "")).startswith("none"):
+            continue
+        first = prediction_date(year_bounds(year)[0], lag)
+        tuning = config.get("tuning")
+        if not isinstance(tuning, dict):
+            reason = "no tuning record"
+        elif tuning.get("validation_end") is None:
+            reason = "tuning has no validation_end"
+        elif pd.Timestamp(tuning["validation_end"]) >= first:
+            reason = f"validation_end {tuning['validation_end']} >= first prediction {first.date()}"
+        else:
+            continue
+        violations.append({"year": year, "model": model, "path": str(path), "reason": reason})
+    return violations

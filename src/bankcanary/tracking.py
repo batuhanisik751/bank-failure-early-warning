@@ -7,7 +7,8 @@ so re-running the same command overwrites the same small files instead of piling
 timestamped copies, and a tuning script can ask :func:`find_metrics` whether a
 configuration has already been scored. ``runs/index.jsonl`` lists every run once
 (deduplicated by id) with its scalar metrics so the history is greppable without opening
-each directory. The directory is committed; keep the metric payloads small.
+each directory; ``finish`` only ever appends to it and :func:`rebuild_index` rewrites it
+from the run directories. The directory is committed; keep the metric payloads small.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -93,20 +95,64 @@ def find_metrics(name: str, config: dict, settings: Settings) -> dict | None:
 
 
 def read_index(settings: Settings) -> list[dict]:
-    """Every row of ``runs/index.jsonl`` (empty list when no run was logged yet)."""
+    """Every run in ``runs/index.jsonl`` once, deduplicated by id (empty before any run).
+
+    The file may hold several lines for one id (each ``finish`` appends, see
+    :func:`_append_index`); the latest line wins and keeps the position of the first.
+    """
     path = runs_dir(settings) / INDEX_FILE
     if not path.exists():
         return []
-    lines = path.read_text(encoding="utf-8").splitlines()
-    return [json.loads(line) for line in lines if line.strip()]
+    return _dedupe(_read_rows(path))
+
+
+def rebuild_index(settings: Settings) -> int:
+    """Rewrite ``runs/index.jsonl`` from every ``runs/<name>/<run_id>/config.json``.
+
+    One row per run directory, sorted by run id, built from the files on disk rather than
+    from the old index, so rows lost or duplicated by interleaved calls are repaired and
+    two rebuilds of the same tree give byte-identical files. The new file replaces the old
+    one atomically (temporary file + rename). Returns the number of rows written.
+    """
+    root = runs_dir(settings)
+    rows = []
+    for config_path in sorted(root.glob("*/*/config.json")):
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        metrics_path = config_path.with_name("metrics.json")
+        metrics = {} if not metrics_path.exists() else json.loads(metrics_path.read_text())
+        run_dir = config_path.parent
+        run = Run(run_dir.parent.name, run_dir.name, config, run_dir, settings, metrics)
+        rows.append(run.index_row())
+    rows.sort(key=lambda r: r["run_id"])
+    _replace_file(root / INDEX_FILE, "".join(json.dumps(r, sort_keys=True) + "\n" for r in rows))
+    return len(rows)
 
 
 def _append_index(path: Path, row: dict) -> None:
+    """Append one line with a single ``O_APPEND`` write, so concurrent finishes never
+    overwrite each other's rows; readers deduplicate by id (:func:`read_index`) and
+    :func:`rebuild_index` compacts the file."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    rows = [] if not path.exists() else _read_rows(path)
-    rows = [r for r in rows if r.get("run_id") != row["run_id"]] + [row]
-    text = "".join(json.dumps(r, sort_keys=True) + "\n" for r in rows)
-    path.write_text(text, encoding="utf-8")
+    line = json.dumps(row, sort_keys=True) + "\n"
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    try:
+        os.write(fd, line.encode("utf-8"))
+    finally:
+        os.close(fd)
+
+
+def _replace_file(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _dedupe(rows: list[dict]) -> list[dict]:
+    latest: dict[str, dict] = {}
+    for row in rows:
+        latest[row.get("run_id")] = row  # a repeated id keeps its first slot, latest content
+    return list(latest.values())
 
 
 def _read_rows(path: Path) -> list[dict]:

@@ -6,32 +6,32 @@
 
 | feature | mean_abs_shap | share | mean_abs_2009 | mean_abs_2023 |
 |---|---|---|---|---|
-| texas_ratio | 0.2051 | 0.0716 | 0.3836 | 0.1374 |
-| adjusted_tier1_leverage | 0.1598 | 0.0558 | 0.0947 | 0.2721 |
-| securities_to_assets | 0.1402 | 0.0489 | 0.1566 | 0.1286 |
-| macro_hpi_change_4q | 0.1285 | 0.0448 | 0.4155 | 0.0574 |
-| macro_fedfunds_change_4q | 0.1211 | 0.0423 | 0.1896 | 0.2843 |
-| neg_roa_quarters_last_8 | 0.1201 | 0.0419 | 0.0272 | 0.1450 |
-| equity_to_assets | 0.1052 | 0.0367 | 0.0494 | 0.1039 |
-| macro_unemp_change_4q | 0.0774 | 0.0270 | 0.0245 | 0.0387 |
-| total_rbc_ratio | 0.0728 | 0.0254 | 0.0248 | 0.0497 |
-| share_construction | 0.0667 | 0.0233 | 0.0174 | 0.0240 |
-| unrealized_loss_to_tier1 | 0.0653 | 0.0228 | 0.0280 | 0.1602 |
-| noncurrent_ratio | 0.0641 | 0.0224 | 0.0808 | 0.0483 |
-| d4q_equity_to_assets | 0.0641 | 0.0224 | 0.0373 | 0.0309 |
-| share_nonfarm_nonres | 0.0624 | 0.0218 | 0.0916 | 0.0571 |
-| d4q_texas_ratio | 0.0623 | 0.0218 | 0.0379 | 0.0449 |
-| early_delinquency | 0.0529 | 0.0185 | 0.0347 | 0.0297 |
-| log_assets | 0.0507 | 0.0177 | 0.0734 | 0.0424 |
-| liquid_assets_ratio | 0.0490 | 0.0171 | 0.0665 | 0.0762 |
-| roa_q | 0.0440 | 0.0154 | 0.1096 | 0.0292 |
-| brokered_share | 0.0425 | 0.0148 | 0.1016 | 0.0197 |
+| large_time_deposit_share | 3.1621 | 0.2409 | 0.0311 | 0.0211 |
+| unrealized_loss_to_tier1 | 2.7087 | 0.2063 | 0.0280 | 0.1071 |
+| macro_dgs10 | 0.9435 | 0.0719 | 0.0201 | 0.0225 |
+| nco_rate | 0.7826 | 0.0596 | 0.0177 | 0.0013 |
+| d1q_unrealized_loss_to_tier1 | 0.6753 | 0.0514 | 0.0134 | 0.0088 |
+| share_nonfarm_nonres | 0.5644 | 0.0430 | 0.0916 | 0.0453 |
+| texas_ratio | 0.4758 | 0.0362 | 0.3836 | 0.1081 |
+| macro_hpi_change_4q | 0.4152 | 0.0316 | 0.4155 | 0.0433 |
+| securities_to_assets | 0.2129 | 0.0162 | 0.1566 | 0.1152 |
+| adjusted_tier1_leverage | 0.2043 | 0.0156 | 0.0947 | 0.2262 |
+| afs_unrealized_to_tier1 | 0.1752 | 0.0133 | 0.0415 | 0.1969 |
+| macro_fedfunds_change_4q | 0.1426 | 0.0109 | 0.1896 | 0.3606 |
+| macro_unemp_change_4q | 0.1206 | 0.0092 | 0.0245 | 0.0618 |
+| neg_roa_quarters_last_8 | 0.1206 | 0.0092 | 0.0272 | 0.1402 |
+| equity_to_assets | 0.1011 | 0.0077 | 0.0494 | 0.0845 |
+| uninsured_share | 0.1003 | 0.0076 | 0.0353 | 0.0092 |
+| total_rbc_ratio | 0.0966 | 0.0074 | 0.0248 | 0.0747 |
+| d4q_texas_ratio | 0.0904 | 0.0069 | 0.0379 | 0.0485 |
+| log_assets | 0.0896 | 0.0068 | 0.0734 | 0.0443 |
+| share_consumer | 0.0773 | 0.0059 | 0.0205 | 0.0206 |
 
-Shift in mean |SHAP| from 2009 to 2023: rose most for `adjusted_tier1_leverage` (+0.177), `unrealized_loss_to_tier1` (+0.132), `neg_roa_quarters_last_8` (+0.118); fell most for `macro_hpi_change_4q` (-0.358), `texas_ratio` (-0.246), `region_west` (-0.086). The crisis-year booster leans on credit quality and the housing cycle, the recent one on rate sensitivity (unrealised losses, the funds-rate change) and capital.
+Shift in mean |SHAP| from 2009 to 2023: rose most for `macro_fedfunds_change_4q` (+0.171), `afs_unrealized_to_tier1` (+0.155), `adjusted_tier1_leverage` (+0.131); fell most for `macro_hpi_change_4q` (-0.372), `texas_ratio` (-0.276), `npa_to_assets` (-0.084). The crisis-year booster leans on credit quality and the housing cycle, the recent one on rate sensitivity (unrealised losses, the funds-rate change) and capital.
 
 ## Feature-importance smoke test (spec rule 6.6)
 
-Largest share of the total mean |SHAP|: `texas_ratio` at 7.2%; the top three together carry 17.6%. Threshold 40%: no feature is flagged; importance is spread across capital, asset-quality, earnings and sensitivity ratios, with no single field acting as a failure marker.
+Largest share of the total mean |SHAP|: `large_time_deposit_share` at 24.1%; the top three together carry 51.9%. Threshold 40%: no feature is flagged; importance is spread across capital, asset-quality, earnings and sensitivity ratios, with no single field acting as a failure marker.
 
 ## Per-year top feature
 
@@ -49,11 +49,11 @@ Largest share of the total mean |SHAP|: `texas_ratio` at 7.2%; the top three tog
 | 2017 | texas_ratio | 0.1036 | neg_roa_quarters_last_8 | macro_fedfunds_change_4q |
 | 2018 | neg_roa_quarters_last_8 | 0.0870 | texas_ratio | securities_to_assets |
 | 2019 | texas_ratio | 0.0910 | securities_to_assets | neg_roa_quarters_last_8 |
-| 2020 | texas_ratio | 0.0744 | macro_fedfunds_change_4q | neg_roa_quarters_last_8 |
-| 2021 | texas_ratio | 0.0954 | securities_to_assets | neg_roa_quarters_last_8 |
-| 2022 | macro_fedfunds_change_4q | 0.1063 | adjusted_tier1_leverage | d4q_unrealized_loss_to_tier1 |
-| 2023 | macro_fedfunds_change_4q | 0.1073 | adjusted_tier1_leverage | unrealized_loss_to_tier1 |
-| 2024 | adjusted_tier1_leverage | 0.0938 | texas_ratio | unrealized_loss_to_tier1 |
-| production | texas_ratio | 0.0805 | adjusted_tier1_leverage | neg_roa_quarters_last_8 |
+| 2020 | large_time_deposit_share | 0.2997 | unrealized_loss_to_tier1 | macro_dgs10 |
+| 2021 | texas_ratio | 0.0933 | neg_roa_quarters_last_8 | securities_to_assets |
+| 2022 | macro_fedfunds_change_4q | 0.1378 | adjusted_tier1_leverage | d4q_unrealized_loss_to_tier1 |
+| 2023 | macro_fedfunds_change_4q | 0.1477 | adjusted_tier1_leverage | afs_unrealized_to_tier1 |
+| 2024 | adjusted_tier1_leverage | 0.1006 | unrealized_loss_to_tier1 | neg_roa_quarters_last_8 |
+| production | adjusted_tier1_leverage | 0.0851 | neg_roa_quarters_last_8 | unrealized_loss_to_tier1 |
 
 ![SHAP beeswarm, latest booster](figures/shap_summary_latest.png)

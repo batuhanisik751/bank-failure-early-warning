@@ -216,6 +216,14 @@ concatenates module lists in a fixed order and `build.py` calls the builders in 
 
 ### 14. CLI additions
 
-`build-macro`, `build-features --version v2`, `train --model {gbdt,gbdt_mono,hazard}`,
-`walkforward --year Y --model M`, `calibrate`, `sensitivity`, `explain`, `runs list`.
-All idempotent; all log a run record.
+`build-crosswalk`, `build-macro`, `build-features-v2`, `train-gbdt`, `train-hazard`,
+`walkforward --year Y [--model M] [--horizon H]`, `walkforward-report`,
+`calibrate --year Y [--model M] [--horizon H]`, `metrics-report`, `sensitivity`,
+`explain {--year Y | --latest | --all | --report}`, `runs list [--name NAME] [--limit N]`
+and `runs rebuild-index`. All idempotent. The fitting, scoring and explaining commands
+(`train-gbdt`, `train-hazard`, `walkforward`, `calibrate`, `metrics-report`, `sensitivity`,
+`explain`) log a run record; the table builders, the report rebuild and `runs` do not.
+`runs list` prints run id, name, horizon and the headline metric (`pr_auc`, else the
+calibrated Brier, else the raw Brier) from `runs/index.jsonl`; `runs rebuild-index` rewrites
+that index from the run directories, sorted by run id (each `finish` only appends a line,
+readers keep the latest line per id).
