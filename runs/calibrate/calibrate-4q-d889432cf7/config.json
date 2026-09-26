@@ -1,0 +1,37 @@
+{
+  "availability_lag_days": 60,
+  "backend": "lightgbm",
+  "calibration_end": "2021-12-31",
+  "calibration_prediction_date": "2023-05-30",
+  "calibration_start": "2020-03-31",
+  "calibration_years": [
+    2020,
+    2021
+  ],
+  "effective_scorer": "trailing",
+  "fallback": false,
+  "features_version": "v2",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "inner_train_repdte_max": null,
+  "iterations_capped": false,
+  "method": "isotonic",
+  "min_bin": 50,
+  "model": "gbdt",
+  "monotone": false,
+  "n_calibration": 40417,
+  "n_inner_train": 0,
+  "n_rows": 40417,
+  "params": {
+    "learning_rate": 0.03,
+    "min_samples_leaf": 200,
+    "n_estimators": 200,
+    "num_leaves": 15
+  },
+  "positives_calibration": 4,
+  "positives_inner_train": 0,
+  "slice_scorer": "trailing",
+  "sufficient": false,
+  "test_year": 2023
+}

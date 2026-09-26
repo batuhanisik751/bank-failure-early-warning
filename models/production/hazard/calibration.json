@@ -1,0 +1,19 @@
+{
+  "model": "hazard",
+  "horizon": 4,
+  "method": "isotonic",
+  "slice_scorer": "trailing",
+  "effective_scorer": "trailing",
+  "fallback": false,
+  "min_bin": 50,
+  "calibration_years": [
+    2023,
+    2024
+  ],
+  "calibration_start": "2023-03-31",
+  "calibration_end": "2024-12-31",
+  "n_rows": 37194,
+  "positives_calibration": 19,
+  "n_bins": 743,
+  "top_plateau": 0.015463917525773196
+}

@@ -1,0 +1,37 @@
+{
+  "availability_lag_days": 60,
+  "backend": "lightgbm",
+  "calibration_end": "2012-12-31",
+  "calibration_prediction_date": "2015-05-30",
+  "calibration_start": "2011-03-31",
+  "calibration_years": [
+    2011,
+    2012
+  ],
+  "effective_scorer": "trailing",
+  "fallback": false,
+  "features_version": "v2",
+  "fit_horizon": 8,
+  "fit_label": "y_8q",
+  "horizon": 8,
+  "inner_train_repdte_max": null,
+  "iterations_capped": false,
+  "method": "isotonic",
+  "min_bin": 50,
+  "model": "gbdt",
+  "monotone": false,
+  "n_calibration": 59295,
+  "n_inner_train": 0,
+  "n_rows": 59295,
+  "params": {
+    "learning_rate": 0.03,
+    "min_samples_leaf": 200,
+    "n_estimators": 200,
+    "num_leaves": 15
+  },
+  "positives_calibration": 546,
+  "positives_inner_train": 0,
+  "slice_scorer": "trailing",
+  "sufficient": true,
+  "test_year": 2015
+}

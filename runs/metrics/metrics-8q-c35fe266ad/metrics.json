@@ -1,5 +1,5 @@
 {
-  "brier_calibrated": 0.0076882081788902275,
+  "brier_calibrated": 0.008047364229056126,
   "brier_raw": 0.007930043236936413,
   "failure_rate": 0.009243880958046813,
   "lead_all_median_lead_time_quarters": 5.0,
@@ -15,7 +15,7 @@
   "low_confidence_years": [
     2020
   ],
-  "mean_calibrated": 0.006148543498155861,
+  "mean_calibrated": 0.008416242700044587,
   "mean_raw": 0.004406127339993532,
   "n": 407621,
   "n_failures": 3768,

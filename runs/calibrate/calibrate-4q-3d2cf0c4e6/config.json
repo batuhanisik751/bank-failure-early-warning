@@ -1,0 +1,33 @@
+{
+  "C": 1.0,
+  "availability_lag_days": 60,
+  "calibration_end": "2017-12-31",
+  "calibration_prediction_date": "2019-05-30",
+  "calibration_start": "2016-03-31",
+  "calibration_years": [
+    2016,
+    2017
+  ],
+  "class_weight": null,
+  "effective_scorer": "trailing",
+  "fallback": false,
+  "features_version": "v2",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "inner_train_repdte_max": null,
+  "method": "isotonic",
+  "min_bin": 50,
+  "model": "logit",
+  "n_calibration": 47672,
+  "n_inner_train": 0,
+  "n_rows": 47672,
+  "params": {
+    "C": 1.0
+  },
+  "positives_calibration": 33,
+  "positives_inner_train": 0,
+  "slice_scorer": "trailing",
+  "sufficient": true,
+  "test_year": 2019
+}

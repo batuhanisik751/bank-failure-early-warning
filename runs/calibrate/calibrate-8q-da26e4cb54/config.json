@@ -1,0 +1,34 @@
+{
+  "C": 0.1,
+  "availability_lag_days": 60,
+  "calibration_end": "2013-12-31",
+  "calibration_prediction_date": "2016-05-30",
+  "calibration_start": "2012-03-31",
+  "calibration_years": [
+    2012,
+    2013
+  ],
+  "class_weight": null,
+  "conversion": "1 - (1 - h)^H",
+  "effective_scorer": "trailing",
+  "fallback": false,
+  "features_version": "v2",
+  "fit_horizon": 1,
+  "fit_label": "y_1q",
+  "horizon": 8,
+  "inner_train_repdte_max": null,
+  "method": "isotonic",
+  "min_bin": 50,
+  "model": "hazard",
+  "n_calibration": 57100,
+  "n_inner_train": 0,
+  "n_rows": 57100,
+  "params": {
+    "C": 0.1
+  },
+  "positives_calibration": 304,
+  "positives_inner_train": 0,
+  "slice_scorer": "trailing",
+  "sufficient": true,
+  "test_year": 2016
+}
