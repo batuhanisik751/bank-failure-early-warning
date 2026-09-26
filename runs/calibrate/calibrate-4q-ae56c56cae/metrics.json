@@ -1,0 +1,16 @@
+{
+  "brier_calibrated": 0.000835974830135346,
+  "brier_raw": 0.0008133294149886282,
+  "brier_slice_calibrated": 0.00172696408153409,
+  "brier_slice_raw": 0.0020198780518517604,
+  "extrapolated_share": 0.0,
+  "failure_rate": 0.0009405494376298155,
+  "mean_calibrated": 0.001506378583745423,
+  "n": 25517,
+  "n_failures": 24,
+  "n_thresholds": 26,
+  "pr_auc": 0.3305396589774285,
+  "pr_auc_calibrated": 0.282845455817702,
+  "slice_score_max": 0.9999944612327883,
+  "top_plateau": 0.7142857142857143
+}

@@ -1,0 +1,32 @@
+{
+  "brier_calibrated": null,
+  "brier_raw": 0.1706682316970154,
+  "failure_rate": 0.004936399550254801,
+  "lead_all_median_lead_time_quarters": 5.0,
+  "lead_all_n_failed": 545,
+  "lead_all_n_flagged": 458,
+  "lead_all_share_flagged": 0.8403669724770643,
+  "lead_all_share_flagged_ahead": 0.8201834862385321,
+  "lead_crisis_median_lead_time_quarters": 4.0,
+  "lead_crisis_n_failed": 440,
+  "lead_crisis_n_flagged": 372,
+  "lead_crisis_share_flagged": 0.8454545454545455,
+  "lead_crisis_share_flagged_ahead": 0.825,
+  "low_confidence_years": [
+    2017,
+    2020,
+    2021,
+    2024
+  ],
+  "mean_calibrated": null,
+  "mean_raw": 0.14794220980111203,
+  "n": 426019,
+  "n_failures": 2103,
+  "pr_auc": 0.2606038194001353,
+  "pr_auc_high": 0.29803082719657625,
+  "pr_auc_low": 0.22551991408660127,
+  "recall_at_2pct": 0.743699476937708,
+  "recall_at_2pct_high": 0.7706672532329351,
+  "recall_at_2pct_low": 0.71580631916,
+  "roc_auc": 0.9599161267861154
+}

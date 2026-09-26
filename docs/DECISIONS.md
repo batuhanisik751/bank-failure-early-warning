@@ -499,3 +499,39 @@ open for the owner to revisit.
   mean |SHAP| (`texas_ratio` leads at 7.2 percent, top three 17.6 percent); the 2008-2010
   boosters lean on `macro_hpi_change_4q` and construction shares, 2022-2024 on
   `macro_fedfunds_change_4q`, `adjusted_tier1_leverage` and `unrealized_loss_to_tier1`.
+- 2026-09-25 — **Isotonic calibration (D9) follows the contract's inner-model recipe and is
+  reported as it comes out, including where it hurts.** For test year Y and each probability
+  model, `evaluation.calibration.calibration_masks` takes the last calendar year whose four
+  report quarters all lie in Y's `training_mask` at the scoring horizon as the calibration
+  slice (widened backwards a year at a time while it or the inner rows hold fewer than 5
+  failures), fits an inner model with Y's tuned hyper-parameters on the rows whose windows
+  closed before the slice's first prediction date (`assert_no_leakage` re-checked), scores
+  the slice, fits `IsotonicRegression(out_of_bounds="clip")` on those pairs and applies the
+  map to the full-window model's year-Y scores (`calibration.joblib` next to the model,
+  `score_calibrated` in the per-year file, `runs/calibrate/` keyed by slice bounds and
+  params). The hazard's inner model fits at 1q and its slice scores are converted with
+  `1 - (1 - h)^4` before the map. Result: the map is learned on the inner model's score
+  scale and applied to a model that has seen one more year (for 2010 the 2008 crisis year
+  and a re-tuned C), so where the scales differ the calibrated probabilities inherit the
+  inner model's plateaus: pooled 4q Brier goes from 0.0041 raw to 0.0189 (logit) and
+  0.0545 (hazard), gbdt is unchanged (0.00425 against 0.00435), and mean calibrated
+  probabilities overshoot the 0.49 percent failure rate (2.9 percent for the logit). The
+  raw outputs remain the better probabilities on Brier; `score_calibrated` is kept as the
+  contract specifies and the reliability tables show the mismatch decile by decile. The
+  metrics suite lives in `evaluation.metrics_report` (a new module so that `walkforward.py`
+  and `calibration.py` stay fit-only): `bankcanary metrics-report` regenerates
+  `reports/walkforward.md` in about 35 s from `walkforward_scores` and the panel's
+  `fail_date`, superseding `walkforward-report`, and logs a `runs/metrics/` record per
+  model and horizon with the pooled headline numbers. Confidence intervals are percentile
+  intervals from 200 cluster-bootstrap draws that resample certs (seed 20080101) with row
+  weights equal to the draw counts, so PR-AUC is a weighted average precision and recall@2%
+  takes the head that holds 2 percent of the resampled weight; years with fewer than 10
+  failures are flagged low confidence rather than dropped. Lead time flags the top 2 percent
+  of each report quarter's ranking and counts calendar quarters to `fail_date`; the 2009-2012
+  cohort (440 failed banks) is the headline because 2008 failures can only be flagged inside
+  2008 and post-2024 failures are scored only through 2024. On that cohort the logit flags
+  89.8 percent of the failed banks before failure, median lead 5 quarters, 87.7 percent at
+  least 2 quarters ahead (hazard 5 / 88.4 percent, gbdt 4.5 / 81.6 percent, Texas 4 / 82.5
+  percent). The per-year retune of the walk-forward fits changed the pooled ranking the D8
+  report had shown: at 4q the hazard now pools best (PR-AUC 0.326, CI [0.293, 0.357]) ahead
+  of the logit (0.307) and the booster (0.281), with overlapping intervals for the top two.

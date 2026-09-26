@@ -1,0 +1,31 @@
+{
+  "availability_lag_days": 60,
+  "backend": "lightgbm",
+  "calibration_end": "2017-12-31",
+  "calibration_prediction_date": "2017-05-30",
+  "calibration_start": "2017-03-31",
+  "calibration_years": [
+    2017
+  ],
+  "features_version": "v2",
+  "fit_horizon": 4,
+  "fit_label": "y_4q",
+  "horizon": 4,
+  "inner_train_repdte_max": "2015-12-31",
+  "iterations_capped": false,
+  "method": "isotonic",
+  "model": "gbdt",
+  "monotone": false,
+  "n_calibration": 23321,
+  "n_inner_train": 495493,
+  "params": {
+    "learning_rate": 0.03,
+    "min_samples_leaf": 50,
+    "n_estimators": 200,
+    "num_leaves": 15
+  },
+  "positives_calibration": 5,
+  "positives_inner_train": 2161,
+  "sufficient": true,
+  "test_year": 2019
+}

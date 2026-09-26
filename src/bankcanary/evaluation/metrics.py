@@ -261,3 +261,147 @@ def evaluate_by_event(
     m["n_multi_bank_events"] = int(len(multi))
     m["n_banks_in_multi_events"] = int(multi["n"].sum())
     return m
+
+
+def brier(y_true, probabilities) -> float:
+    """Mean squared error of the probabilities against the 0/1 outcome (lower is better).
+
+    Only meaningful for a score that is a probability; a ranking such as the Texas ratio
+    has no Brier score. NaN labels count as non-failures, as in :func:`evaluate`.
+    """
+    y = np.nan_to_num(np.asarray(y_true, dtype=float), nan=0.0)
+    p = np.asarray(probabilities, dtype=float)
+    if y.shape != p.shape:
+        raise ValueError(f"shape mismatch: {y.shape} labels vs {p.shape} probabilities")
+    return float(np.mean((p - y) ** 2)) if len(y) else float("nan")
+
+
+LOW_CONFIDENCE_FAILURES = 10
+LEAD_TIME_AHEAD_QUARTERS = 2
+
+
+def lead_time_summary(
+    lead: pd.DataFrame,
+    fail_date_col: str = "fail_date",
+    fail_years: tuple[int, int] | None = None,
+    ahead_quarters: int = LEAD_TIME_AHEAD_QUARTERS,
+) -> dict:
+    """Summarise :func:`lead_time_quarters` output: how early the failures were flagged.
+
+    Every failed bank counts once. ``share_flagged_ahead`` is the share of failed banks
+    that first entered the top 2 percent at least ``ahead_quarters`` quarters before
+    failing (never-flagged banks are in the denominator, so this is a recall-like number,
+    not a statistic of the flagged banks only). ``median_lead_time_quarters`` is over the
+    flagged banks; ``median_lead_time_all`` treats a never-flagged bank as lead 0 so that
+    a model that misses half the failures cannot report a long median. ``fail_years``
+    restricts to failures dated in the inclusive year range (spec: 2009-2012).
+    """
+    d = lead
+    if fail_years is not None:
+        years = pd.to_datetime(d[fail_date_col]).dt.year
+        d = d[(years >= int(fail_years[0])) & (years <= int(fail_years[1]))]
+    lt = d["lead_time_quarters"].astype(float)
+    flagged = lt.notna()
+    n = int(len(d))
+    out = {
+        "n_failed": n,
+        "n_flagged": int(flagged.sum()),
+        "share_flagged": float(flagged.mean()) if n else float("nan"),
+        "median_lead_time_quarters": float(lt[flagged].median()) if flagged.any() else float("nan"),
+        "median_lead_time_all": float(lt.fillna(0.0).median()) if n else float("nan"),
+        "share_flagged_ahead": float((lt.fillna(-1) >= ahead_quarters).mean())
+        if n
+        else float("nan"),
+        "ahead_quarters": int(ahead_quarters),
+        "low_confidence": n < LOW_CONFIDENCE_FAILURES,
+    }
+    if fail_years is not None:
+        out["fail_years"] = [int(fail_years[0]), int(fail_years[1])]
+    return out
+
+
+BOOTSTRAP_DRAWS = 200
+BOOTSTRAP_SEED = 20080101
+
+
+def _weighted_average_precision(y_sorted, w_sorted, group_end) -> float:
+    """sklearn's step-wise average precision with row weights, on rows sorted by score."""
+    tp = np.cumsum(w_sorted * y_sorted)[group_end]
+    seen = np.cumsum(w_sorted)[group_end]
+    total_tp = tp[-1]
+    if total_tp <= 0:
+        return float("nan")
+    precision = np.divide(tp, seen, out=np.zeros_like(tp), where=seen > 0)
+    return float(np.sum(np.diff(tp, prepend=0.0) * precision) / total_tp)
+
+
+def _weighted_recall_at_frac(y_ranked, w_ranked, frac: float) -> float:
+    """Recall in the head that holds the first ``ceil(frac * total weight)`` resampled rows."""
+    total = w_ranked.sum()
+    positives = float((w_ranked * y_ranked).sum())
+    if total <= 0 or positives <= 0:
+        return float("nan")
+    k = max(1.0, math.ceil(frac * total))
+    starts = np.cumsum(w_ranked) - w_ranked
+    head = starts < k
+    return float((w_ranked[head] * y_ranked[head]).sum() / positives)
+
+
+def cluster_bootstrap_ci(
+    y_true,
+    scores,
+    clusters,
+    n_draws: int = BOOTSTRAP_DRAWS,
+    seed: int = BOOTSTRAP_SEED,
+    k_frac: float = 0.02,
+    tie_breaker=None,
+    alpha: float = 0.05,
+) -> dict:
+    """Percentile confidence intervals for PR-AUC and recall@k by resampling banks.
+
+    Bank-quarters of one bank are not independent (a failing bank is a positive in
+    several consecutive quarters), so the resampling unit is the ``cluster`` (the
+    ``cert``): each draw resamples the banks with replacement and every row carries the
+    number of times its bank was drawn as a weight. The seed is fixed so the interval is
+    reproducible. Returns ``pr_auc_ci`` and ``recall_at_<k>pct_ci`` as ``[low, high]``,
+    the number of draws, clusters and failures, and ``low_confidence`` when the slice
+    holds fewer than :data:`LOW_CONFIDENCE_FAILURES` failures (spec: the interval of such
+    a year is not to be trusted). With no failures every bound is NaN.
+    """
+    y = np.nan_to_num(np.asarray(y_true, dtype=float), nan=0.0)
+    s = np.asarray(scores, dtype=float)
+    c = np.asarray(clusters)
+    if not (y.shape[0] == s.shape[0] == c.shape[0]):
+        raise ValueError("y_true, scores and clusters must have the same length")
+    n, n_failures = int(len(y)), int(y.sum())
+    name = f"{_frac_name(k_frac)}_ci"
+    _, inverse = np.unique(c, return_inverse=True)
+    m = int(inverse.max()) + 1 if n else 0
+    out = {
+        "n_draws": int(n_draws),
+        "n_clusters": m,
+        "n": n,
+        "n_failures": n_failures,
+        "low_confidence": n_failures < LOW_CONFIDENCE_FAILURES,
+    }
+    if n == 0 or n_failures == 0:
+        return {**out, "pr_auc_ci": [float("nan")] * 2, name: [float("nan")] * 2}
+    nan = np.isnan(s)
+    if nan.any():
+        s = np.where(nan, (np.nanmin(s) - 1.0 if (~nan).any() else 0.0), s)
+    by_score = np.argsort(-s, kind="stable")
+    s_sorted = s[by_score]
+    group_end = np.flatnonzero(np.append(s_sorted[1:] != s_sorted[:-1], True))
+    ranked = rank_order(s, tie_breaker)
+    rng = np.random.default_rng(seed)
+    aps, recalls = np.empty(n_draws), np.empty(n_draws)
+    for i in range(n_draws):
+        counts = np.bincount(rng.integers(0, m, size=m), minlength=m).astype(float)
+        w = counts[inverse]
+        aps[i] = _weighted_average_precision(y[by_score], w[by_score], group_end)
+        recalls[i] = _weighted_recall_at_frac(y[ranked], w[ranked], k_frac)
+    q = [100 * alpha / 2, 100 * (1 - alpha / 2)]
+    out["pr_auc_ci"] = [float(v) for v in np.nanpercentile(aps, q)]
+    out[name] = [float(v) for v in np.nanpercentile(recalls, q)]
+    out["n_failed_draws"] = int(np.isnan(aps).sum())
+    return out

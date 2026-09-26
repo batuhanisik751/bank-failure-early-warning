@@ -1,0 +1,16 @@
+{
+  "features_version": "v2",
+  "horizon": 4,
+  "lead_time_years": [
+    2009,
+    2012
+  ],
+  "model": "gbdt",
+  "n_draws": 200,
+  "seed": 20080101,
+  "test_years": [
+    2008,
+    2024
+  ],
+  "top_frac": 0.02
+}
