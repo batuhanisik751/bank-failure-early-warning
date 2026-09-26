@@ -535,3 +535,21 @@ open for the owner to revisit.
   percent). The per-year retune of the walk-forward fits changed the pooled ranking the D8
   report had shown: at 4q the hazard now pools best (PR-AUC 0.326, CI [0.293, 0.357]) ahead
   of the logit (0.307) and the booster (0.281), with overlapping intervals for the top two.
+- 2026-09-25 — **Notebooks 02 and 04 are built from `scripts/make_notebook_0{2,4}.py` and
+  executed in place; they read tables, `models/` and `runs/` only and never retrain.** 02
+  recomputes the walk-forward tables from `walkforward_scores` through
+  `metrics_report.ci_table` (about 17 s for four models) rather than parsing
+  `reports/walkforward.md`, so the notebook and the report cannot drift; the chart keeps the
+  failure counts in a second panel rather than on a second axis. The Decision Point 2
+  section reads `settings.models.gbdt.inner_pr_auc` for the inner-validation column and
+  states both orderings without recommending one. 04 defines a false positive at the
+  bank-year level (a flagged `y = 0` bank kept once per test year at its highest-scored
+  quarter) and follows it eight quarters from `avail_date`, mirroring the label windows;
+  acquisitions are `exit_reason` in {merger, absorption, affiliated_merger, consolidation}.
+  Result for 2009-2012 (875 bank-years): 26 percent failed later (17 percent in quarters
+  5-8), 10 percent were acquired within two years (9 percent by recorded merger against a
+  5 percent base rate over every bank-year), 62 percent were still open after eight
+  quarters. Gotcha for readers: the 2010 booster saturates (68 bank-quarters score above
+  0.999, 44 of them failed), so the very top of the 2010 ranking is ordered by `cert`. The
+  builders carry a file-level `noqa: E501` because the embedded cell sources are kept as the
+  notebook shows them.
