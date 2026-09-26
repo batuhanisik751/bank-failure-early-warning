@@ -1,0 +1,35 @@
+{
+  "C": 1.0,
+  "availability_lag_days": 60,
+  "class_weight": null,
+  "features_version": "v2",
+  "first_test_prediction_date": "2022-05-30",
+  "fit_horizon": 8,
+  "fit_label": "y_8q",
+  "horizon": 8,
+  "model": "logit",
+  "n_features": 83,
+  "n_test": 19285,
+  "n_train": 586828,
+  "positives_test": 27,
+  "positives_train": 4414,
+  "test_year": 2022,
+  "train_repdte_max": "2019-12-31",
+  "train_repdte_min": "2001-03-31",
+  "tuning": {
+    "fallback": null,
+    "inner_train_repdte_max": "2015-12-31",
+    "metric": "pr_auc",
+    "n_inner_train": 495493,
+    "n_validation": 43663,
+    "positives_inner_train": 4316,
+    "positives_validation": 50,
+    "selected": {
+      "C": 1.0
+    },
+    "sufficient": true,
+    "validation_end": "2019-12-31",
+    "validation_quarters": 8,
+    "validation_start": "2018-03-31"
+  }
+}

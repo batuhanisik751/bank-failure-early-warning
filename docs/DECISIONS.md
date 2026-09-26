@@ -663,3 +663,20 @@ open for the owner to revisit.
   current `models/walkforward` config, among them the 17 v1-comparison runs kept on
   purpose) are left in place: no pruning helper exists in `scripts/` or `tracking`, and the
   index still names them. `reports/walkforward.md` is not regenerated in this pass.
+- 2026-09-25 — **8q walk-forward years regenerated with per-year tuning.** `logit_8q` and
+  `gbdt_8q` for 2008-2023 (32 pairs) still carried the pre-fix fixed hyper-parameters (no
+  `tuning` key); for 2008 and 2009 that was a genuine rule 6.7 overlap, because those
+  parameters had been chosen on 2007Q1-2008Q4 reports inside the test years. `hazard_8q` was
+  fitted after the fix and is untouched (all 16 configs already carry `tuning`). Each pair
+  was refitted one model per call with `--no-rebuild` and `walkforward_scores` rebuilt once;
+  no `--gbdt-iterations` cap was needed (slowest call 2017 gbdt, 1 m 43 s). Every 8q config
+  now has `tuning.validation_end` before `first_test_prediction_date`, `sufficient=True`,
+  `fallback=None`. Pooled 8q PR-AUC: hazard 0.4113 (unchanged), logit 0.2835 -> 0.2566,
+  gbdt 0.1169 -> 0.0887. The fall is concentrated in 2008, whose training window closes at
+  2005-12-31 with 116 positives: logit 0.3020 -> 0.0719 and gbdt 0.1773 -> 0.0326 (the tuned
+  booster scores every 2008 row identically, ROC-AUC 0.5000); the earlier figures had leaked
+  the test year through the shared grid choice. From 2011 on the per-year numbers move
+  within the reported intervals and the booster beats the logit in 2012, 2014-2017 and 2019.
+  Pooled ROC-AUC for `gbdt_8q` (0.42) mixes yearly score scales and is not a ranking claim;
+  the per-year table in the report is the reference. `reports/walkforward.md` is not
+  regenerated in this pass; its 8q section still shows the superseded figures.

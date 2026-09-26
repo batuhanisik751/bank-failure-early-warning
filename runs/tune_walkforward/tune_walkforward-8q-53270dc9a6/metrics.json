@@ -1,0 +1,11 @@
+{
+  "n": 43663,
+  "n_failures": 50,
+  "pr_auc": 0.30435744466004455,
+  "recall_at_1pct": 0.8,
+  "recall_at_2pct": 0.82,
+  "recall_at_5pct": 0.82,
+  "recall_at_top100": 0.54,
+  "recall_at_top50": 0.4,
+  "roc_auc": 0.9597775892509115
+}

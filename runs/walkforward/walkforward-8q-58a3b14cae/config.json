@@ -1,0 +1,45 @@
+{
+  "availability_lag_days": 60,
+  "backend": "lightgbm",
+  "features_version": "v2",
+  "first_test_prediction_date": "2011-05-30",
+  "fit_horizon": 8,
+  "fit_label": "y_8q",
+  "horizon": 8,
+  "iterations_capped": false,
+  "model": "gbdt",
+  "monotone": false,
+  "n_features": 83,
+  "n_test": 30165,
+  "n_train": 291677,
+  "params": {
+    "learning_rate": 0.03,
+    "min_samples_leaf": 50,
+    "n_estimators": 200,
+    "num_leaves": 15
+  },
+  "positives_test": 352,
+  "positives_train": 1821,
+  "test_year": 2011,
+  "train_repdte_max": "2008-12-31",
+  "train_repdte_min": "2001-03-31",
+  "tuning": {
+    "fallback": null,
+    "inner_train_repdte_max": "2004-12-31",
+    "metric": "pr_auc",
+    "n_inner_train": 151630,
+    "n_validation": 68725,
+    "positives_inner_train": 107,
+    "positives_validation": 1617,
+    "selected": {
+      "learning_rate": 0.03,
+      "min_samples_leaf": 50,
+      "n_estimators": 200,
+      "num_leaves": 15
+    },
+    "sufficient": true,
+    "validation_end": "2008-12-31",
+    "validation_quarters": 8,
+    "validation_start": "2007-03-31"
+  }
+}
