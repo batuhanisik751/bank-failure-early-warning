@@ -1,15 +1,22 @@
 import type { Metadata } from "next";
-import { RiskBand } from "@/components/RiskBand";
+import Link from "next/link";
+import { LeaderboardFilters } from "@/components/leaderboard/LeaderboardFilters";
+import { LeaderboardTable } from "@/components/leaderboard/LeaderboardTable";
+import { Pagination } from "@/components/leaderboard/Pagination";
+import { PAGE_SIZE, leaderboardHref, parseLeaderboardParams, type SearchParams } from "@/components/leaderboard/params";
 import { DISCLAIMER } from "@/lib/disclaimer";
-import { formatCount, formatDate, formatMoneyThousands, formatPercent } from "@/lib/format";
-import { latestQuarter, leaderboard } from "@/lib/queries";
+import { formatCount, formatDate } from "@/lib/format";
+import { leaderboard, leaderboardDrivers, leaderboardStates } from "@/lib/queries/leaderboard";
+import { latestQuarter } from "@/lib/queries/quarters";
+
+type Props = { searchParams: Promise<SearchParams> };
 
 export async function generateMetadata(): Promise<Metadata> {
   const latest = await latestQuarter();
   const when = latest ? ` for ${latest.label}` : "";
   return {
     title: "Leaderboard",
-    description: `The banks the model ranks highest for 12-month failure risk${when}. ${DISCLAIMER}`,
+    description: `Every FDIC-insured bank ranked by modelled 12-month failure probability${when}. ${DISCLAIMER}`,
   };
 }
 
@@ -22,7 +29,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: Props) {
   const latest = await latestQuarter();
   if (!latest) {
     return (
@@ -32,19 +39,24 @@ export default async function HomePage() {
       </section>
     );
   }
-  const [board, high] = await Promise.all([
-    leaderboard(latest.label, {}, { page: 1, pageSize: 10 }),
+  const params = parseLeaderboardParams(await searchParams);
+  const [board, high, states] = await Promise.all([
+    leaderboard(latest.label, params.filters, { page: params.page, pageSize: PAGE_SIZE, sort: params.sort, dir: params.dir }),
     leaderboard(latest.label, { band: "high" }, { page: 1, pageSize: 1 }),
+    leaderboardStates(latest.label),
   ]);
   const rows = board?.rows ?? [];
+  const drivers = await leaderboardDrivers(latest.label, rows.map((r) => r.cert));
+  const total = board?.total ?? 0;
+  const csvHref = leaderboardHref({ ...params, page: 1 }, {}, "/api/download/leaderboard.csv");
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <section className="space-y-3">
         <h1 className="text-3xl font-bold tracking-tight">Leaderboard</h1>
         <p className="max-w-3xl text-muted">
-          Every FDIC-insured bank scored for the probability of failing within twelve months of its
-          latest call report. Scores come from a monotone gradient-boosted model trained only on
-          quarters before the one it scores; the hazard model is a second opinion.
+          The probability is the model&apos;s calibrated estimate that a bank fails within twelve months of its{" "}
+          {latest.label} call report, from a monotone gradient-boosted model trained only on earlier quarters
+          (model version <code className="font-mono text-fg">{latest.modelVersion ?? "unknown"}</code>).
         </p>
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Quarter" value={latest.label} />
@@ -52,63 +64,23 @@ export default async function HomePage() {
           <Stat label="High band" value={formatCount(high?.total ?? 0)} />
           <Stat label="Data available" value={formatDate(latest.availDate)} />
         </dl>
-        <p className="text-xs text-muted">
-          Model version <code className="font-mono">{latest.modelVersion ?? "unknown"}</code>.
-        </p>
       </section>
-      <section aria-labelledby="top10">
-        <h2 id="top10" className="mb-3 text-xl font-semibold">
-          Top 10 of {formatCount(board?.total ?? 0)} banks, {latest.label}
-        </h2>
+      <LeaderboardFilters params={params} states={states} total={total} />
+      <section aria-labelledby="ranked" className="space-y-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="ranked" className="text-xl font-semibold">
+            {formatCount(total)} banks, {latest.label}
+          </h2>
+          <a href={csvHref} download className="text-sm font-medium">Download this view as CSV</a>
+        </div>
         {rows.length === 0 ? (
-          <p className="text-muted">No scores were published for this quarter.</p>
+          <p className="rounded-lg border border-border bg-surface p-4 text-muted">
+            No bank matches these filters. <Link href="/">Clear the filters</Link> to see every scored bank.
+          </p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-            <table className="data-table">
-              <caption>
-                Rank and 12-month probability from the production gbdt_mono model; the hazard
-                model is shown beside it. Change is the probability move since the prior quarter.{" "}
-                {DISCLAIMER}
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col" className="num">Rank</th>
-                  <th scope="col">Bank</th>
-                  <th scope="col">State</th>
-                  <th scope="col" className="num">Assets</th>
-                  <th scope="col">Risk band</th>
-                  <th scope="col" className="num">Hazard model</th>
-                  <th scope="col" className="num">Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.cert}>
-                    <td className="num">{row.rank ?? "—"}</td>
-                    <td>
-                      <span className="font-medium text-fg">{row.name ?? `Cert ${row.cert}`}</span>
-                      <span className="block text-xs text-muted">
-                        {row.city ? `${row.city}, ` : ""}
-                        cert {row.cert}
-                      </span>
-                    </td>
-                    <td>{row.state ?? "—"}</td>
-                    <td className="num">{formatMoneyThousands(row.totalAssets)}</td>
-                    <td>
-                      <RiskBand band={row.band} probability={row.probability} />
-                    </td>
-                    <td className="num">{formatPercent(row.hazardProbability, 1)}</td>
-                    <td className="num">
-                      {row.deltaProbPriorQ == null
-                        ? "—"
-                        : `${row.deltaProbPriorQ > 0 ? "+" : ""}${formatPercent(row.deltaProbPriorQ, 1)}`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <LeaderboardTable rows={rows} drivers={drivers} params={params} quarter={latest.label} modelVersion={latest.modelVersion} />
         )}
+        <Pagination params={params} total={total} pageSize={PAGE_SIZE} />
       </section>
     </div>
   );

@@ -75,3 +75,23 @@ export const bankTimeline = cached("bankTimeline", async (cert: number): Promise
   ]);
   return { scores: scoreRows, ratios: ratioRows, drivers: driverRows, failure: failureRows[0] ?? null };
 });
+
+const ps = schema.peerStats;
+export type PeerStatsRow = typeof ps.$inferSelect;
+
+/**
+ * Peer percentile bands (p10/p50/p90) of every ratio for one peer group across every
+ * quarter, oldest first. The peer group is size bucket x Census region (CONTRACT 16).
+ */
+export const bankPeerStats = cached(
+  "bankPeerStats",
+  async (sizeBucket: string | null, region: string): Promise<PeerStatsRow[]> => {
+    if (!sizeBucket) return [];
+    const db = getDb();
+    return db
+      .select()
+      .from(ps)
+      .where(and(eq(ps.sizeBucket, sizeBucket), eq(ps.region, region)))
+      .orderBy(asc(ps.repdte), asc(ps.ratio));
+  },
+);

@@ -936,29 +936,3 @@ open for the owner to revisit.
   spec is `web/e2e/time_machine_map.spec.ts`. The pages import from
   `@/lib/queries/timeMachine` and `@/lib/queries/map` directly rather than the shared index,
   which another step was editing in the same checkout at the same time.
-- 2026-09-26 — **Time machine and failure replay map (steps E6 and E7).**
-  `/time-machine?quarter=YYYYQn` replays the `gbdt_mono` ranking of any scored quarter
-  (2008Q1 to the latest) from `scores`, with hindsight from `banks.fail_date`: "failed N
-  months later" counts whole months from the report date, while recall@top-2% uses the label
-  window the model was scored against (a failure after the quarter's `avail_date` and within
-  twelve months of it, as in `labels/build.py`), ordered by raw score descending with `cert`
-  as the tie-breaker and a head of ceil(2% of n), exactly as `evaluation/metrics.py`. Pooled
-  over a walk-forward year the query reproduces `walkforward_metrics.recall_at_2pct` to the
-  last digit (the page says "identical" and the e2e spec checks 2009). Two gotchas: the join
-  to `banks` must be a left join because 111 scored certs have no `banks` row and an inner
-  join shifts the cutoff (0.3697 instead of 0.3741 for 2009); and bound date parameters are
-  cast (`$1::date`) because `unknown + interval` is ambiguous in Postgres. The map is an
-  inline SVG: `us-atlas` states-10m (version 3 ships raw lon/lat, not pre-projected) and every
-  head office go through `d3-geo`'s `geoAlbersUsa` on a 975 by 610 frame, which drops Puerto
-  Rico and the territories (about 30 offices, noted under the map); each band is one `<path>`
-  of repeated symbols (circle, diamond, triangle) so a quarter of 8,000 banks is four
-  elements, failures are crosses in the foreground colour, and the legend and the failures
-  table carry the same information as the shapes. `/api/map/[quarter]` serves one quarter
-  (lat/lon rounded to three decimals; about 0.9 MB raw for a 2009 quarter, so a columnar
-  payload is the next lever if playback feels slow on Neon); the client keeps every quarter
-  it has seen and prefetches the next during playback, and playback waits for a quarter
-  rather than skipping it. `mapTimeline()` (bank and failure counts per quarter) and
-  `scoredQuarters()` give the quarter ranges. Playwright's `testDir` is `web/e2e`, so the
-  spec is `web/e2e/time_machine_map.spec.ts`. The pages import from
-  `@/lib/queries/timeMachine` and `@/lib/queries/map` directly rather than the shared index,
-  which another step was editing in the same checkout at the same time.
