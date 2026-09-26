@@ -80,8 +80,9 @@ levers in `docs/DECISIONS.md` before the next quarter lands.
 - A failed table load rolls back that table only; re-run `publish` (idempotent).
 - A column type changed in `schema.sql` does not reach an existing table (`CREATE TABLE IF
   NOT EXISTS`): `DROP TABLE <t>` locally, then `publish --tables <t>` recreates and fills it.
-- Neon: the owner sets `DATABASE_URL` (pooled, `sslmode=verify-full`) as a GitHub
-  secret and runs the same command from the refresh workflow; nothing here deploys.
+- Neon: the owner sets `DATABASE_URL` (pooled, `sslmode=verify-full&sslrootcert=system`)
+  as a GitHub secret and runs the same command from the refresh workflow; section 7 is
+  the full checklist and explains the TLS parameters; nothing here deploys.
 
 ## 5. Scheduled refresh (GitHub Actions)
 
@@ -149,3 +150,62 @@ npm run test:e2e                  # Playwright + axe over the built app, starts/
   `sslmode=verify-full`), `REVALIDATE_SECRET` (any long random string, the same value as
   the GitHub secret) and `NEXT_PUBLIC_SITE_URL` (the public origin). The build command is
   the default `npm run build`.
+
+## 7. Deployment checklist (owner's actions; nothing in the repository deploys)
+
+Order matters: the database first, the web app second, the GitHub secrets last, so the
+first scheduled refresh finds a filled database and a live revalidate route.
+
+1. **Create the Neon database through the Vercel marketplace.** Vercel dashboard →
+   Storage → Create → Neon (free tier) → connect it to the project created in step 2 (or
+   create the project first with root directory `web`). Neon's free tier caps the
+   project at 0.5 GB and the database is 399.6 MB after a full publish, so do not add
+   anything else to it. In the Neon console create a second role for the web app that
+   may only read (`GRANT SELECT ON ALL TABLES IN SCHEMA public TO <reader>` plus
+   `ALTER DEFAULT PRIVILEGES ... GRANT SELECT` for tables published later); the owner
+   role that Neon created is the writer for `publish` and `refresh`.
+2. **Vercel project.** Import the GitHub repository, set root directory `web`, framework
+   Next.js, build command the default `npm run build`, Node 22. Environment variables
+   (production and preview): `DATABASE_URL` = the Neon **pooled** connection string of the
+   reader role with `?sslmode=verify-full` and nothing else after the `?` (the TLS note
+   below says why), `REVALIDATE_SECRET` = `openssl rand -hex 32`, `NEXT_PUBLIC_SITE_URL` =
+   the public origin. The first build fails until step 4 has filled the database, because
+   the home page prerenders from it; redeploy after the publish.
+3. **GitHub secrets** (section 5 table): `DATABASE_URL` = the pooled string of the
+   **writer** role with `?sslmode=verify-full&sslrootcert=system`, `REVALIDATE_URL` =
+   `https://<site>/api/revalidate`, `REVALIDATE_SECRET` = the same value as on Vercel,
+   optionally `FRED_API_KEY`. Use `gh secret set <NAME> --repo <owner>/<repo>` and type the
+   value at the prompt.
+4. **Publish once from a machine that has the warehouse** (`data/parquet/`, `runs/`,
+   `models/production/`; the refresh job never rebuilds history, so this seed is the only
+   full load): `DATABASE_URL='<writer pooled string>' uv run bankcanary publish`. Pass the
+   variable inline for that one command rather than editing `.env`, so the local
+   container stays the default. About two minutes on a home connection.
+5. **Verify** with the counts query of section 3 against the same URL (expect the row
+   counts listed there and about 400 MB), then open the site and check the leaderboard
+   shows the latest quarter, `/time-machine?quarter=2009Q1` loads, and
+   `curl -X POST -H "Authorization: Bearer $REVALIDATE_SECRET" https://<site>/api/revalidate`
+   answers `{"revalidated": true, ...}`.
+6. **Run the refresh workflow by hand** (Actions → Refresh → Run workflow, no input). The
+   first run warms the raw cache (about 20 minutes) and ends with `no new quarter`;
+   `pipeline_runs` gains one row with status `ok`. From then on it runs every Monday.
+7. Put the live URL in `README.md` (status line) and in the Vercel project's
+   `NEXT_PUBLIC_SITE_URL` if a custom domain replaces the `vercel.app` one.
+
+### TLS notes
+
+- **psycopg (publish, refresh, tests)** hands the URL to libpq unchanged, so the query
+  string decides. `sslmode=verify-full` checks the certificate chain *and* the host name,
+  but libpq then needs a root store: `sslrootcert=system` (libpq 16+, which
+  `psycopg[binary]` bundles) uses the operating system's CA bundle, which contains Neon's
+  public CA. Without it verify-full fails with "root certificate file does not exist".
+  Neon's default `sslmode=require` encrypts but does not verify; do not use it.
+- **node-postgres (the web app)** merges the parsed URL over the explicit config, so
+  `web/lib/db/client.ts` strips `ssl`, `sslmode`, `sslcert`, `sslkey`, `sslrootcert`,
+  `sslnegotiation` and `uselibpqcompat` from any non-local URL (a warning names the dropped
+  keys, never values) and always connects with `rejectUnauthorized: true`, verifying against
+  Node's bundled CA store. Give Vercel `sslmode=verify-full` only: it is the documented
+  contract (CONTRACT 18), and `sslrootcert=system` would just produce a warning at every
+  cold start. A local `DATABASE_URL` (localhost, 127.0.0.1, ::1) stays plain.
+- Neon's pooled host (`-pooler` in the host name) is required for the web app because
+  serverless functions open many short connections; the writer may use either host.

@@ -1,7 +1,10 @@
 # BankCanary — bank failure early-warning system
 
-> **Status:** Prototype 1 ("Foundation") and Prototype 2 ("Depth") complete; Prototype 3 (the web dashboard) not started. Nothing here is a credit rating,
-> investment advice, or a supervisory assessment. See the disclaimer below.
+> **Status:** Prototype 1 ("Foundation") and Prototype 2 ("Depth") complete; Prototype 3
+> ("Product": Postgres publish, weekly refresh and the Next.js dashboard in `web/`) is built and
+> awaits the owner's deployment ([`docs/RUNBOOK.md`](docs/RUNBOOK.md) section 7); the live URL
+> goes here once it is up. Nothing here is a credit rating, investment advice, or a
+> supervisory assessment. See the disclaimer below.
 
 BankCanary is an open, reproducible early-warning system for US bank failures. It ingests
 every FDIC-insured bank's quarterly regulatory filings (Call Reports), computes the same
@@ -30,7 +33,50 @@ interest-rate and deposit-run indicators close the gap.
 5. **Trains** baseline, statistical and machine-learning models, including a hazard model.
 6. **Backtests** walk-forward: train only on the past, predict the next year, repeat.
 7. **Explains** every prediction and compares each bank to its peers.
-8. **Publishes** a web dashboard (Prototype 3).
+8. **Publishes** every score, driver, ratio and peer percentile to Postgres and serves them
+   from a Next.js dashboard (leaderboard, bank profiles, time machine, map, 2023 case
+   study, rate-shock what-if, methodology), refreshed weekly when the FDIC posts a quarter.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph sources [Sources]
+        FDIC[FDIC BankFind API<br/>financials, institutions, failures]
+        FRED[FRED<br/>macro series]
+    end
+    subgraph pipeline [Python pipeline: uv run bankcanary ...]
+        ING[ingest / build-macro<br/>raw JSON cache] --> WH[(Parquet warehouse<br/>panel, labels, macro_state)]
+        WH --> FEAT[build-features-v2<br/>83 point-in-time features]
+        FEAT --> MOD[walkforward + calibrate + explain<br/>models/walkforward, models/production]
+        MOD --> PUB[publish<br/>13 tables, one transaction each]
+    end
+    FDIC --> ING
+    FRED --> ING
+    PUB --> PG[(Postgres on Neon<br/>under 400 MB)]
+    PG --> WEB[Next.js 16 on Vercel<br/>web/, read-only role]
+    WEB --> USER((Reader))
+    subgraph automation [GitHub Actions]
+        CI[ci.yml<br/>ruff, pytest, eslint, tsc, vitest]
+        REF[refresh.yml, Mondays 09:00 UTC<br/>probe REPDTE, ingest, score, publish]
+        RET[retrain.yml, manual<br/>walk-forward, opens a PR]
+    end
+    REF -. new quarter .-> PUB
+    REF -. POST /api/revalidate .-> WEB
+```
+
+The weekly refresh probes the FDIC API for the newest report date; when it is newer than
+`quarters.max(repdte)` it ingests that quarter, rebuilds the panel, labels and features from
+the raw cache, scores it with `models/production/`, explains it with SHAP, upserts the new
+rows and asks the web app to drop its query cache. A run with no new quarter takes about a
+second and writes one `pipeline_runs` row. Historical walk-forward rows are never rewritten
+by the refresh; only `retrain.yml` changes a model, and only through a pull request.
+
+Layers and their homes: ingestion, features and models in `src/bankcanary/`, the publish and
+refresh jobs in `src/bankcanary/publish/` and `src/bankcanary/refresh.py`, the schema in
+`src/bankcanary/publish/schema.sql` (mirrored by `web/lib/db/schema.ts`, checked by a test),
+the dashboard in `web/` (server components, queries in `web/lib/queries/`, one ECharts
+wrapper, light and dark themes, an accessibility smoke over every route).
 
 ## Getting started
 
@@ -50,6 +96,23 @@ If `uv run bankcanary` ever reports `No module named 'bankcanary'`, run
 `.venv` as hidden, and Python 3.12+ then skips the editable-install `.pth` file; the script
 adds a `sitecustomize` module that keeps `src/` importable regardless. Tests are unaffected.
 The `Makefile` targets are shortcuts for the same `uv run` commands.
+
+### Web app and database (Prototype 3)
+
+```bash
+docker compose up -d                 # Postgres 16 on port 5433 (another project holds 5432)
+uv run bankcanary publish            # 13 tables from the warehouse + models/production, ~100 s
+cd web && npm install                # Node 22, npm 10
+npm run build && npm run start       # http://localhost:3100
+npm run lint && npm run typecheck && npm test   # what ci.yml runs (no database)
+npm run test:e2e                     # Playwright + axe over the built app (needs the database)
+```
+
+`DATABASE_URL` lives in the git-ignored `.env`; `web/next.config.ts` copies unset
+variables from it, so no `web/.env.local` is needed locally. `bankcanary refresh` is the
+weekly job (`bankcanary refresh --dry-run` prints its decision without writing). The
+deployment checklist, the secrets each environment needs and the TLS notes are in
+[`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 ## Project layout
 
@@ -112,6 +175,20 @@ interest-rate and uninsured-deposit features lifts it to the 95th percentile (ra
 that uninsured deposits marked size rather than risk. None of the four models put SVB in
 its top 2%, Signature was flagged only by the credit-only logit on its concentration
 profile, and First Republic by nothing.
+
+**Prototype 3** promotes the 2024 walk-forward `gbdt_mono` fit to the production model
+(`model_version = <model>-<train end>-<git sha>` on every published row; `hazard` is the
+secondary score), scores every label-incomplete quarter with it, ranks banks into risk bands
+by percentile (`high` top 2%, `elevated` top 2-10%, `low`, always shown with the calibrated
+probability), and publishes 13 tables that stay under Neon's 400 MB free tier
+([`docs/CONTRACT.md`](docs/CONTRACT.md) section 16 lists them and the precision trade-offs
+that got there). The time machine reproduces the backtest exactly: a quarter's rows come
+from the walk-forward model of its test year, and a database test checks that their
+recall@2% equals the `walkforward_metrics` value. The 2023 pages show the finding above
+rather than hide it: the production model did not flag Silicon Valley Bank (median in
+2022Q4), the interest-rate and uninsured-deposit features lift it to the 95th percentile only
+in the unconstrained booster, and the case study explains why twenty years of training
+history argued against reading those features as risk.
 
 **Notebooks** (each executed in place, none retrains a walk-forward model):
 [`01_foundation`](notebooks/01_foundation.ipynb) (data, labels, Prototype 1 baselines),

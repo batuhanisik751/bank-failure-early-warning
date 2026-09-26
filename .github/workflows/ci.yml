@@ -1,5 +1,11 @@
 name: CI
 
+# Lint, type-check and unit-test both halves of the repository on every push to main and
+# every pull request (CONTRACT 17). The Python tests that need Postgres skip when
+# DATABASE_URL is unset; the web unit tests never touch a database; the Playwright
+# accessibility smoke needs a built app and a published database, so it runs locally
+# (docs/RUNBOOK.md section 6), not here. Nothing here deploys anything.
+
 on:
   push:
     branches: [main]
@@ -42,16 +48,13 @@ jobs:
     name: Web (lint + typecheck + unit tests)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
     steps:
       - uses: actions/checkout@v4
 
-      - name: Detect the web app
-        id: web
-        run: |
-          if [ -f web/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
-
       - name: Set up Node
-        if: steps.web.outputs.present == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -59,25 +62,15 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Install
-        if: steps.web.outputs.present == 'true'
-        working-directory: web
         run: npm ci
 
       - name: Lint
-        if: steps.web.outputs.present == 'true'
-        working-directory: web
         run: npm run lint
 
       - name: Typecheck
-        if: steps.web.outputs.present == 'true'
-        working-directory: web
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Unit tests (vitest, no database)
-        if: steps.web.outputs.present == 'true'
-        working-directory: web
-        run: npx vitest run
-
-      - name: No web app yet
-        if: steps.web.outputs.present != 'true'
-        run: echo "web/ is not in this checkout; nothing to check"
+        # Includes tests/schema.test.ts, which compares web/lib/db/schema.ts with
+        # src/bankcanary/publish/schema.sql; the full checkout is required for that.
+        run: npm test

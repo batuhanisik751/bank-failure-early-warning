@@ -967,3 +967,20 @@ open for the owner to revisit.
   (the routes are `force-dynamic` and read the same `unstable_cache` data as the pages, so
   the download is cheap and always the published quarter). `web/components/leaderboard/csv.ts`
   sits outside the step's nominal file list but is the root cause named by the review.
+- 2026-09-26 — **CI, README and deployment runbook (step E12).** `ci.yml`'s web job no
+  longer gates on the presence of `web/package.json` (the app exists; a missing directory
+  should fail the build, not skip it) and runs `npm ci`, `npm run lint`, `npm run typecheck`
+  and `npm test` with `working-directory: web`; the Python job is unchanged and Playwright
+  stays local because it needs a built app and a published database. README gained the
+  architecture diagram (Mermaid: FDIC/FRED → ingest → warehouse → features → models →
+  publish → Neon → Next.js on Vercel, with the weekly refresh and the revalidate call), the
+  web setup, a Prototype 3 paragraph and a status line that reserves the place for the live
+  URL. `docs/RUNBOOK.md` section 7 is the owner's deployment checklist in the order that
+  makes the first refresh succeed (Neon via the Vercel marketplace with a separate reader
+  role, Vercel project with root directory `web`, GitHub secrets, one `publish` from a
+  machine with the warehouse, the counts query, a manual refresh run), plus the TLS notes:
+  psycopg hands the URL to libpq, so the GitHub secret needs
+  `sslmode=verify-full&sslrootcert=system`; node-postgres strips every TLS parameter and
+  forces verified TLS, so the Vercel value carries `sslmode=verify-full` only. No
+  `web/vercel.json`: the root directory is a project setting and Next.js is auto-detected.
+  Nothing was deployed and no external account was touched.
