@@ -36,6 +36,7 @@ test.describe("2023 case study", () => {
     await expect(page.locator("canvas")).toHaveCount(3);
     await expect(page.getByRole("table")).toBeVisible();
     await expect(page.getByRole("table")).toContainText("Educational project");
+    await expect(page.getByRole("table")).toContainText(/publish run publish-\S+ \(.*\), when the production model was version \S+-\d{4}/);
     await expect(page.getByTestId("disclaimer")).toContainText("$250,000 per depositor");
     await expectAxeClean(page);
   });
@@ -64,6 +65,10 @@ test.describe("methodology", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Methodology" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "How to read a probability" })).toBeVisible();
     await expect(page.getByRole("rowheader", { name: "Pooled" })).toBeVisible();
+    await expect(page.getByRole("img", { name: /Line chart of PR-AUC by walk-forward test year/ })).toBeVisible();
+    await page.locator("label", { hasText: "Brier" }).click();
+    await expect(page.getByRole("radio", { name: "Brier" })).toBeChecked();
+    await expect(page.getByRole("img", { name: /Line chart of Brier by walk-forward test year/ })).toBeVisible();
     await expect(page.getByRole("img", { name: /Reliability diagram for the monotone booster/ })).toBeAttached();
     await expect(page.getByRole("heading", { level: 3, name: /Label definition and censoring/ })).toBeVisible();
     await expect(page.getByRole("heading", { level: 3, name: /References/ })).toBeVisible();

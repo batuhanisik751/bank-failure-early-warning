@@ -83,6 +83,8 @@ test.describe("bank profile", () => {
     await page.goto(`/bank/${cert}`);
     await expect(page.getByRole("heading", { level: 2, name: "Probability timeline" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: /What drives the score/ })).toBeVisible();
+    await expect(page.getByTestId("bank-model-version")).toContainText(/Model version \S+-\d{4}-\d{2}-\d{2}-[0-9a-f]{7}/);
+    await expect(page.getByTestId("timeline-model-versions")).toContainText("model version");
     await expect(page.getByRole("list", { name: "CAMELS ratio panels" }).getByRole("listitem")).toHaveCount(12);
     await expect(page.getByRole("link", { name: /time machine/ })).toHaveAttribute("href", /\/time-machine\?quarter=\d{4}Q[1-4]/);
     const csv = await request.get(`/api/download/bank/${cert}.csv`);

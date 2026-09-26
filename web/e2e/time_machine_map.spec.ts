@@ -84,6 +84,7 @@ test.describe("failure replay map", () => {
     expect(await page.getByTestId("failure-list").getByRole("row").count()).toBeGreaterThan(10);
     await expect(page.getByTestId("map-quarter")).toHaveText("2009Q2");
     await expect(page.getByTestId("map-status")).toContainText("2009Q2");
+    await expect(page.getByTestId("map-model-version")).toHaveText(/^\S+-\d{4}-\d{2}-\d{2}-[0-9a-f]{7}$/);
 
     await page.getByRole("button", { name: "Next quarter" }).click();
     await expect(page.getByTestId("map-quarter")).toHaveText("2009Q3");

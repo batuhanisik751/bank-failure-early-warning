@@ -55,6 +55,14 @@ export function BankHeader({ profile, failure, nScored }: { profile: BankProfile
             rank {formatCount(gbdt?.rank)}{nScored ? ` of ${formatCount(nScored)}` : ""} in {latest.label}
             {latest.hazard?.probability != null ? ` · hazard model ${(latest.hazard.probability * 100).toFixed(1)}%` : ""}
           </span>
+          <span className="basis-full text-xs text-muted" data-testid="bank-model-version">
+            Model version <code className="font-mono text-fg">{gbdt?.modelVersion ?? "unknown"}</code>
+            {latest.hazard?.modelVersion ? (
+              <>
+                {" "}· hazard <code className="font-mono text-fg">{latest.hazard.modelVersion}</code>
+              </>
+            ) : null}
+          </span>
         </div>
       ) : null}
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">

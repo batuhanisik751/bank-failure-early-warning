@@ -1,6 +1,6 @@
 import { DISCLAIMER } from "@/lib/disclaimer";
-import { formatNumber, formatProbability } from "@/lib/format";
-import type { CaseStudyRankRow } from "@/lib/queries";
+import { formatDate, formatNumber, formatProbability } from "@/lib/format";
+import type { CaseStudy, CaseStudyRankRow } from "@/lib/queries";
 
 const VIEWS = [
   { view: "credit_only", label: "Credit-only" },
@@ -11,10 +11,10 @@ const MODELS = [
   { model: "gbdt_mono", label: "gbdt_mono" },
 ] as const;
 
-type Props = { ranks: CaseStudyRankRow[]; names: Map<number, string> };
+type Props = { ranks: CaseStudyRankRow[]; names: Map<number, string>; provenance: CaseStudy["provenance"] };
 
 /** Rank and percentile of each bank-quarter under the four view × model fits. */
-export function RankTable({ ranks, names }: Props) {
+export function RankTable({ ranks, names, provenance }: Props) {
   const keys = [...new Map(ranks.map((r) => [`${r.cert}|${r.quarter}`, r])).values()]
     .map((r) => ({ cert: r.cert, quarter: r.quarter, nScored: r.nScored }))
     .sort((a, b) => a.quarter.localeCompare(b.quarter) || (names.get(a.cert) ?? "").localeCompare(names.get(b.cert) ?? ""));
@@ -26,7 +26,11 @@ export function RankTable({ ranks, names }: Props) {
           Rank 1 is the riskiest bank of the quarter; the percentile is the share of scored banks
           ranked below it, and the probability is the calibrated 12-month estimate. Both fits are
           trained on reports through 2021Q3 under the outcome-window rule, so no 2022 or 2023
-          outcome shapes them. {DISCLAIMER}
+          outcome shapes them. These fits are refit at every publish rather than versioned: the rows come
+          from publish run <code className="font-mono">{provenance?.runId ?? "unknown"}</code>
+          {provenance?.finishedAt ? ` (${formatDate(provenance.finishedAt.slice(0, 10))})` : ""}, when the
+          production model was version{" "}
+          <code className="font-mono">{provenance?.productionModelVersion ?? "unknown"}</code>. {DISCLAIMER}
         </caption>
         <thead>
           <tr>

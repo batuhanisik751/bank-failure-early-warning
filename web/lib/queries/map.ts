@@ -27,6 +27,8 @@ export type MapTimelineEntry = {
   nBanks: number;
   nFailures: number;
   labelComplete: boolean | null;
+  /** quarters.model_version: the model that scored this quarter (CONTRACT 15). */
+  modelVersion: string | null;
 };
 
 /** Every scored bank with a head-office location for one quarter, for /api/map/[quarter]. */
@@ -73,10 +75,11 @@ export const mapTimeline = cached("mapTimeline", async (): Promise<MapTimelineEn
       nBanks: count(),
       nFailures: sql<number>`count(*) filter (where ${mq.failedThisQuarter})::int`,
       labelComplete: q.labelComplete4q,
+      modelVersion: q.modelVersion,
     })
     .from(mq)
     .innerJoin(q, eq(q.repdte, mq.repdte))
-    .groupBy(mq.repdte, q.label, q.labelComplete4q)
+    .groupBy(mq.repdte, q.label, q.labelComplete4q, q.modelVersion)
     .orderBy(asc(mq.repdte));
   return rows.map((r) => ({ ...r, nBanks: Number(r.nBanks), nFailures: Number(r.nFailures) }));
 });

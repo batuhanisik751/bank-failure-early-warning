@@ -151,6 +151,7 @@ export function FailureReplayMap({ timeline, initial }: Props) {
         {label}: {entry?.nBanks ?? shown.dots.length} banks on the map, {entry?.nFailures ?? 0} failed in the following quarter
         {loading ? " (loading)" : ""}
         {last ? ". The quarter after the latest report has not ended, so its failures may still be added" : ""}.
+        {" "}Model version <code className="font-mono text-fg" data-testid="map-model-version">{entry?.modelVersion ?? "unknown"}</code>.
       </p>
       {error ? (
         <p role="alert" className="rounded-md border border-border bg-surface px-4 py-3 text-sm text-fg">

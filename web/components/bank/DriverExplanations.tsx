@@ -1,10 +1,10 @@
 import { driverSentence, formatFeatureValue, type DriverLike } from "@/components/bank/explain";
 import { DISCLAIMER } from "@/lib/disclaimer";
 
-type Props = { drivers: Array<DriverLike & { rank: number }>; quarter: string };
+type Props = { drivers: Array<DriverLike & { rank: number }>; quarter: string; modelVersion: string | null };
 
 /** One plain-English sentence per driver, plus the raw numbers in a table for the record. */
-export function DriverExplanations({ drivers, quarter }: Props) {
+export function DriverExplanations({ drivers, quarter, modelVersion }: Props) {
   if (drivers.length === 0) return null;
   return (
     <div className="space-y-3">
@@ -16,7 +16,8 @@ export function DriverExplanations({ drivers, quarter }: Props) {
       <div className="relative overflow-x-auto rounded-lg border border-border bg-surface" role="region" aria-label="Driver table, scrolls sideways" tabIndex={0}>
         <table className="data-table">
           <caption>
-            SHAP contributions of the production gbdt_mono model for {quarter}, largest absolute value first.
+            SHAP contributions of the gbdt_mono model for {quarter} (model version{" "}
+            <code className="font-mono">{modelVersion ?? "unknown"}</code>), largest absolute value first.
             Contributions are in log-odds; a positive value raises the estimated probability. {DISCLAIMER}
           </caption>
           <thead>

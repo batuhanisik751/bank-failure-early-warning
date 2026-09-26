@@ -1039,3 +1039,28 @@ open for the owner to revisit.
   both models and the drivers table. Deployment stays "pending owner": the checklist
   copies the seven RUNBOOK steps so the orchestrator can hand them over without the
   runbook. The refresh run record is committed like every other run record.
+- 2026-09-26 — **Prototype 3 gap pass.** (1) `model_version` now appears on the three pages
+  that lacked it: the bank profile prints it under the rank line (`gbdt_mono`, and the
+  `hazard` version when present), in the driver-table caption and in a note under the
+  probability timeline that counts the walk-forward versions behind the series (the CSV
+  already carried it per row); the map's status line shows `quarters.model_version` of the
+  quarter on screen (`mapTimeline` now selects it); the 2023 case study cannot cite a model
+  version because `case_study_2023` is refit at every publish and has no such column
+  (CONTRACT 16, unchanged), so its rank-table caption cites the `pipeline_runs` row that
+  wrote the table (latest `status = 'ok'` run whose `rows_written` lists it) and the
+  production model version of the newest quarter at that time. (2) The `Makefile` now covers
+  the whole pipeline: `p1`, `p2` (per-year `walkforward` loop, `YEARS` overridable),
+  `publish`, `publish-dry`, `refresh`, `db-up`/`db-down`, `web-install`, `web-check`,
+  `web-build`, `web-start`, `web-e2e`, `web-lighthouse` and `ci` (= `lint test web-check`,
+  the same three legs as `ci.yml`). (3) The methodology page gets `WalkforwardCharts`
+  (`components/methodology/chartOptions.ts` + client wrapper): PR-AUC and recall@2% with the
+  published 95% bounds as dotted lines, and Brier raw against calibrated, low-confidence
+  years as hollow markers; the option builder copies columns and never derives values, so
+  CONTRACT 19's no-client-arithmetic rule holds (the bootstrap band is drawn as two bound
+  lines rather than a filled `hi − lo` area for that reason). Found on the way: ECharts'
+  `aria` feature rewrites the container's `aria-label` once it draws, so every chart's
+  spoken `ariaLabel` prop was lost after hydration (the case-study test passed only because
+  the generated text happened to contain the chart title); `EChart.tsx` now hands the prop to
+  ECharts as `aria.label.description`, which keeps the accessible name fixed on every chart.
+  Deployment (acceptance criterion 4) remains the owner's action per `docs/RUNBOOK.md`
+  section 7.

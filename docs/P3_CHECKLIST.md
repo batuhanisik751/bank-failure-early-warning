@@ -82,7 +82,10 @@ assessment; FDIC insurance covers $250,000 per depositor, per bank, per ownershi
 
 Numbers were read from the HTML the built app served (`GET /` 150 KB, `GET /bank/8681`
 192 KB) with the scripts and styles stripped, then matched to rows in the local database.
-Every page and table carries `model_version` and the quarter in its caption.
+Every page and table carries `model_version` and the quarter in its caption. (Gap pass,
+same day: the bank profile, the map status line and the case-study rank table were the
+three places that did not print it; they do now, the case study by publish run id plus the
+production version at that publish, because its refit rows have no version column.)
 
 | rendered | page | database row(s) | model_version |
 |---|---|---|---|

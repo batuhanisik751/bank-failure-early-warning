@@ -95,7 +95,10 @@ If `uv run bankcanary` ever reports `No module named 'bankcanary'`, run
 `uv run --no-sync python scripts/fix_venv.py` (or `make fix-venv`). Some macOS tools flag
 `.venv` as hidden, and Python 3.12+ then skips the editable-install `.pth` file; the script
 adds a `sitecustomize` module that keeps `src/` importable regardless. Tests are unaffected.
-The `Makefile` targets are shortcuts for the same `uv run` commands.
+The `Makefile` targets are shortcuts for the same `uv run` and `npm` commands: `make p1`,
+`make p2` and `make publish` run each prototype's pipeline in order, `make ci` runs what
+`ci.yml` runs (`lint`, `test`, `web-check`), and `make web-build`, `web-e2e` and `refresh`
+cover the rest; `make -n <target>` prints the commands behind any target.
 
 ### Web app and database (Prototype 3)
 
@@ -107,6 +110,9 @@ npm run build && npm run start       # http://localhost:3100
 npm run lint && npm run typecheck && npm test   # what ci.yml runs (no database)
 npm run test:e2e                     # Playwright + axe over the built app (needs the database)
 ```
+
+Or, from the repository root: `make db-up publish web-install web-check web-e2e` (the
+`web-*` targets `cd web` themselves; `make refresh` is the weekly job by hand).
 
 `DATABASE_URL` lives in the git-ignored `.env`; `web/next.config.ts` copies unset
 variables from it, so no `web/.env.local` is needed locally. `bankcanary refresh` is the
@@ -217,6 +223,8 @@ uv run python scripts/make_notebook_01.py
 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/01_foundation.ipynb
 ```
 
+`make p1` runs the `bankcanary` lines above in order (not the notebooks).
+
 Prototype 2 continues from there (every command is idempotent and logs a run record under
 `runs/`; the walk-forward, calibration and explanation steps run one test year per call so
 that no command takes more than a couple of minutes):
@@ -237,6 +245,9 @@ uv run bankcanary sensitivity            # reports/sensitivity.md
 for N in 02 03 04 05; do uv run python scripts/make_notebook_$N.py; done
 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/0[2-5]_*.ipynb
 ```
+
+`make p2` runs the same steps (`make walkforward YEARS="2009 2010"` limits the loop), again
+without the notebooks.
 
 The first `ingest` downloads about 100 quarters of financials and takes a while; every
 later run reads the JSON cache and rebuilds the Parquet tables byte-identically. If the

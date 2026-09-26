@@ -3,6 +3,7 @@ import { Figures } from "@/components/methodology/Figures";
 import { MetricsTable } from "@/components/methodology/MetricsTable";
 import { ModelCard } from "@/components/methodology/ModelCard";
 import { DataSources, HowToRead } from "@/components/methodology/Reading";
+import { WalkforwardCharts } from "@/components/methodology/WalkforwardCharts";
 import { DISCLAIMER } from "@/lib/disclaimer";
 import { formatDate } from "@/lib/format";
 import { methodology } from "@/lib/queries";
@@ -50,7 +51,10 @@ export default async function Page() {
         {data.years.length === 0 ? (
           <p className="text-muted">No walk-forward metrics have been published yet.</p>
         ) : (
-          <MetricsTable data={data} />
+          <>
+            <WalkforwardCharts data={data} />
+            <MetricsTable data={data} />
+          </>
         )}
       </section>
       <section aria-labelledby="figures" className="space-y-3">

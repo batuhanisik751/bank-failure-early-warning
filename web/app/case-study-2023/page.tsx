@@ -74,7 +74,7 @@ export default async function Page() {
           </section>
           <section aria-labelledby="cs-ranks" className="space-y-3">
             <h2 id="cs-ranks" className="text-xl font-semibold">Credit-only against rate-aware, 2022Q3 to 2023Q1</h2>
-            <RankTable ranks={data.ranks} names={names} />
+            <RankTable ranks={data.ranks} names={names} provenance={data.provenance} />
           </section>
           <Narrative />
         </>

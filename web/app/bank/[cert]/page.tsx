@@ -50,6 +50,9 @@ export default async function BankPage({ params }: Props) {
   const drivers = timeline.drivers.filter((d) => d.repdte === latestRepdte);
   const driversLabel = repdteToLabel(latestRepdte);
   const sizeLabel = formatSizeBucket(profile.bank.sizeBucket);
+  const gbdtScores = timeline.scores.filter((s) => s.model === "gbdt_mono");
+  const latestGbdt = gbdtScores.find((s) => s.repdte === latestRepdte) ?? profile.latest?.gbdt ?? null;
+  const versions = [...new Set(gbdtScores.map((s) => s.modelVersion).filter((v): v is string => v != null))];
   return (
     <div className="space-y-10">
       <BankHeader profile={profile} failure={timeline.failure} nScored={quarter?.nBanks ?? null} />
@@ -57,11 +60,20 @@ export default async function BankPage({ params }: Props) {
       <section aria-labelledby="timeline" className="space-y-3">
         <h2 id="timeline" className="text-xl font-semibold">Probability timeline</h2>
         <ProbabilityTimeline scores={timeline.scores} failure={timeline.failure} name={name} />
+        {gbdtScores.length > 0 ? (
+          <p className="max-w-3xl text-xs text-muted" data-testid="timeline-model-versions">
+            {gbdtScores.length} scored quarter{gbdtScores.length === 1 ? "" : "s"} from {versions.length} gbdt_mono model
+            version{versions.length === 1 ? "" : "s"}: each historical quarter is scored by the walk-forward model of its
+            year and the latest quarters by the production model, version{" "}
+            <code className="font-mono text-fg">{latestGbdt?.modelVersion ?? "unknown"}</code>. The CSV download lists
+            the version behind every row.
+          </p>
+        ) : null}
       </section>
       <section aria-labelledby="drivers" className="space-y-3">
         <h2 id="drivers" className="text-xl font-semibold">What drives the score{driversLabel !== "—" ? `, ${driversLabel}` : ""}</h2>
         <ShapWaterfall drivers={drivers} quarter={driversLabel} name={name} />
-        <DriverExplanations drivers={drivers} quarter={driversLabel} />
+        <DriverExplanations drivers={drivers} quarter={driversLabel} modelVersion={latestGbdt?.modelVersion ?? null} />
       </section>
       <section aria-labelledby="ratios" className="space-y-3">
         <h2 id="ratios" className="text-xl font-semibold">CAMELS ratios against peers</h2>

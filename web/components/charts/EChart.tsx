@@ -31,7 +31,9 @@ export default function EChart({ option, ariaLabel, height = 320, className = ""
     import("echarts").then((echarts) => {
       if (disposed) return;
       chart = echarts.init(el, theme === "dark" ? "dark" : undefined);
-      chart.setOption({ backgroundColor: "transparent", aria: { enabled: true }, ...option });
+      // ECharts' aria feature rewrites the container's aria-label once it draws, so the
+      // spoken summary is handed to it as the description; the name then never changes.
+      chart.setOption({ backgroundColor: "transparent", aria: { enabled: true, label: { description: ariaLabel } }, ...option });
       observer = new ResizeObserver(() => chart?.resize());
       observer.observe(el);
     });
@@ -41,7 +43,7 @@ export default function EChart({ option, ariaLabel, height = 320, className = ""
       observer?.disconnect();
       chart?.dispose();
     };
-  }, [option, theme]);
+  }, [option, theme, ariaLabel]);
 
   return (
     <div
